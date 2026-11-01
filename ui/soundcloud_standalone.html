@@ -17561,6 +17561,7 @@
             audioEngine.removeAttribute('crossOrigin');
             audioEngine.crossOrigin = null;
           }
+          audioEngine.load();
         } catch (_) {}
 
         if (!track.id) return;
@@ -17591,9 +17592,23 @@
           saveSessionState();
         };
 
-        if (isHls && window.Hls && Hls.isSupported()) {
+        if (isPlatformLinux) {
+          // WebKitGTK on Linux: Use native GStreamer playback directly.
+          // Hls.js with MediaSource causes thread deadlocks in WebKitGTK when switching tracks.
+          try {
+            audioEngine.removeAttribute('crossOrigin');
+            audioEngine.crossOrigin = null;
+          } catch (_) {}
+          audioEngine.src = streamUrl;
+          audioEngine.play().then(handlePlaybackStart).catch(err => {
+            console.log('Native audio play error:', err.message);
+            if (requestId === currentPlayRequestId && err.name !== 'AbortError') {
+              notify("⚠️ Ошибка воспроизведения");
+            }
+          });
+        } else if (isHls && window.Hls && Hls.isSupported()) {
           const hls = new Hls({
-            enableWorker: !isPlatformLinux,
+            enableWorker: true,
             lowLatencyMode: true,
             maxBufferLength: 15,
             maxMaxBufferLength: 30
@@ -17612,27 +17627,17 @@
                 hls.destroy();
               } catch (_) {}
               window.currentHls = null;
-              if (isPlatformLinux) {
-                try {
-                  audioEngine.removeAttribute('crossOrigin');
-                  audioEngine.crossOrigin = null;
-                } catch (_) {}
-              }
               audioEngine.src = streamUrl;
               audioEngine.play().then(handlePlaybackStart).catch(err => console.log('Native fallback error:', err.message));
             }
           });
         } else {
-          if (isPlatformLinux) {
-            try {
-              audioEngine.removeAttribute('crossOrigin');
-              audioEngine.crossOrigin = null;
-            } catch (_) {}
-          }
           audioEngine.src = streamUrl;
           audioEngine.play().then(handlePlaybackStart).catch(err => {
             console.log('Native audio play error:', err.message);
-            notify("⚠️ Ошибка воспроизведения");
+            if (requestId === currentPlayRequestId && err.name !== 'AbortError') {
+              notify("⚠️ Ошибка воспроизведения");
+            }
           });
         }
       } catch (e) {
@@ -32451,22 +32456,8 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      if (currentQueue && currentTrackIndex >= 0 && currentTrackIndex < currentQueue.length) {
-
-
-
-
-
-
-
+      if (typeof handleTrackPlaybackFailure === 'function' && currentQueue && currentTrackIndex >= 0 && currentTrackIndex < currentQueue.length) {
         handleTrackPlaybackFailure(currentQueue[currentTrackIndex], 'audioEngineError');
-
-
-
-
-
-
-
       }
 
 
