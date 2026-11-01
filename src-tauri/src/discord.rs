@@ -11,8 +11,14 @@ pub struct DiscordManager {
     inner: Arc<Mutex<DiscordState>>,
 }
 
+#[cfg(target_os = "windows")]
+type IpcStream = std::fs::File;
+
+#[cfg(not(target_os = "windows"))]
+type IpcStream = std::os::unix::net::UnixStream;
+
 struct DiscordState {
-    pipe: Option<std::fs::File>,
+    pipe: Option<IpcStream>,
     connected: bool,
     enabled: bool,
     client_id: String,
@@ -112,6 +118,7 @@ impl DiscordManager {
         }
 
         let cid = state.client_id.clone();
+        #[cfg(target_os = "windows")]
         for i in 0..10 {
             let pipe_path = format!(r"\\.\pipe\discord-ipc-{}", i);
             if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -141,6 +148,53 @@ impl DiscordManager {
                         let _ = self.send_activity_payload(act);
                     }
                     return true;
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut prefixes = Vec::new();
+            if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+                let p = std::path::PathBuf::from(runtime_dir);
+                prefixes.push(p.clone());
+                prefixes.push(p.join("app/com.discordapp.Discord"));
+                prefixes.push(p.join(".flatpak/org.equicord.equibop/xdg-run"));
+                prefixes.push(p.join(".flatpak/com.discordapp.Discord/xdg-run"));
+            }
+            if let Ok(tmp) = std::env::var("TMPDIR") {
+                prefixes.push(std::path::PathBuf::from(tmp));
+            }
+            prefixes.push(std::path::PathBuf::from("/tmp"));
+
+            for prefix in prefixes {
+                for i in 0..10 {
+                    let socket_path = prefix.join(format!("discord-ipc-{}", i));
+                    if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&socket_path) {
+                        let handshake = serde_json::json!({
+                            "v": 1,
+                            "client_id": cid
+                        });
+                        let payload = handshake.to_string();
+                        let op = 0u32;
+                        let len = payload.len() as u32;
+
+                        let mut packet = Vec::with_capacity(8 + payload.len());
+                        packet.extend_from_slice(&op.to_le_bytes());
+                        packet.extend_from_slice(&len.to_le_bytes());
+                        packet.extend_from_slice(payload.as_bytes());
+
+                        if stream.write_all(&packet).is_ok() && stream.flush().is_ok() {
+                            state.pipe = Some(stream);
+                            state.connected = true;
+
+                            if let Some(act) = state.current_activity.clone() {
+                                drop(state);
+                                let _ = self.send_activity_payload(act);
+                            }
+                            return true;
+                        }
+                    }
                 }
             }
         }

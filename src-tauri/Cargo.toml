@@ -1,6 +1,6 @@
 [package]
 name = "soundcloud-desktop"
-version = "1.0.3"
+version = "1.0.4"
 description = "SoundCloud Desktop Player"
 edition = "2021"
 license = "Proprietary"
