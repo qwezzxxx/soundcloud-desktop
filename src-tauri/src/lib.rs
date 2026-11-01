@@ -421,7 +421,7 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                     // 4. Safely destroy webview without closing application
                     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                     if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
-                        let _ = win.destroy();
+                        let _ = win.close();
                     }
                 });
                 return false;
@@ -439,7 +439,7 @@ fn close_login_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("soundcloud_login") {
         let _ = win.hide();
-        let _ = win.destroy();
+        let _ = win.close();
     }
     Ok(())
 }
@@ -731,7 +731,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app_handle, event| {
-            if let tauri::RunEvent::ExitRequested { api, code } = event {
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
                 // Prevent launcher from quitting when windows (like login modal or main hide) are closed
                 if code.is_none() {
                     api.prevent_exit();
