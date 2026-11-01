@@ -17224,6 +17224,9 @@
           appConfig.cached_likes = tracksToSave;
           if (api && api.saveConfig) api.saveConfig(appConfig).catch(() => {});
         }
+        if (api && api.invoke) {
+          api.invoke('save_local_likes', { likes: tracksToSave }).catch(() => {});
+        }
       } catch (e) {
         console.warn('saveLocalDatabase error:', e);
       }
@@ -26586,6 +26589,22 @@
 
 
       logD('=== SoundCloud App Initializing ===');
+        // Listen for real-time background likes updates from backend
+        if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+          try {
+            window.__TAURI__.event.listen('likes_updated', (event) => {
+              if (event.payload && Array.isArray(event.payload) && event.payload.length > 0) {
+                allTracks = event.payload;
+                allTracks.forEach(t => { if (t) t.liked = true; });
+                currentQueue = [...allTracks];
+                saveLocalDatabase();
+                renderLikedTable();
+                applyUserProfile(currentUser, allTracks.length);
+              }
+            });
+          } catch (_) {}
+        }
+
 
 
 
@@ -27061,20 +27080,19 @@
             }
 
             const localDb = loadLocalDatabase();
-            if (res.likes && res.likes.length > 0) {
-              allTracks = res.likes;
-              currentQueue = [...allTracks];
-              saveLocalDatabase();
-              renderLikedTable();
-            } else if (localDb && localDb.length > 0) {
-              allTracks = localDb;
-              currentQueue = [...allTracks];
-              renderLikedTable();
-            } else {
-              allTracks = [];
-              currentQueue = [];
-              renderLikedTable();
+            let initialLikes = [];
+            if (res.likes && Array.isArray(res.likes) && res.likes.length > 0) {
+              initialLikes = res.likes;
+            } else if (localDb && Array.isArray(localDb) && localDb.length > 0) {
+              initialLikes = localDb;
+            } else if (appConfig && Array.isArray(appConfig.cached_likes) && appConfig.cached_likes.length > 0) {
+              initialLikes = appConfig.cached_likes;
             }
+            allTracks = initialLikes;
+            allTracks.forEach(t => { if (t) t.liked = true; });
+            currentQueue = [...allTracks];
+            saveLocalDatabase();
+            renderLikedTable();
 
             applyUserProfile(currentUser, allTracks.length);
             renderHomeFeed(allTracks, res.mixed || lastMixedData || null);
@@ -27085,18 +27103,19 @@
           // GUEST / OFFLINE MODE: preserve saved liked tracks!
           currentUser = null;
           const localDb = loadLocalDatabase();
-          if (res.likes && res.likes.length > 0) {
-            allTracks = res.likes;
-          } else if (localDb && localDb.length > 0) {
-            allTracks = localDb;
+          let initialLikes = [];
+          if (res.likes && Array.isArray(res.likes) && res.likes.length > 0) {
+            initialLikes = res.likes;
+          } else if (localDb && Array.isArray(localDb) && localDb.length > 0) {
+            initialLikes = localDb;
           } else if (appConfig && Array.isArray(appConfig.cached_likes) && appConfig.cached_likes.length > 0) {
-            allTracks = appConfig.cached_likes;
-          } else {
-            allTracks = [];
+            initialLikes = appConfig.cached_likes;
           }
+          allTracks = initialLikes;
           allTracks.forEach(t => { if (t) t.liked = true; });
           currentQueue = [...allTracks];
           originalQueue = null;
+          saveLocalDatabase();
 
           applyTheme(UNIVERSAL_DEFAULTS.theme, false);
           applyAccent(UNIVERSAL_DEFAULTS.accent_color, '', false);

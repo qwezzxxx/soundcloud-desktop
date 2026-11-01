@@ -17,10 +17,13 @@ pub struct AppState {
 }
 
 #[tauri::command]
-async fn init_app(state: State<'_, AppState>) -> Result<Value, String> {
+async fn init_app(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
     let _ = std::fs::write("init_app_called.log", "init_app was called!\n");
     let cfg = state.sc.load_config();
-    let likes = cfg.cached_likes.clone().unwrap_or_default();
+    let mut likes = state.sc.load_local_likes();
+    if likes.is_empty() {
+        likes = cfg.cached_likes.clone().unwrap_or_default();
+    }
     let profile = cfg.user_profile.clone();
     let mixed = cfg.cached_mixed.clone();
     let user = profile.clone();
@@ -46,9 +49,16 @@ async fn init_app(state: State<'_, AppState>) -> Result<Value, String> {
     // Background update without blocking startup
     if has_token {
         let sc_clone = state.sc.clone();
+        let app_handle = app.clone();
         tokio::spawn(async move {
             let _ = sc_clone.get_profile().await;
-            let _ = sc_clone.get_liked_tracks(300).await;
+            if let Ok(fetched) = sc_clone.get_liked_tracks(300).await {
+                if !fetched.is_empty() {
+                    let _ = sc_clone.save_local_likes(&fetched);
+                    use tauri::Emitter;
+                    let _ = app_handle.emit("likes_updated", &fetched);
+                }
+            }
             let _ = sc_clone.get_mixed_selections().await;
         });
     }
@@ -61,6 +71,22 @@ async fn init_app(state: State<'_, AppState>) -> Result<Value, String> {
         "hasToken": has_token,
         "mixed": mixed
     }))
+}
+
+#[tauri::command]
+async fn save_local_likes(likes: Vec<Value>, state: State<'_, AppState>) -> Result<(), String> {
+    let mut tracks = Vec::new();
+    for v in likes {
+        if let Ok(t) = serde_json::from_value::<FormattedTrack>(v) {
+            tracks.push(t);
+        }
+    }
+    state.sc.save_local_likes(&tracks)
+}
+
+#[tauri::command]
+async fn get_local_likes(state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
+    Ok(state.sc.load_local_likes())
 }
 
 #[tauri::command]
@@ -365,16 +391,37 @@ fn clear_custom_wallpaper() -> Result<(), String> {
     Ok(())
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    let _ = std::fs::write("app_run.log", "lib::run() started\n");
-    let mut config_path = PathBuf::from("config.json");
+fn resolve_config_path() -> PathBuf {
     if let Ok(exe_dir) = std::env::current_exe() {
         if let Some(parent) = exe_dir.parent() {
             let candidate = parent.join("config.json");
-            config_path = candidate;
+            if candidate.exists() {
+                if let Ok(f) = std::fs::OpenOptions::new().write(true).open(&candidate) {
+                    drop(f);
+                    return candidate;
+                }
+            } else {
+                let test_p = parent.join(".sc_write_test");
+                if let Ok(_) = std::fs::write(&test_p, "1") {
+                    let _ = std::fs::remove_file(&test_p);
+                    return candidate;
+                }
+            }
         }
     }
+    let appdata = std::env::var("APPDATA")
+        .or_else(|_| std::env::var("LOCALAPPDATA"))
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_else(|_| ".".to_string());
+    let dir = PathBuf::from(appdata).join("com.soundcloud.desktop");
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join("config.json")
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let _ = std::fs::write("app_run.log", "lib::run() started\n");
+    let config_path = resolve_config_path();
 
     let sc = Arc::new(SoundCloudClient::new(config_path));
     let discord = DiscordManager::new();
@@ -471,6 +518,8 @@ pub fn run() {
             login_account,
             logout,
             init_app,
+            save_local_likes,
+            get_local_likes,
             get_config,
             save_config,
             get_profile,

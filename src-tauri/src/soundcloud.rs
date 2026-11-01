@@ -323,73 +323,31 @@ impl Default for AppConfig {
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-
-
-
 pub struct FormattedTrack {
-
-
-
+    #[serde(default)]
     pub id: Value,
-
-
-
+    #[serde(default)]
     pub title: String,
-
-
-
+    #[serde(default)]
     pub artist: String,
-
-
-
+    #[serde(default)]
     pub duration: String,
-
-
-
+    #[serde(default)]
     pub duration_ms: u64,
-
-
-
+    #[serde(default)]
     pub cover: String,
-
-
-
+    #[serde(default)]
     pub liked: bool,
-
-
-
     #[serde(default)]
-
-
-
+    pub stream_url: Option<String>,
+    #[serde(default)]
     pub description: Option<String>,
-
-
-
     #[serde(default)]
-
-
-
     pub genre: Option<String>,
-
-
-
     #[serde(default)]
-
-
-
     pub permalink_url: Option<String>,
-
-
-
     #[serde(default)]
-
-
-
     pub provider: Option<String>,
-
-
-
 }
 
 
@@ -481,6 +439,42 @@ impl SoundCloudClient {
 
 
 
+
+    pub fn likes_path(&self) -> PathBuf {
+        if let Some(parent) = self.config_path.parent() {
+            parent.join("likes.json")
+        } else {
+            PathBuf::from("likes.json")
+        }
+    }
+
+    pub fn load_local_likes(&self) -> Vec<FormattedTrack> {
+        let l_path = self.likes_path();
+        if let Ok(content) = fs::read_to_string(&l_path) {
+            if let Ok(tracks) = serde_json::from_str::<Vec<FormattedTrack>>(&content) {
+                if !tracks.is_empty() {
+                    return tracks;
+                }
+            }
+        }
+        let cfg = self.load_config();
+        cfg.cached_likes.unwrap_or_default()
+    }
+
+    pub fn save_local_likes(&self, likes: &[FormattedTrack]) -> Result<(), String> {
+        let l_path = self.likes_path();
+        if let Some(parent) = l_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let json = serde_json::to_string_pretty(likes).map_err(|e| e.to_string())?;
+        let _ = fs::write(&l_path, json);
+
+        // Also update cached_likes in config
+        let mut cfg = self.load_config();
+        cfg.cached_likes = Some(likes.to_vec());
+        let _ = self.save_config(&cfg);
+        Ok(())
+    }
 
     pub fn load_config(&self) -> AppConfig {
 
