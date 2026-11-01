@@ -7,9 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag / Release version (e.g. v1.0.0)'
+        description: 'Tag / Release version (e.g. v1.0.4-pre1)'
         required: true
-        default: 'v1.0.0'
+        default: 'v1.0.4-pre1'
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        required: true
+        default: true
 
 permissions:
   contents: write
@@ -62,18 +67,20 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: "./src-tauri"
           tagName: ${{ github.ref_name != 'main' && github.ref_name || inputs.tag_name }}
           releaseName: "ONYX ${{ github.ref_name != 'main' && github.ref_name || inputs.tag_name }}"
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, 'pre') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') || inputs.prerelease == true }}
 
       - name: Upload Windows Portable Binaries
         if: matrix.platform == 'windows-latest'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name != 'main' && github.ref_name || inputs.tag_name }}"
           mkdir -p dist_portable
