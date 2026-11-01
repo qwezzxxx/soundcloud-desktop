@@ -2857,7 +2857,17 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                         "followers_count": 0,
                         "followings_count": 0
                     })
-                } else {
+                } else if resolved_token.is_some() {
+                    serde_json::json!({
+                        "id": 1000000,
+                        "username": "SoundCloud User",
+                        "permalink": "user",
+                        "avatar_url": "https://a1.sndcdn.com/images/default_avatar_large.png",
+                        "track_count": 0,
+                        "public_favorites_count": 0,
+                        "followers_count": 0,
+                        "followings_count": 0
+                    })
                     return Err("Пользователь не найден. Проверьте никнейм, ID, ссылку или токен.".to_string());
                 }
 
@@ -2992,6 +3002,11 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         if clean.is_empty() {
             return Err("Token is empty".to_string());
         }
+        // Immediately persist token to config.json so it survives any crashes
+        let mut cfg = self.load_config();
+        cfg.oauth_token = Some(clean.to_string());
+        let _ = self.save_raw_config(&cfg);
+
         self.login_account(String::new(), Some(clean.to_string())).await
     }
 
@@ -3047,47 +3062,43 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
-        let user_id = if let Some(ref uid) = cfg.user_id {
-
-
-
+        let mut user_id_str = if let Some(ref uid) = cfg.user_id {
             if let Some(n) = uid.as_i64() {
-
-
-
                 n.to_string()
-
-
-
             } else if let Some(s) = uid.as_str() {
-
-
-
-                s.to_string()
-
-
-
+                if s != "me" && !s.is_empty() {
+                    s.to_string()
+                } else {
+                    String::new()
+                }
             } else {
-
-
-
-                "me".to_string()
-
-
-
+                String::new()
             }
-
-
-
         } else {
-
-
-
-            "me".to_string()
-
-
-
+            String::new()
         };
+
+        if user_id_str.is_empty() {
+            let me_url = format!("https://api-v2.soundcloud.com/me?client_id={}", client_id);
+            if let Ok(res) = self.http.get(&me_url)
+                .header("Authorization", &token)
+                .header("User-Agent", USER_AGENT)
+                .send()
+                .await
+            {
+                if let Ok(val) = res.json::<Value>().await {
+                    if let Some(n) = val.get("id").and_then(|v| v.as_i64()) {
+                        user_id_str = n.to_string();
+                        let mut upd = self.load_config();
+                        upd.user_id = Some(Value::from(n));
+                        upd.user_profile = Some(val);
+                        let _ = self.save_config(&upd);
+                    }
+                }
+            }
+        }
+
+        let user_id = if !user_id_str.is_empty() { user_id_str } else { "me".to_string() };
 
 
 

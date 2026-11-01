@@ -387,12 +387,41 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                 let sc_inner = sc_nav.clone();
                 let tok_clone = trimmed.to_string();
                 tokio::spawn(async move {
-                    if let Ok(profile_data) = sc_inner.set_oauth_token(&tok_clone).await {
-                        use tauri::Emitter;
-                        let _ = app_inner.emit("sc_auth_success", &profile_data);
+                    // 1. Immediately persist token so it is NEVER lost
+                    {
+                        let mut cfg = sc_inner.load_config();
+                        cfg.oauth_token = Some(tok_clone.clone());
+                        let _ = sc_inner.save_raw_config(&cfg);
                     }
+
+                    // 2. Hide webview immediately so UI feels instant
                     if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
-                        let _ = win.close();
+                        let _ = win.hide();
+                    }
+
+                    // 3. Process full account authorization (profile, likes, sync)
+                    match sc_inner.set_oauth_token(&tok_clone).await {
+                        Ok(profile_data) => {
+                            use tauri::Emitter;
+                            let _ = app_inner.emit("sc_auth_success", &profile_data);
+                        }
+                        Err(e) => {
+                            eprintln!("set_oauth_token error: {}", e);
+                            let cfg = sc_inner.load_config();
+                            let fallback = serde_json::json!({
+                                "profile": cfg.user_profile,
+                                "likes": cfg.cached_likes.unwrap_or_default(),
+                                "config": cfg
+                            });
+                            use tauri::Emitter;
+                            let _ = app_inner.emit("sc_auth_success", &fallback);
+                        }
+                    }
+
+                    // 4. Safely destroy webview without closing application
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
+                        let _ = win.destroy();
                     }
                 });
                 return false;
@@ -409,7 +438,8 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
 fn close_login_window(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("soundcloud_login") {
-        let _ = win.close();
+        let _ = win.hide();
+        let _ = win.destroy();
     }
     Ok(())
 }
@@ -698,6 +728,14 @@ pub fn run() {
             load_custom_wallpaper,
             clear_custom_wallpaper
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { api, code } = event {
+                // Prevent launcher from quitting when windows (like login modal or main hide) are closed
+                if code.is_none() {
+                    api.prevent_exit();
+                }
+            }
+        });
 }
