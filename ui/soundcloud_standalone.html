@@ -9905,7 +9905,7 @@
 
 
 
-    <div class="relative bg-[#111114] border border-[#232328] rounded-2xl p-6 w-full max-w-[420px] shadow-2xl space-y-4 select-none">
+    <div class="relative bg-[#111114] border border-[#232328] rounded-2xl p-6 w-full max-w-[440px] max-h-[92vh] overflow-y-auto shadow-2xl space-y-4 select-none">
 
 
 
@@ -10083,6 +10083,40 @@
 
       </div>
 
+      <!-- Quick SoundCloud Auth Button -->
+      <div class="space-y-2">
+        <button id="btn-oauth-window-login" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#ff5500] to-[#ff3300] hover:from-[#ff6611] hover:to-[#ff4411] active:scale-[0.98] text-white font-semibold text-xs flex items-center justify-center gap-2.5 shadow-lg shadow-orange-500/20 transition-all cursor-pointer">
+          <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M1.175 12.225c-.053 0-.097.042-.1.096l-.37 3.333c-.01.07.039.13.107.13h.363c.058 0 .106-.046.109-.104l.182-3.359c.003-.054-.04-.096-.091-.096zm1.312-.76c-.056 0-.102.044-.105.1l-.348 4.195c-.007.067.043.124.11.124h.347c.057 0 .104-.045.108-.102l.18-4.22c.002-.054-.04-.097-.092-.097zm1.309-.345c-.058 0-.105.045-.108.102l-.317 4.542c-.006.066.044.122.11.122h.34c.058 0 .106-.046.108-.103l.161-4.565c.002-.054-.041-.098-.094-.098zm1.308-.073c-.058 0-.106.046-.109.103l-.288 4.615c-.005.066.045.121.111.121h.334c.058 0 .106-.046.108-.104l.145-4.636c.002-.054-.041-.099-.094-.099zm1.308-.225c-.058 0-.106.046-.109.104l-.261 4.84c-.005.066.046.121.112.121h.328c.058 0 .106-.046.108-.104l.13-4.862c.002-.054-.041-.099-.094-.099zm1.307-.468c-.058 0-.106.046-.109.104l-.234 5.308c-.004.066.047.121.113.121h.323c.058 0 .106-.046.108-.104l.115-5.33c.002-.054-.041-.099-.094-.099zm1.307-.638c-.058 0-.106.046-.109.104l-.208 5.946c-.004.066.048.121.114.121h.317c.058 0 .106-.046.108-.105l.102-5.967c.001-.054-.042-.099-.094-.099zm1.307-.655c-.058 0-.106.046-.109.104l-.181 6.601c-.003.066.049.121.115.121h.312c.059 0 .107-.046.108-.105l.088-6.622c.001-.054-.042-.099-.095-.099zm2.463-2.613c-.33 0-.649.049-.95.138-.052.015-.084.066-.075.12l.143 9.008c.001.063.053.112.116.112h3.407c1.884 0 3.415-1.503 3.415-3.352 0-1.745-1.353-3.176-3.092-3.332-.303-1.528-1.673-2.694-3.314-2.694zm-1.156 1.761c-.058 0-.106.046-.108.104l-.154 7.37c-.002.066.05.121.116.121h.236c.058 0 .105-.046.107-.104l.104-7.391c0-.054-.043-.1-.095-.1h-.206z"/></svg>
+          <span>Войти через SoundCloud</span>
+        </button>
+        <button id="btn-browser-login" class="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 active:scale-[0.98] text-neutral-400 hover:text-white font-medium text-[11px] flex items-center justify-center gap-2 border border-white/5 transition-all cursor-pointer">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          <span>Войти через внешний браузер</span>
+        </button>
+      </div>
+
+      <!-- Explanatory note about Token Requirement -->
+      <div class="p-3 rounded-xl bg-[#191512] border border-[#ff5500]/25 text-neutral-300 text-[11px] leading-relaxed">
+        <div class="flex items-center gap-1.5 text-[#ff7722] font-semibold text-xs mb-1">
+          <svg class="w-3.5 h-3.5 text-[#ff5500] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>Только через токен плеер работает полноценно</span>
+        </div>
+        <p class="text-neutral-400">
+          При входе <strong class="text-white font-medium">через токен (OAuth)</strong> открываются все возможности: сохранение лайков в один клик, бесконечный поток <span class="text-white font-medium">«Моя волна»</span>, персональные рекомендации и приватные плейлисты.
+        </p>
+        <p class="text-neutral-500 mt-1">
+          Кнопка выше делает это автоматически. Если вводить только никнейм/ссылку — плеер будет работать в режиме гостя (без лайков и волны).
+        </p>
+      </div>
+
+      <!-- Divider -->
+      <div class="relative flex items-center justify-center pt-1">
+        <div class="border-t border-[#232328] w-full"></div>
+        <span class="bg-[#111114] px-2.5 text-[10px] text-neutral-500 uppercase tracking-wider font-medium whitespace-nowrap">или вручную по токену / нику</span>
+        <div class="border-t border-[#232328] w-full"></div>
+      </div>
+
+
 
 
 
@@ -10113,38 +10147,10 @@
 
 
 
-          <label class="block text-xs font-semibold text-neutral-300 mb-1.5">Никнейм, ID, ссылка или OAuth токен</label>
-
-
-
-
-
-
-
-          <input id="login-identifier-input" type="text" placeholder="Никнейм, ссылка, ID или OAuth токен..." class="w-full bg-[#17171c] border border-[#26262e] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all font-mono">
-
-
-
-
-
-
-
+          <label class="block text-xs font-semibold text-neutral-300 mb-1.5">OAuth токен (рекомендуется) или никнейм / ссылка</label>
+          <input id="login-identifier-input" type="text" placeholder="OAuth токен (напр. 2-293...-...) или никнейм..." class="w-full bg-[#17171c] border border-[#26262e] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all font-mono">
           <div class="mt-1.5 text-[11px] text-neutral-500">
-
-
-
-
-
-
-
-            <span>Поддерживает: никнейм, ссылку на профиль, ID или OAuth токен</span>
-
-
-
-
-
-
-
+            <span>Вставьте OAuth токен для полного доступа (из cookie oauth_token) или никнейм для гостевого режима</span>
           </div>
 
 
@@ -24854,109 +24860,27 @@
 
 
     if (btnBrowserLogin) {
-
-
-
-
-
-
-
       btnBrowserLogin.addEventListener('click', () => {
-
-
-
-
-
-
-
+        if (loginStatusMsg) {
+          loginStatusMsg.className = 'text-xs text-orange-400 min-h-[16px] animate-pulse';
+          loginStatusMsg.textContent = '⏳ Ожидание авторизации... Завершите вход в браузере';
+        }
         api.openBrowserLogin().catch(console.warn);
-
-
-
-
-
-
-
         startAuthWatcher();
-
-
-
-
-
-
-
         notify('Открыта страница авторизации в браузере...', '🌐');
-
-
-
-
-
-
-
       });
-
-
-
-
-
-
-
     }
 
-
-
-
-
-
-
     if (btnOauthWindowLogin) {
-
-
-
-
-
-
-
       btnOauthWindowLogin.addEventListener('click', () => {
-
-
-
-
-
-
-
+        if (loginStatusMsg) {
+          loginStatusMsg.className = 'text-xs text-orange-400 min-h-[16px] animate-pulse';
+          loginStatusMsg.textContent = '⏳ Открыто окно входа... Войдите в SoundCloud в открывшемся окне';
+        }
         api.openInAppLogin().catch(console.warn);
-
-
-
-
-
-
-
         startAuthWatcher();
-
-
-
-
-
-
-
         notify('Открыто окно авторизации SoundCloud...', '🪟');
-
-
-
-
-
-
-
       });
-
-
-
-
-
-
-
     }
 
 
