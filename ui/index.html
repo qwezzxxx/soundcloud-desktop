@@ -16,6 +16,7 @@
 
 <head>
   <script>
+    const isPlatformLinux = typeof navigator !== "undefined" && (/Linux/i.test(navigator.userAgent) || /Linux/i.test(navigator.platform));
     (function() {
       try {
         const savedTheme = localStorage.getItem('sc_desktop_theme') || 'oled';
@@ -17553,8 +17554,14 @@
           } catch (_) {}
           window.currentHls = null;
         }
-        audioEngine.pause();
-        audioEngine.removeAttribute('src');
+        try {
+          audioEngine.pause();
+          audioEngine.removeAttribute('src');
+          if (isPlatformLinux) {
+            audioEngine.removeAttribute('crossOrigin');
+            audioEngine.crossOrigin = null;
+          }
+        } catch (_) {}
 
         if (!track.id) return;
 
@@ -17586,7 +17593,7 @@
 
         if (isHls && window.Hls && Hls.isSupported()) {
           const hls = new Hls({
-            enableWorker: true,
+            enableWorker: !isPlatformLinux,
             lowLatencyMode: true,
             maxBufferLength: 15,
             maxMaxBufferLength: 30
@@ -17601,11 +17608,27 @@
           hls.on(Hls.Events.ERROR, (event, data) => {
             if (data.fatal && requestId === currentPlayRequestId) {
               console.log('HLS fatal, switching to native fallback:', data.type);
+              try {
+                hls.destroy();
+              } catch (_) {}
+              window.currentHls = null;
+              if (isPlatformLinux) {
+                try {
+                  audioEngine.removeAttribute('crossOrigin');
+                  audioEngine.crossOrigin = null;
+                } catch (_) {}
+              }
               audioEngine.src = streamUrl;
               audioEngine.play().then(handlePlaybackStart).catch(err => console.log('Native fallback error:', err.message));
             }
           });
         } else {
+          if (isPlatformLinux) {
+            try {
+              audioEngine.removeAttribute('crossOrigin');
+              audioEngine.crossOrigin = null;
+            } catch (_) {}
+          }
           audioEngine.src = streamUrl;
           audioEngine.play().then(handlePlaybackStart).catch(err => {
             console.log('Native audio play error:', err.message);
@@ -27371,69 +27394,25 @@
 
 
                 function initAudioPipeline() {
-
-
-
-
-
-
-
       if (isAudioContextInit && audioCtx) {
-
-
-
-
-
-
-
         if (audioCtx.state === 'suspended') {
-
-
-
-
-
-
-
           audioCtx.resume().catch(console.warn);
-
-
-
-
-
-
-
         }
-
-
-
-
-
-
-
         return;
-
-
-
-
-
-
-
       }
 
-
-
-
-
-
+      if (isPlatformLinux) {
+        // Linux WebKitGTK fix: bypass createMediaElementSource & crossOrigin to eliminate GStreamer deadlock
+        try {
+          audioEngine.removeAttribute('crossOrigin');
+          audioEngine.crossOrigin = null;
+        } catch (_) {}
+        isAudioContextInit = true;
+        startVisualizerLoop();
+        return;
+      }
 
       try {
-
-
-
-
-
-
-
         audioEngine.crossOrigin = "anonymous";
 
 
@@ -28734,7 +28713,7 @@
     // Add audio listeners for reliable activation
     if (typeof audioEngine !== 'undefined' && audioEngine) {
       audioEngine.addEventListener('play', () => {
-        if (typeof initAudioPipeline === 'function') initAudioPipeline();
+        if (!isPlatformLinux && typeof initAudioPipeline === 'function') initAudioPipeline();
         if (typeof startVisualizerLoop === 'function') startVisualizerLoop();
       });
       audioEngine.addEventListener('playing', () => {

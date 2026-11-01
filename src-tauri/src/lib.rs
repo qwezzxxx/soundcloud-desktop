@@ -223,9 +223,18 @@ async fn get_related_tracks(track_id: Value, state: State<'_, AppState>) -> Resu
 
 #[tauri::command]
 fn open_browser_login() -> Result<(), String> {
-    let _ = std::process::Command::new("cmd")
-        .args(["/c", "start", "http://127.0.0.1:49221/login"])
-        .spawn();
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/c", "start", "http://127.0.0.1:49221/login"])
+            .spawn();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = std::process::Command::new("xdg-open")
+            .arg("http://127.0.0.1:49221/login")
+            .spawn();
+    }
     Ok(())
 }
 
@@ -292,6 +301,12 @@ fn open_url(url: String) -> Result<(), String> {
         {
             let _ = std::process::Command::new("cmd")
                 .args(["/c", "start", "", clean])
+                .spawn();
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = std::process::Command::new("xdg-open")
+                .arg(clean)
                 .spawn();
         }
     }
@@ -409,11 +424,12 @@ fn resolve_config_path() -> PathBuf {
             }
         }
     }
-    let appdata = std::env::var("APPDATA")
+    let config_dir = std::env::var("APPDATA")
         .or_else(|_| std::env::var("LOCALAPPDATA"))
-        .or_else(|_| std::env::var("HOME"))
+        .or_else(|_| std::env::var("XDG_CONFIG_HOME"))
+        .or_else(|_| std::env::var("HOME").map(|h| format!("{}/.config", h)))
         .unwrap_or_else(|_| ".".to_string());
-    let dir = PathBuf::from(appdata).join("com.soundcloud.desktop");
+    let dir = PathBuf::from(config_dir).join("com.soundcloud.desktop");
     let _ = std::fs::create_dir_all(&dir);
     dir.join("config.json")
 }
