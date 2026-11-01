@@ -16843,6 +16843,7 @@
 
 
       // 7. Persist to cache
+      saveLocalDatabase();
 
 
 
@@ -17213,9 +17214,15 @@
 
     function saveLocalDatabase() {
       try {
-        if (currentUser && currentUser.id && allTracks && allTracks.length > 0) {
-          localStorage.setItem(`sc_user_${currentUser.id}_likes`, JSON.stringify(allTracks));
-          saveUserSettings(currentUser.id, { cached_likes: allTracks.slice(0, 300) });
+        const tracksToSave = (allTracks && Array.isArray(allTracks)) ? allTracks.filter(t => t && t.id) : [];
+        localStorage.setItem('sc_saved_likes', JSON.stringify(tracksToSave));
+        if (currentUser && currentUser.id) {
+          localStorage.setItem('sc_user_' + currentUser.id + '_likes', JSON.stringify(tracksToSave));
+          saveUserSettings(currentUser.id, { cached_likes: tracksToSave.slice(0, 500) });
+        }
+        if (appConfig) {
+          appConfig.cached_likes = tracksToSave;
+          if (api && api.saveConfig) api.saveConfig(appConfig).catch(() => {});
         }
       } catch (e) {
         console.warn('saveLocalDatabase error:', e);
@@ -17224,16 +17231,25 @@
 
     function loadLocalDatabase() {
       try {
-        if (!currentUser || !currentUser.id) return null;
-        const uid = String(currentUser.id);
-        const raw = localStorage.getItem(`sc_user_${uid}_likes`);
-        if (raw) {
-          const parsed = JSON.parse(raw);
+        if (currentUser && currentUser.id) {
+          const uid = String(currentUser.id);
+          const raw = localStorage.getItem('sc_user_' + uid + '_likes');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+          const uSettings = loadUserSettings(uid);
+          if (uSettings && Array.isArray(uSettings.cached_likes) && uSettings.cached_likes.length > 0) {
+            return uSettings.cached_likes;
+          }
+        }
+        const globalRaw = localStorage.getItem('sc_saved_likes');
+        if (globalRaw) {
+          const parsed = JSON.parse(globalRaw);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
-        const uSettings = loadUserSettings(uid);
-        if (uSettings && Array.isArray(uSettings.cached_likes) && uSettings.cached_likes.length > 0) {
-          return uSettings.cached_likes;
+        if (appConfig && Array.isArray(appConfig.cached_likes) && appConfig.cached_likes.length > 0) {
+          return appConfig.cached_likes;
         }
       } catch (e) {
         console.warn('loadLocalDatabase error:', e);
@@ -27066,13 +27082,21 @@
             restoreSessionState();
           }
         } else {
-          // UNIVERSAL CLEAN STATE (No user logged in / Guest):
+          // GUEST / OFFLINE MODE: preserve saved liked tracks!
           currentUser = null;
-          allTracks = [];
-          currentQueue = [];
+          const localDb = loadLocalDatabase();
+          if (res.likes && res.likes.length > 0) {
+            allTracks = res.likes;
+          } else if (localDb && localDb.length > 0) {
+            allTracks = localDb;
+          } else if (appConfig && Array.isArray(appConfig.cached_likes) && appConfig.cached_likes.length > 0) {
+            allTracks = appConfig.cached_likes;
+          } else {
+            allTracks = [];
+          }
+          allTracks.forEach(t => { if (t) t.liked = true; });
+          currentQueue = [...allTracks];
           originalQueue = null;
-          currentTrackIndex = -1;
-          currentlyPlayingTrackId = null;
 
           applyTheme(UNIVERSAL_DEFAULTS.theme, false);
           applyAccent(UNIVERSAL_DEFAULTS.accent_color, '', false);
@@ -27080,8 +27104,8 @@
           applyUiOpacity(UNIVERSAL_DEFAULTS.ui_opacity);
 
           renderLikedTable();
-          renderHomeFeed([], null);
-          applyUserProfile(null, 0);
+          renderHomeFeed(allTracks, res.mixed || lastMixedData || null);
+          applyUserProfile(null, allTracks.length);
 
           if (playerTitle) playerTitle.textContent = "Трек не выбран";
           if (playerArtist) playerArtist.textContent = "SoundCloud";
@@ -36116,6 +36140,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+    try {
+      const initLikes = loadLocalDatabase();
+      if (initLikes && Array.isArray(initLikes) && initLikes.length > 0) {
+        allTracks = initLikes;
+        currentQueue = [...allTracks];
+      }
+    } catch (_) {}
     if (allTracks.length > 0) {
 
 
@@ -36206,6 +36237,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
     window.addEventListener('beforeunload', () => {
       try {
+        saveLocalDatabase();
         saveSessionState(true);
       } catch (_) {}
     });

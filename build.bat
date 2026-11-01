@@ -9,9 +9,10 @@ if %ERRORLEVEL% NEQ 0 (
 cargo build --manifest-path "%~dp0src-tauri\Cargo.toml"
 if %ERRORLEVEL% EQU 0 (
     copy /y "%~dp0src-tauri\target\debug\soundcloud-desktop.exe" "%~dp0SoundCloud.exe"
-    if exist "%~dp0src-tauri\target\debug\WebView2Loader.dll" (
-        copy /y "%~dp0src-tauri\target\debug\WebView2Loader.dll" "%~dp0WebView2Loader.dll"
+    for /r "%~dp0src-tauri\target" %%f in (WebView2Loader.dll) do (
+        if exist "%%f" copy /y "%%f" "%~dp0WebView2Loader.dll" >nul & goto :copied_dll
     )
+    :copied_dll
     python "%~dp0embed_icon.py"
     echo [OK] Build successful: SoundCloud.exe updated.
 ) else (
