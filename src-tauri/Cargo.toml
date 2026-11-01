@@ -3,7 +3,7 @@ name = "soundcloud-desktop"
 version = "1.0.0"
 description = "SoundCloud Desktop Player"
 edition = "2021"
-license = "MIT"
+license = "Proprietary"
 
 [lib]
 name = "app_lib"
