@@ -408,9 +408,11 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                         Err(e) => {
                             eprintln!("set_oauth_token error: {}", e);
                             let cfg = sc_inner.load_config();
+                            let profile = cfg.user_profile.clone();
+                            let likes = cfg.cached_likes.clone().unwrap_or_default();
                             let fallback = serde_json::json!({
-                                "profile": cfg.user_profile,
-                                "likes": cfg.cached_likes.unwrap_or_default(),
+                                "profile": profile,
+                                "likes": likes,
                                 "config": cfg
                             });
                             use tauri::Emitter;

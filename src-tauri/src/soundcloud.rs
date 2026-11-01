@@ -2868,6 +2868,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                         "followers_count": 0,
                         "followings_count": 0
                     })
+                } else {
                     return Err("Пользователь не найден. Проверьте никнейм, ID, ссылку или токен.".to_string());
                 }
 
