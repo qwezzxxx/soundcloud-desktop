@@ -16905,37 +16905,13 @@
 
 
       try {
-
-
-
-
-
-
-
-        await api.toggleLike(track.id, newLikedState);
-
-
-
-
-
-
-
+        const syncOk = await api.toggleLike(track.id, newLikedState);
+        if (!syncOk && currentUser && currentUser.id) {
+          notify('Внимание: не удалось синхронизировать лайк с SoundCloud (проверьте сессию)', '⚠️');
+        }
       } catch (err) {
-
-
-
-
-
-
-
         console.warn('Like toggle sync error:', err);
-
-
-
-
-
-
-
+        notify('Ошибка синхронизации лайка с SoundCloud: ' + (err.message || err), '⚠️');
       }
 
 
