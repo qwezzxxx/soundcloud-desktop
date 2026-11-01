@@ -2987,6 +2987,14 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
+    pub async fn set_oauth_token(&self, token: &str) -> Result<Value, String> {
+        let clean = token.trim();
+        if clean.is_empty() {
+            return Err("Token is empty".to_string());
+        }
+        self.login_account(String::new(), Some(clean.to_string())).await
+    }
+
     pub async fn toggle_like(&self, track_id: Value, should_like: bool) -> Result<bool, String> {
 
 
@@ -3119,7 +3127,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
-            self.http.put(&url1)
+            self.http.put(&url1).header("Content-Length", "0").body("")
 
 
 
@@ -3223,7 +3231,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
-                self.http.put(&url2)
+                self.http.put(&url2).header("Content-Length", "0").body("")
 
 
 
@@ -3331,7 +3339,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
-                self.http.post(&url3)
+                self.http.post(&url3).header("Content-Length", "0").body("")
 
 
 
@@ -3400,6 +3408,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
         }
+        let mut local_likes = self.load_local_likes();
 
 
 
@@ -3440,17 +3449,22 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
             if !should_like {
-
-
-
                 list.retain(|t| t.id != id_val);
-
-
-
+                local_likes.retain(|t| t.id != id_val);
+            } else {
+                if !local_likes.iter().any(|t| t.id == id_val) {
+                    if let Ok(mut resolved) = self.resolve_tracks(vec![id_val.clone()]).await {
+                        if let Some(mut ft) = resolved.pop() {
+                            ft.liked = true;
+                            local_likes.insert(0, ft.clone());
+                            if !list.iter().any(|t| t.id == id_val) {
+                                list.insert(0, ft);
+                            }
+                        }
+                    }
+                }
             }
-
-
-
+            let _ = self.save_local_likes(&local_likes);
             let _ = self.save_config(&updated_cfg);
 
 

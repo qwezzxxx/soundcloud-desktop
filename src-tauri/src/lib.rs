@@ -239,7 +239,12 @@ fn open_browser_login() -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn open_in_app_login(app: tauri::AppHandle) -> Result<(), String> {
+async fn set_oauth_token(token: String, state: State<'_, AppState>) -> Result<Value, String> {
+    state.sc.set_oauth_token(&token).await
+}
+
+#[tauri::command]
+async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     use tauri::Manager;
     if let Some(existing) = app.get_webview_window("soundcloud_login") {
         let _ = existing.set_focus();
@@ -248,39 +253,155 @@ async fn open_in_app_login(app: tauri::AppHandle) -> Result<(), String> {
 
     let auth_script = r#"
         (function() {
-            var check = function() {
+            if (window.__ONYX_AUTH_INJECTED__) return;
+            window.__ONYX_AUTH_INJECTED__ = true;
+
+            var tokenFound = false;
+
+            function sendToken(tok) {
+                if (tokenFound || !tok) return;
+                tok = decodeURIComponent(tok).trim();
+                if (tok.length < 10) return;
+                tokenFound = true;
+
+                try {
+                    var banner = document.createElement('div');
+                    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999999;background:#ff5500;color:#fff;text-align:center;padding:12px;font-family:sans-serif;font-size:13px;font-weight:bold;box-shadow:0 4px 16px rgba(0,0,0,0.5);';
+                    banner.innerText = '✨ Авторизация успешна! Подключаем аккаунт к ONYX...';
+                    document.body.appendChild(banner);
+                } catch(e) {}
+
+                try {
+                    var img = new Image();
+                    img.src = 'http://127.0.0.1:49221/auth?token=' + encodeURIComponent(tok);
+                } catch(e) {}
+
+                try {
+                    fetch('http://127.0.0.1:49221/auth?token=' + encodeURIComponent(tok), { mode: 'no-cors' }).catch(function(){});
+                } catch(e) {}
+
+                setTimeout(function() {
+                    window.location.href = 'https://soundcloud.com/?onyx_oauth_token=' + encodeURIComponent(tok);
+                }, 300);
+            }
+
+            function check() {
+                if (tokenFound) return;
                 try {
                     var m = document.cookie.match(/oauth_token=([^;]+)/);
                     if (m && m[1]) {
-                        var tok = decodeURIComponent(m[1]);
-                        fetch('http://127.0.0.1:49221/auth?token=' + encodeURIComponent(tok))
-                            .then(function() {
-                                window.close();
-                            })
-                            .catch(function(e) {
-                                console.error('Auth sync error:', e);
-                            });
+                        sendToken(m[1]);
+                        return;
                     }
                 } catch(e) {}
-            };
-            setInterval(check, 1000);
+
+                try {
+                    for (var i = 0; i < localStorage.length; i++) {
+                        var k = localStorage.key(i);
+                        if (k === 'oauth_token' || k === 'sc_oauth_token') {
+                            var v = localStorage.getItem(k);
+                            if (v && v.length > 10) {
+                                sendToken(v);
+                                return;
+                            }
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            try {
+                var originalFetch = window.fetch;
+                window.fetch = function(input, init) {
+                    try {
+                        if (init && init.headers) {
+                            var auth = null;
+                            if (init.headers instanceof Headers) {
+                                auth = init.headers.get('Authorization') || init.headers.get('authorization');
+                            } else if (typeof init.headers === 'object') {
+                                auth = init.headers['Authorization'] || init.headers['authorization'];
+                            }
+                            if (auth && typeof auth === 'string') {
+                                var mAuth = auth.match(/OAuth\s+([^\s;]+)/i) || auth.match(/Bearer\s+([^\s;]+)/i);
+                                if (mAuth && mAuth[1]) {
+                                    sendToken(mAuth[1]);
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                    return originalFetch.apply(this, arguments);
+                };
+            } catch(e) {}
+
+            try {
+                var origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+                XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
+                    try {
+                        if (header && header.toLowerCase() === 'authorization' && value) {
+                            var mAuth = value.match(/OAuth\s+([^\s;]+)/i) || value.match(/Bearer\s+([^\s;]+)/i);
+                            if (mAuth && mAuth[1]) {
+                                sendToken(mAuth[1]);
+                            }
+                        }
+                    } catch(e) {}
+                    return origSetHeader.apply(this, arguments);
+                };
+            } catch(e) {}
+
+            setInterval(check, 600);
             check();
         })();
     "#;
 
     let target_url: tauri::Url = "https://soundcloud.com/signin".parse().unwrap();
+    let app_handle = app.clone();
+    let sc_clone = state.sc.clone();
 
-    let _win = tauri::WebviewWindowBuilder::new(
+    let mut builder = tauri::WebviewWindowBuilder::new(
         &app,
         "soundcloud_login",
         tauri::WebviewUrl::External(target_url)
     )
-    .title("Вход в SoundCloud")
+    .title("Вход в SoundCloud — ONYX")
     .inner_size(540.0, 720.0)
-    .initialization_script(auth_script)
-    .build()
-    .map_err(|e| e.to_string())?;
+    .center()
+    .initialization_script(auth_script);
 
+    let app_nav = app_handle.clone();
+    let sc_nav = sc_clone.clone();
+
+    builder = builder.on_navigation(move |url| {
+        let url_str = url.as_str();
+        if url_str.contains("onyx_oauth_token=") {
+            let token = if let Some(idx) = url_str.find("onyx_oauth_token=") {
+                let rest = &url_str[idx + 17..];
+                let end = rest.find('&').unwrap_or(rest.len());
+                let clean = &rest[..end];
+                urlencoding::decode(clean).unwrap_or_else(|_| clean.into()).to_string()
+            } else {
+                String::new()
+            };
+
+            let trimmed = token.trim();
+            if !trimmed.is_empty() {
+                let app_inner = app_nav.clone();
+                let sc_inner = sc_nav.clone();
+                let tok_clone = trimmed.to_string();
+                tokio::spawn(async move {
+                    if let Ok(profile_data) = sc_inner.set_oauth_token(&tok_clone).await {
+                        use tauri::Emitter;
+                        let _ = app_inner.emit("sc_auth_success", &profile_data);
+                    }
+                    if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
+                        let _ = win.close();
+                    }
+                });
+                return false;
+            }
+        }
+        true
+    });
+
+    let _win = builder.build().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -560,6 +681,7 @@ pub fn run() {
             get_related_tracks,
             open_browser_login,
             open_in_app_login,
+            set_oauth_token,
             close_login_window,
             open_url,
             update_discord_activity,

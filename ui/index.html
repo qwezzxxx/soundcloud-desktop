@@ -11920,6 +11920,7 @@
 
 
       openInAppLogin: () => api.invoke('open_in_app_login'),
+      setOauthToken: (token) => api.invoke('set_oauth_token', { token }),
 
 
 
@@ -26552,6 +26553,33 @@
                 saveLocalDatabase();
                 renderLikedTable();
                 applyUserProfile(currentUser, allTracks.length);
+              }
+            });
+
+            window.__TAURI__.event.listen('sc_auth_success', (event) => {
+              try {
+                const data = event.payload;
+                if (data) {
+                  if (data.profile) currentUser = data.profile;
+                  if (data.config) appConfig = data.config;
+                  if (data.likes && Array.isArray(data.likes) && data.likes.length > 0) {
+                    allTracks = data.likes;
+                    allTracks.forEach(t => { if (t) t.liked = true; });
+                    currentQueue = [...allTracks];
+                  }
+                  try {
+                    if (currentUser) localStorage.setItem('sc_local_user_profile', JSON.stringify(currentUser));
+                    if (appConfig && appConfig.oauth_token) localStorage.setItem('sc_session_token', appConfig.oauth_token);
+                  } catch (_) {}
+                  saveLocalDatabase();
+                  applyUserProfile(currentUser, allTracks.length);
+                  renderLikedTable();
+                  if (typeof lastMixedData !== 'undefined' && lastMixedData) renderHomeFeed(allTracks, lastMixedData);
+                  closeLogin();
+                  notify('SoundCloud аккаунт успешно подключен!', '✨');
+                }
+              } catch (e) {
+                console.warn('sc_auth_success handler error:', e);
               }
             });
           } catch (_) {}
