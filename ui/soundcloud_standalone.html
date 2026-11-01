@@ -17574,7 +17574,7 @@
         prefetchNextTrack(currentTrackIndex + 1);
 
         const streamUrl = typeof streamInfo === 'object' && streamInfo !== null ? streamInfo.url : streamInfo;
-        const isHls = (typeof streamInfo === 'object' && streamInfo !== null && streamInfo.protocol === 'hls') || (streamUrl && streamUrl.includes('m3u8'));
+        const isHls = ((typeof streamInfo === 'object' && streamInfo !== null && streamInfo.protocol === 'hls') || (streamUrl && streamUrl.includes('m3u8'))) && !streamUrl.includes('127.0.0.1:49221');
 
         if (!streamUrl) {
           notify("⚠️ Поток трека недоступен на серверах SoundCloud", "❌");

@@ -436,6 +436,10 @@ fn resolve_config_path() -> PathBuf {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
     let _ = std::fs::write("app_run.log", "lib::run() started\n");
     let config_path = resolve_config_path();
 

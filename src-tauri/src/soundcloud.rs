@@ -2274,7 +2274,7 @@ impl SoundCloudClient {
 
 
 
-                                                return Ok(audio_url.to_string());
+                                                let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(audio_url)); return Ok(proxied);
 
 
 

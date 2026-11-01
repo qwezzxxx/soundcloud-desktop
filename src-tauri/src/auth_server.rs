@@ -160,13 +160,70 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
                                 return;
                             }
 
+                            let client = get_http_client();
+
+                            // Handle HLS m3u8 playlists by stitching fMP4 segments into a direct progressive audio stream
+                            if target_url.contains("m3u8") {
+                                if let Ok(m_resp) = client.get(&target_url)
+                                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36")
+                                    .send().await
+                                {
+                                    if let Ok(m_text) = m_resp.text().await {
+                                        let mut init_url: Option<String> = None;
+                                        let mut segments: Vec<String> = Vec::new();
+                                        for line in m_text.lines() {
+                                            let clean = line.trim();
+                                            if clean.starts_with("#EXT-X-MAP:URI=\"") {
+                                                if let Some(end_idx) = clean[16..].find('"') {
+                                                    init_url = Some(clean[16..16 + end_idx].to_string());
+                                                }
+                                            } else if !clean.is_empty() && !clean.starts_with('#') {
+                                                if clean.starts_with("http://") || clean.starts_with("https://") {
+                                                    segments.push(clean.to_string());
+                                                } else if let Ok(base) = reqwest::Url::parse(&target_url) {
+                                                    if let Ok(joined) = base.join(clean) {
+                                                        segments.push(joined.to_string());
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if !segments.is_empty() {
+                                            let header_str = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS, HEAD\r\nAccess-Control-Allow-Headers: Range, Origin, Content-Type, Accept\r\nAccept-Ranges: none\r\nConnection: keep-alive\r\nContent-Type: audio/mp4\r\n\r\n";
+                                            if stream.write_all(header_str.as_bytes()).await.is_ok() {
+                                                if let Some(ref init) = init_url {
+                                                    if let Ok(mut init_res) = client.get(init).header("User-Agent", "Mozilla/5.0").send().await {
+                                                        while let Ok(Some(chunk)) = init_res.chunk().await {
+                                                            if stream.write_all(&chunk).await.is_err() {
+                                                                return;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
+                                                for seg in segments {
+                                                    if let Ok(mut seg_res) = client.get(&seg).header("User-Agent", "Mozilla/5.0").send().await {
+                                                        while let Ok(Some(chunk)) = seg_res.chunk().await {
+                                                            if stream.write_all(&chunk).await.is_err() {
+                                                                return;
+                                                            }
+                                                        }
+                                                    } else {
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+
                             // Extract Range header if requested by HTML5 audio
                             let range_header = request_str.lines()
                                 .find(|l| l.to_lowercase().starts_with("range:"))
                                 .and_then(|l| l.split(':').nth(1))
                                 .map(|s| s.trim().to_string());
-
-                            let client = get_http_client();
 
                             let mut req = client.get(&target_url)
                                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36")
