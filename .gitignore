@@ -1,0 +1,41 @@
+# Rust & Tauri Build Artifacts
+**/target/
+**/*.rs.bk
+Cargo.lock
+
+# Executables & Binaries (Should be uploaded to GitHub Releases, not git repo)
+*.exe
+*.dll
+*.old*
+*.pdb
+*.zip
+SoundCloud-Desktop-Portable/
+
+# Local App & User Configuration
+config.json
+audio_cache/
+
+# Logs & Debug Dumps
+*.log
+debug_play.log
+app_run.log
+err.log
+out.log
+panic.log
+init_app_called.log
+crash.log
+
+# Node & Python caches
+node_modules/
+__pycache__/
+*.pyc
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+.vscode/
+.idea/
+
+custom_wallpaper.dat
