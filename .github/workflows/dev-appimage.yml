@@ -40,13 +40,13 @@ jobs:
           projectPath: "./src-tauri"
           args: --bundles appimage
           tagName: dev-latest
-          releaseName: "SoundCloud Desktop (Dev Build - AppImage Only)"
+          releaseName: "ONYX (Dev Build - AppImage Only)"
           releaseDraft: false
           prerelease: true
 
       - name: Upload AppImage Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SoundCloud-Desktop-Dev-AppImage
+          name: ONYX-Dev-AppImage
           path: src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn

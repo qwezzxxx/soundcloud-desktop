@@ -429,9 +429,15 @@ fn resolve_config_path() -> PathBuf {
         .or_else(|_| std::env::var("XDG_CONFIG_HOME"))
         .or_else(|_| std::env::var("HOME").map(|h| format!("{}/.config", h)))
         .unwrap_or_else(|_| ".".to_string());
-    let dir = PathBuf::from(config_dir).join("com.soundcloud.desktop");
-    let _ = std::fs::create_dir_all(&dir);
-    dir.join("config.json")
+    let onyx_dir = PathBuf::from(&config_dir).join("com.onyx.player");
+    let legacy_dir = PathBuf::from(&config_dir).join("com.soundcloud.desktop");
+    if !onyx_dir.exists() && legacy_dir.exists() {
+        let _ = std::fs::create_dir_all(&onyx_dir);
+        let _ = std::fs::copy(legacy_dir.join("config.json"), onyx_dir.join("config.json"));
+        let _ = std::fs::copy(legacy_dir.join("likes.json"), onyx_dir.join("likes.json"));
+    }
+    let _ = std::fs::create_dir_all(&onyx_dir);
+    onyx_dir.join("config.json")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -486,13 +492,13 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem};
 
             let quit_i = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
-            let show_i = MenuItem::with_id(app, "show", "Открыть плеер", true, None::<&str>)?;
+            let show_i = MenuItem::with_id(app, "show", "Открыть ONYX", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
             if let Some(icon) = app.default_window_icon() {
                 let _ = TrayIconBuilder::new()
                     .icon(icon.clone())
-                    .tooltip("SoundCloud Desktop")
+                    .tooltip("ONYX")
                     .menu(&menu)
                     .show_menu_on_left_click(false)
                     .on_menu_event(|app, event| {

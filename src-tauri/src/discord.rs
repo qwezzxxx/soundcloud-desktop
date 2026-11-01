@@ -170,7 +170,7 @@ impl DiscordManager {
 
         // When show_status is true, display SoundCloud. When false, use the track name or Music
         let display_name = if show_status {
-            "SoundCloud".to_string()
+            "ONYX".to_string()
         } else {
             if !title.trim().is_empty() {
                 title.trim().to_string()
@@ -192,7 +192,7 @@ impl DiscordManager {
         let mut assets = serde_json::Map::new();
         if show_cover && !cover.is_empty() {
             assets.insert("large_image".to_string(), serde_json::json!(cover));
-            assets.insert("large_text".to_string(), serde_json::json!(if show_status { "SoundCloud" } else { title }));
+            assets.insert("large_text".to_string(), serde_json::json!(if show_status { "ONYX" } else { title }));
         }
 
         if show_status {
