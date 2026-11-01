@@ -16911,7 +16911,12 @@
         }
       } catch (err) {
         console.warn('Like toggle sync error:', err);
-        notify('Ошибка синхронизации лайка с SoundCloud: ' + (err.message || err), '⚠️');
+        const msg = String((err && err.message) || err || '');
+        if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('ограничил') || msg.includes('рейт-лимит')) {
+          notify('SoundCloud временно ограничил лайки (429). Лайк сохранён локально в ONYX.', '⚠️');
+        } else {
+          notify('Ошибка синхронизации лайка с SoundCloud: ' + msg, '⚠️');
+        }
       }
 
 

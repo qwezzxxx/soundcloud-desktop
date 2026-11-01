@@ -154,7 +154,6 @@ async fn get_likes(limit: Option<usize>, state: State<'_, AppState>) -> Result<V
 
 #[tauri::command]
 async fn sync_likes(state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
-    let _ = state.sc.push_local_likes_to_soundcloud().await;
     state.sc.get_liked_tracks(500).await
 }
 
@@ -408,7 +407,6 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                     // 3. Process full account authorization (profile, likes, sync)
                     match sc_inner.set_oauth_token(&tok_clone).await {
                         Ok(profile_data) => {
-                            let _ = sc_inner.push_local_likes_to_soundcloud().await;
                             let fresh_likes = sc_inner.get_liked_tracks(500).await.unwrap_or_default();
                             let mut res_data = profile_data;
                             if let Some(obj) = res_data.as_object_mut() {

@@ -16,6 +16,7 @@ SoundCloud-Desktop-Portable/
 
 # Local App & User Configuration
 config.json
+likes.json
 audio_cache/
 
 # Logs & Debug Dumps

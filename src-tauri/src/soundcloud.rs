@@ -355,17 +355,9 @@ pub struct FormattedTrack {
 
 
 pub struct SoundCloudClient {
-
-
-
     http: reqwest::Client,
-
-
-
     config_path: PathBuf,
-
-
-
+    like_rate_limited_until: std::sync::Mutex<Option<std::time::Instant>>,
 }
 
 
@@ -379,13 +371,24 @@ impl SoundCloudClient {
 
 
     pub fn http_client(&self) -> &reqwest::Client {
-
-
-
         &self.http
+    }
 
+    pub fn is_like_rate_limited(&self) -> bool {
+        if let Ok(guard) = self.like_rate_limited_until.lock() {
+            if let Some(until) = *guard {
+                if std::time::Instant::now() < until {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 
-
+    pub fn set_like_rate_limited(&self, duration: std::time::Duration) {
+        if let Ok(mut guard) = self.like_rate_limited_until.lock() {
+            *guard = Some(std::time::Instant::now() + duration);
+        }
     }
 
 
@@ -415,17 +418,9 @@ impl SoundCloudClient {
 
 
         Self {
-
-
-
             http,
-
-
-
             config_path: config_path.as_ref().to_path_buf(),
-
-
-
+            like_rate_limited_until: std::sync::Mutex::new(None),
         }
 
 
@@ -716,6 +711,9 @@ impl SoundCloudClient {
     }
 
     pub async fn push_local_likes_to_soundcloud(&self) -> Result<usize, String> {
+        if self.is_like_rate_limited() {
+            return Err("SoundCloud кулдаун 429 активен. Автоматическая отправка лайков приостановлена.".to_string());
+        }
         let (user_id, token) = match self.ensure_active_user().await {
             Ok(pair) => pair,
             Err(_) => return Ok(0),
@@ -773,7 +771,8 @@ impl SoundCloudClient {
                 if st == 200 || st == 201 || st == 204 {
                     pushed += 1;
                 } else if st == 429 {
-                    return Err("SoundCloud временно заблокировал добавление лайков (рейт-лимит 429). Подождите 10-15 минут.".to_string());
+                    self.set_like_rate_limited(std::time::Duration::from_secs(1800));
+                    return Err("SoundCloud временно заблокировал добавление лайков (рейт-лимит 429). Подождите 15-30 минут.".to_string());
                 }
             }
 
@@ -3203,58 +3202,66 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         log_msg(&format!("toggle_like called: track_id={}, should_like={}", id_str, should_like));
 
         // 1. Send to SoundCloud API v2 if logged in
-        match self.ensure_active_user().await {
-            Ok((user_id, token)) => {
-                log_msg(&format!("ensure_active_user OK: user_id={}, token_len={}", user_id, token.len()));
+        if should_like && self.is_like_rate_limited() {
+            log_msg("Rate limit cooldown 429 active; skipping network PUT to protect SoundCloud account");
+            last_status = 429;
+        } else {
+            match self.ensure_active_user().await {
+                Ok((user_id, token)) => {
+                    log_msg(&format!("ensure_active_user OK: user_id={}, token_len={}", user_id, token.len()));
 
-                let candidate_urls = if should_like {
-                    vec![
-                        ("PUT", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                    ]
-                } else {
-                    vec![
-                        ("DELETE", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                    ]
-                };
-
-                for (method, url) in candidate_urls {
-                    log_msg(&format!("Trying {} {}", method, url));
-                    let mut req = match method {
-                        "PUT" => self.http.put(&url).header("Content-Length", "0").body(""),
-                        "DELETE" => self.http.delete(&url),
-                        _ => continue,
+                    let candidate_urls = if should_like {
+                        vec![
+                            ("PUT", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
+                        ]
+                    } else {
+                        vec![
+                            ("DELETE", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
+                        ]
                     };
 
-                    req = req
-                        .header("Authorization", &token)
-                        .header("Origin", "https://soundcloud.com")
-                        .header("Referer", "https://soundcloud.com/")
-                        .header("User-Agent", USER_AGENT)
-                        .header("Accept", "application/json, text/javascript, */*; q=0.01");
+                    for (method, url) in candidate_urls {
+                        log_msg(&format!("Trying {} {}", method, url));
+                        let mut req = match method {
+                            "PUT" => self.http.put(&url).header("Content-Length", "0").body(""),
+                            "DELETE" => self.http.delete(&url),
+                            _ => continue,
+                        };
 
-                    match req.send().await {
-                        Ok(res) => {
-                            let st = res.status().as_u16();
-                            last_status = st;
-                            log_msg(&format!("Response {} st={}", method, st));
-                            if st == 200 || st == 201 || st == 204 {
-                                success = true;
-                                break;
-                            } else if st == 404 && !should_like {
-                                success = true;
-                                break;
+                        req = req
+                            .header("Authorization", &token)
+                            .header("Origin", "https://soundcloud.com")
+                            .header("Referer", "https://soundcloud.com/")
+                            .header("User-Agent", USER_AGENT)
+                            .header("Accept", "application/json, text/javascript, */*; q=0.01");
+
+                        match req.send().await {
+                            Ok(res) => {
+                                let st = res.status().as_u16();
+                                last_status = st;
+                                log_msg(&format!("Response {} st={}", method, st));
+                                if st == 200 || st == 201 || st == 204 {
+                                    success = true;
+                                    break;
+                                } else if st == 404 && !should_like {
+                                    success = true;
+                                    break;
+                                } else if st == 429 {
+                                    self.set_like_rate_limited(std::time::Duration::from_secs(1800));
+                                    break;
+                                }
                             }
-                        }
-                        Err(e) => {
-                            last_err = e.to_string();
-                            log_msg(&format!("Request error: {}", e));
+                            Err(e) => {
+                                last_err = e.to_string();
+                                log_msg(&format!("Request error: {}", e));
+                            }
                         }
                     }
                 }
-            }
-            Err(e) => {
-                last_err = e.clone();
-                log_msg(&format!("ensure_active_user FAILED: {}", e));
+                Err(e) => {
+                    last_err = e.clone();
+                    log_msg(&format!("ensure_active_user FAILED: {}", e));
+                }
             }
         }
 
@@ -3293,7 +3300,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         log_msg(&format!("toggle_like finished: success={}, last_status={}, last_err={}", success, last_status, last_err));
 
         if last_status == 429 {
-            return Err("SoundCloud временно заблокировал лайки за частые запросы (рейт-лимит 429). Подождите 5-10 минут.".to_string());
+            return Err("SoundCloud временно ограничил добавление лайков (429 Too Many Requests). Лайк сохранён локально в ONYX.".to_string());
         }
 
         Ok(success)
