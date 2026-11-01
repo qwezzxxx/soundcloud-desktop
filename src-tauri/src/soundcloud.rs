@@ -572,56 +572,120 @@ impl SoundCloudClient {
 
 
     fn auth_header(&self, cfg: &AppConfig) -> Option<String> {
-
-
-
         cfg.oauth_token.as_ref().and_then(|t| {
-
-
-
-            let trimmed = t.trim();
-
-
-
+            let trimmed = t.trim().trim_matches(&['"', '\''][..]).trim();
             if trimmed.is_empty() {
-
-
-
                 None
-
-
-
             } else if trimmed.starts_with("OAuth ") || trimmed.starts_with("Bearer ") {
-
-
-
-                Some(trimmed.to_string())
-
-
-
+                let parts: Vec<&str> = trimmed.splitn(2, ' ').collect();
+                if parts.len() == 2 {
+                    let scheme = parts[0];
+                    let raw_token = parts[1].trim().trim_matches(&['"', '\''][..]).trim();
+                    Some(format!("{} {}", scheme, raw_token))
+                } else {
+                    Some(trimmed.to_string())
+                }
             } else {
-
-
-
                 Some(format!("OAuth {}", trimmed))
-
-
-
             }
-
-
-
         })
-
-
-
     }
 
+    pub async fn ensure_active_user(&self) -> Result<(i64, String), String> {
+        let cfg = self.load_config();
+        let token = self.auth_header(&cfg).ok_or("Not logged in")?;
+        let client_id = self.get_client_id().await;
 
+        if let Some(ref uid_val) = cfg.user_id {
+            if let Some(n) = uid_val.as_i64() {
+                if n > 0 && n != 1000000 {
+                    return Ok((n, token));
+                }
+            } else if let Some(s) = uid_val.as_str() {
+                if let Ok(n) = s.parse::<i64>() {
+                    if n > 0 && n != 1000000 {
+                        return Ok((n, token));
+                    }
+                }
+            }
+        }
 
+        let me_url = format!("https://api-v2.soundcloud.com/me?client_id={}", client_id);
+        let res = self.http.get(&me_url)
+            .header("Authorization", &token)
+            .header("User-Agent", USER_AGENT)
+            .header("Origin", "https://soundcloud.com")
+            .header("Referer", "https://soundcloud.com/")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .send()
+            .await
+            .map_err(|e| format!("Failed to reach SoundCloud /me: {}", e))?;
 
+        if !res.status().is_success() {
+            return Err(format!("SoundCloud /me returned HTTP {}", res.status()));
+        }
 
+        let user_val: Value = res.json().await.map_err(|e| format!("Failed to parse /me: {}", e))?;
+        let numeric_id = user_val.get("id")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| "SoundCloud /me response does not contain numeric user id".to_string())?;
 
+        let mut upd = self.load_config();
+        upd.user_id = Some(Value::from(numeric_id));
+        upd.user_profile = Some(user_val);
+        let _ = self.save_config(&upd);
+
+        Ok((numeric_id, token))
+    }
+
+    pub async fn push_local_likes_to_soundcloud(&self) -> Result<usize, String> {
+        let (user_id, token) = match self.ensure_active_user().await {
+            Ok(pair) => pair,
+            Err(_) => return Ok(0),
+        };
+        let client_id = self.get_client_id().await;
+        let local_tracks = self.load_local_likes();
+        if local_tracks.is_empty() {
+            return Ok(0);
+        }
+
+        let mut pushed = 0;
+        for track in local_tracks {
+            let id_str = if let Some(n) = track.id.as_i64() {
+                n.to_string()
+            } else if let Some(s) = track.id.as_str() {
+                s.to_string()
+            } else {
+                track.id.to_string().trim_matches(&['"', '\''][..]).to_string()
+            };
+            if id_str.is_empty() || id_str == "null" {
+                continue;
+            }
+
+            let put_url = format!(
+                "https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}",
+                user_id, id_str, client_id
+            );
+            let res = self.http.put(&put_url)
+                .header("Authorization", &token)
+                .header("Origin", "https://soundcloud.com")
+                .header("Referer", "https://soundcloud.com/")
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                .header("Content-Length", "0")
+                .body("")
+                .send()
+                .await;
+
+            if let Ok(r) = res {
+                let st = r.status().as_u16();
+                if st == 200 || st == 201 || st == 204 {
+                    pushed += 1;
+                }
+            }
+        }
+        Ok(pushed)
+    }
 
     pub async fn refresh_dynamic_client_id(&self) -> Option<String> {
 
@@ -1169,14 +1233,14 @@ impl SoundCloudClient {
         let token_opt = self.auth_header(&cfg);
         let existing_cached = cfg.cached_likes.clone().unwrap_or_default();
 
-        // 1. Determine user ID
-        let user_id = if let Some(ref uid) = cfg.user_id {
+        // 1. Determine or auto-resolve numeric user ID
+        let mut active_user_id = if let Some(ref uid) = cfg.user_id {
             if let Some(n) = uid.as_i64() {
                 n.to_string()
             } else if let Some(s) = uid.as_str() {
                 s.to_string()
             } else {
-                uid.to_string().trim_matches('"').to_string()
+                uid.to_string().trim_matches(&['"', '\''][..]).to_string()
             }
         } else if let Some(ref prof) = cfg.user_profile {
             prof.get("id")
@@ -1186,26 +1250,28 @@ impl SoundCloudClient {
             String::new()
         };
 
+        if (active_user_id.is_empty() || active_user_id == "me" || active_user_id == "1000000") && token_opt.is_some() {
+            if let Ok((uid_num, _)) = self.ensure_active_user().await {
+                active_user_id = uid_num.to_string();
+            }
+        }
+
         // 2. Build candidate start endpoints in order of priority:
         let mut candidate_endpoints = Vec::new();
-        if token_opt.is_some() {
-            candidate_endpoints.push(format!(
-                "https://api-v2.soundcloud.com/me/likes/tracks?client_id={}&limit=50&linked_partitioning=1",
-                client_id
-            ));
-            candidate_endpoints.push(format!(
-                "https://api-v2.soundcloud.com/me/likes?client_id={}&limit=50&linked_partitioning=1",
-                client_id
-            ));
-        }
-        if !user_id.is_empty() {
+        if !active_user_id.is_empty() && active_user_id != "me" {
             candidate_endpoints.push(format!(
                 "https://api-v2.soundcloud.com/users/{}/track_likes?client_id={}&limit=50&linked_partitioning=1",
-                user_id, client_id
+                active_user_id, client_id
             ));
             candidate_endpoints.push(format!(
                 "https://api-v2.soundcloud.com/users/{}/likes?client_id={}&limit=50&linked_partitioning=1",
-                user_id, client_id
+                active_user_id, client_id
+            ));
+        }
+        if token_opt.is_some() {
+            candidate_endpoints.push(format!(
+                "https://api-v2.soundcloud.com/me/track_likes?client_id={}&limit=50&linked_partitioning=1",
+                client_id
             ));
         }
 
@@ -1267,8 +1333,6 @@ impl SoundCloudClient {
                         }
                     }
 
-                    // Fast incremental overlap check:
-                    // If page 1 intersects with existing cache, merge new tracks and finish in 1 request!
                     if pages == 1 && !existing_cached.is_empty() && !all_tracks.is_empty() {
                         let has_known = all_tracks.iter().any(|t| existing_cached.iter().any(|c| c.id == t.id));
                         if has_known {
@@ -1303,14 +1367,13 @@ impl SoundCloudClient {
         }
 
         if !all_tracks.is_empty() {
-            let mut updated_cfg = self.load_config();
-            updated_cfg.cached_likes = Some(all_tracks.clone());
-            let _ = self.save_config(&updated_cfg);
+            let _ = self.save_local_likes(&all_tracks);
             Ok(all_tracks)
         } else if !existing_cached.is_empty() {
             Ok(existing_cached)
         } else {
-            Ok(all_tracks)
+            let local = self.load_local_likes();
+            Ok(local)
         }
     }
 
@@ -2999,11 +3062,10 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
     pub async fn set_oauth_token(&self, token: &str) -> Result<Value, String> {
-        let clean = token.trim();
+        let clean = token.trim().trim_matches(&['"', '\''][..]).trim();
         if clean.is_empty() {
             return Err("Token is empty".to_string());
         }
-        // Immediately persist token to config.json so it survives any crashes
         let mut cfg = self.load_config();
         cfg.oauth_token = Some(clean.to_string());
         let _ = self.save_raw_config(&cfg);
@@ -3012,494 +3074,106 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
     }
 
     pub async fn toggle_like(&self, track_id: Value, should_like: bool) -> Result<bool, String> {
-
-
-
-        let cfg = self.load_config();
-
-
-
-        let token = self.auth_header(&cfg).ok_or("Not logged in")?;
-
-
-
         let client_id = self.get_client_id().await;
 
-
-
-        
-
-
-
         let id_str = if let Some(n) = track_id.as_i64() {
-
-
-
             n.to_string()
-
-
-
         } else if let Some(s) = track_id.as_str() {
-
-
-
             s.to_string()
-
-
-
         } else {
-
-
-
-            track_id.to_string().trim_matches('"').to_string()
-
-
-
+            track_id.to_string().trim_matches(&['"', '\''][..]).to_string()
         };
-
-
-
-
-
-
-
-        let mut user_id_str = if let Some(ref uid) = cfg.user_id {
-            if let Some(n) = uid.as_i64() {
-                n.to_string()
-            } else if let Some(s) = uid.as_str() {
-                if s != "me" && !s.is_empty() {
-                    s.to_string()
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-
-        if user_id_str.is_empty() {
-            let me_url = format!("https://api-v2.soundcloud.com/me?client_id={}", client_id);
-            if let Ok(res) = self.http.get(&me_url)
-                .header("Authorization", &token)
-                .header("User-Agent", USER_AGENT)
-                .send()
-                .await
-            {
-                if let Ok(val) = res.json::<Value>().await {
-                    if let Some(n) = val.get("id").and_then(|v| v.as_i64()) {
-                        user_id_str = n.to_string();
-                        let mut upd = self.load_config();
-                        upd.user_id = Some(Value::from(n));
-                        upd.user_profile = Some(val);
-                        let _ = self.save_config(&upd);
-                    }
-                }
-            }
-        }
-
-        let user_id = if !user_id_str.is_empty() { user_id_str } else { "me".to_string() };
-
-
-
-
-
-
 
         let mut success = false;
 
-
-
-
-
-
-
-        // 1. Try /users/{user_id}/track_likes/{id}
-
-
-
-        let url1 = format!(
-
-
-
-            "https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}",
-
-
-
-            user_id, id_str, client_id
-
-
-
-        );
-
-
-
-        let req1 = if should_like {
-
-
-
-            self.http.put(&url1).header("Content-Length", "0").body("")
-
-
-
-        } else {
-
-
-
-            self.http.delete(&url1)
-
-
-
-        };
-
-
-
-        if let Ok(res1) = req1
-
-
-
-            .header("Authorization", &token)
-
-
-
-            .header("Origin", "https://soundcloud.com")
-
-
-
-            .header("Referer", "https://soundcloud.com/")
-
-
-
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-
-
-            .header("Accept", "application/json, text/javascript, */*; q=0.01")
-
-
-
-            .send()
-
-
-
-            .await
-
-
-
-        {
-
-
-
-            let st = res1.status().as_u16();
-
-
-
-            if st == 200 || st == 201 || st == 204 {
-
-
-
-                success = true;
-
-
-
-            }
-
-
-
-        }
-
-
-
-
-
-
-
-        // 2. Fallback to /me/track_likes/{id}
-
-
-
-        if !success {
-
-
-
-            let url2 = format!(
-
-
-
-                "https://api-v2.soundcloud.com/me/track_likes/{}?client_id={}",
-
-
-
-                id_str, client_id
-
-
-
+        // 1. Send PUT / DELETE to SoundCloud API v2 if logged in
+        if let Ok((user_id, token)) = self.ensure_active_user().await {
+            let url = format!(
+                "https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}",
+                user_id, id_str, client_id
             );
 
-
-
-            let req2 = if should_like {
-
-
-
-                self.http.put(&url2).header("Content-Length", "0").body("")
-
-
-
+            let req = if should_like {
+                self.http.put(&url)
+                    .header("Authorization", &token)
+                    .header("Origin", "https://soundcloud.com")
+                    .header("Referer", "https://soundcloud.com/")
+                    .header("User-Agent", USER_AGENT)
+                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                    .header("Content-Length", "0")
+                    .body("")
             } else {
-
-
-
-                self.http.delete(&url2)
-
-
-
+                self.http.delete(&url)
+                    .header("Authorization", &token)
+                    .header("Origin", "https://soundcloud.com")
+                    .header("Referer", "https://soundcloud.com/")
+                    .header("User-Agent", USER_AGENT)
+                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
             };
 
-
-
-            if let Ok(res2) = req2
-
-
-
-                .header("Authorization", &token)
-
-
-
-                .header("Origin", "https://soundcloud.com")
-
-
-
-                .header("Referer", "https://soundcloud.com/")
-
-
-
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-
-
-                .header("Accept", "application/json, text/javascript, */*; q=0.01")
-
-
-
-                .send()
-
-
-
-                .await
-
-
-
-            {
-
-
-
-                let st = res2.status().as_u16();
-
-
-
+            if let Ok(res) = req.send().await {
+                let st = res.status().as_u16();
                 if st == 200 || st == 201 || st == 204 {
-
-
-
                     success = true;
-
-
-
                 }
-
-
-
             }
 
-
-
-        }
-
-
-
-
-
-
-
-        // 3. Fallback to /likes/tracks/{id}
-
-
-
-        if !success {
-
-
-
-            let url3 = format!(
-
-
-
-                "https://api-v2.soundcloud.com/likes/tracks/{}?client_id={}",
-
-
-
-                id_str, client_id
-
-
-
-            );
-
-
-
-            let req3 = if should_like {
-
-
-
-                self.http.post(&url3).header("Content-Length", "0").body("")
-
-
-
-            } else {
-
-
-
-                self.http.delete(&url3)
-
-
-
-            };
-
-
-
-            if let Ok(res3) = req3
-
-
-
-                .header("Authorization", &token)
-
-
-
-                .header("Origin", "https://soundcloud.com")
-
-
-
-                .header("Referer", "https://soundcloud.com/")
-
-
-
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-
-
-                .send()
-
-
-
-                .await
-
-
-
-            {
-
-
-
-                let st = res3.status().as_u16();
-
-
-
-                if st == 200 || st == 201 || st == 204 {
-
-
-
-                    success = true;
-
-
-
-                }
-
-
-
-            }
-
-
-
-        }
-        let mut local_likes = self.load_local_likes();
-
-
-
-
-
-
-
-        // 4. Update local cached_likes in config.json
-
-
-
-        let mut updated_cfg = self.load_config();
-
-
-
-        if let Some(ref mut list) = updated_cfg.cached_likes {
-
-
-
-            let id_val = if let Ok(num) = id_str.parse::<i64>() {
-
-
-
-                serde_json::json!(num)
-
-
-
-            } else {
-
-
-
-                serde_json::json!(id_str)
-
-
-
-            };
-
-
-
-            if !should_like {
-                list.retain(|t| t.id != id_val);
-                local_likes.retain(|t| t.id != id_val);
-            } else {
-                if !local_likes.iter().any(|t| t.id == id_val) {
-                    if let Ok(mut resolved) = self.resolve_tracks(vec![id_val.clone()]).await {
-                        if let Some(mut ft) = resolved.pop() {
-                            ft.liked = true;
-                            local_likes.insert(0, ft.clone());
-                            if !list.iter().any(|t| t.id == id_val) {
-                                list.insert(0, ft);
-                            }
-                        }
+            // Fallback for like if PUT users/{uid}/track_likes wasn't 200/201/204
+            if !success {
+                let fb_url = format!(
+                    "https://api-v2.soundcloud.com/me/track_likes/{}?client_id={}",
+                    id_str, client_id
+                );
+                let fb_req = if should_like {
+                    self.http.put(&fb_url)
+                        .header("Authorization", &token)
+                        .header("Origin", "https://soundcloud.com")
+                        .header("Referer", "https://soundcloud.com/")
+                        .header("User-Agent", USER_AGENT)
+                        .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                        .header("Content-Length", "0")
+                        .body("")
+                } else {
+                    self.http.delete(&fb_url)
+                        .header("Authorization", &token)
+                        .header("Origin", "https://soundcloud.com")
+                        .header("Referer", "https://soundcloud.com/")
+                        .header("User-Agent", USER_AGENT)
+                        .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                };
+                if let Ok(res) = fb_req.send().await {
+                    let st = res.status().as_u16();
+                    if st == 200 || st == 201 || st == 204 {
+                        success = true;
                     }
                 }
             }
-            let _ = self.save_local_likes(&local_likes);
-            let _ = self.save_config(&updated_cfg);
-
-
-
         }
 
+        // 2. Always persist like state locally to likes.json and cached_likes
+        let mut local_likes = self.load_local_likes();
+        let id_val = if let Ok(num) = id_str.parse::<i64>() {
+            serde_json::json!(num)
+        } else {
+            serde_json::json!(id_str)
+        };
 
-
-
-
-
+        if !should_like {
+            local_likes.retain(|t| t.id != id_val);
+        } else {
+            if !local_likes.iter().any(|t| t.id == id_val) {
+                if let Ok(mut resolved) = self.resolve_tracks(vec![id_val.clone()]).await {
+                    if let Some(mut ft) = resolved.pop() {
+                        ft.liked = true;
+                        local_likes.insert(0, ft);
+                    }
+                }
+            }
+        }
+        let _ = self.save_local_likes(&local_likes);
 
         Ok(success || should_like)
-
-
-
     }
-
-
-
-
-
-
 
     pub async fn resolve_url(&self, target_url: &str) -> Result<Value, String> {
 

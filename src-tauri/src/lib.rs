@@ -154,7 +154,13 @@ async fn get_likes(limit: Option<usize>, state: State<'_, AppState>) -> Result<V
 
 #[tauri::command]
 async fn sync_likes(state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
+    let _ = state.sc.push_local_likes_to_soundcloud().await;
     state.sc.get_liked_tracks(500).await
+}
+
+#[tauri::command]
+async fn push_local_likes(state: State<'_, AppState>) -> Result<usize, String> {
+    state.sc.push_local_likes_to_soundcloud().await
 }
 
 #[tauri::command]
@@ -381,7 +387,7 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                 String::new()
             };
 
-            let trimmed = token.trim();
+            let trimmed = token.trim().trim_matches(&['"', '\''][..]).trim();
             if !trimmed.is_empty() {
                 let app_inner = app_nav.clone();
                 let sc_inner = sc_nav.clone();
@@ -402,8 +408,16 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                     // 3. Process full account authorization (profile, likes, sync)
                     match sc_inner.set_oauth_token(&tok_clone).await {
                         Ok(profile_data) => {
+                            let _ = sc_inner.push_local_likes_to_soundcloud().await;
+                            let fresh_likes = sc_inner.get_liked_tracks(500).await.unwrap_or_default();
+                            let mut res_data = profile_data;
+                            if let Some(obj) = res_data.as_object_mut() {
+                                if let Ok(val) = serde_json::to_value(&fresh_likes) {
+                                    obj.insert("likes".to_string(), val);
+                                }
+                            }
                             use tauri::Emitter;
-                            let _ = app_inner.emit("sc_auth_success", &profile_data);
+                            let _ = app_inner.emit("sc_auth_success", &res_data);
                         }
                         Err(e) => {
                             eprintln!("set_oauth_token error: {}", e);
@@ -704,6 +718,7 @@ pub fn run() {
             get_profile,
             get_likes,
             sync_likes,
+            push_local_likes,
             get_stream_url,
             toggle_like,
             search_tracks,
