@@ -3091,7 +3091,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
         let log_msg = |msg: &str| {
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
-                let _ = writeln!(f, "[{}] {}", chrono::Utc::now().to_rfc3339(), msg);
+                let _ = writeln!(f, "[{}] {}", "DEBUG", msg);
             }
         };
 
