@@ -9,6 +9,9 @@ Cargo.lock
 *.old*
 *.pdb
 *.zip
+*.AppImage
+*.deb
+*.rpm
 SoundCloud-Desktop-Portable/
 
 # Local App & User Configuration
