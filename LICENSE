@@ -2,6 +2,21 @@ MIT License
 
 Copyright (c) 2026 qwezzxxx
 
+---
+Дисклеймер / Disclaimer:
+Данное программное обеспечение предоставляется исключительно в ознакомительных,
+исследовательских и образовательных целях. Проект является неофициальным клиентом
+и никоим образом не связан, не спонсируется и не аффилирован с SoundCloud Global Limited
+& Co. KG, Google LLC (YouTube), Яндекс или любыми их дочерними компаниями.
+Все товарные знаки, логотипы, названия брендов и медиаконтент принадлежат их
+законным правообладателям.
+
+This project is created strictly for educational, research, and evaluation purposes.
+It is an unofficial third-party client and is not affiliated with, endorsed by, or
+sponsored by SoundCloud, YouTube, Yandex, or any of their affiliates. All trademarks,
+registered trademarks, and copyrights belong to their respective owners.
+---
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
@@ -9,8 +24,8 @@ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice, this disclaimer, and this permission notice shall be
+included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
