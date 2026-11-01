@@ -3,7 +3,7 @@ name = "onyx"
 version = "1.0.3"
 description = "ONYX - Modern SoundCloud Player"
 edition = "2021"
-license = "Proprietary"
+license = "AGPL-3.0-only"
 
 [lib]
 name = "app_lib"

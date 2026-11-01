@@ -12,6 +12,9 @@
 <a href="https://github.com/qwezzxxx/soundcloud-desktop/releases">
 <img src="https://img.shields.io/github/downloads/qwezzxxx/soundcloud-desktop/total?style=for-the-badge&logo=download&color=222222&label=Скачивания" alt="Downloads"/>
 </a>
+<a href="LICENSE">
+<img src="https://img.shields.io/badge/Лицензия-AGPLv3-0055ff?style=for-the-badge" alt="License: AGPLv3"/>
+</a>
 </p>
 
 ---
@@ -78,5 +81,6 @@ SoundCloud заблокирован во многих регионах, а ве�
 
 ## Лицензия
 
-Распространяется свободно для личного использования.
+Проект распространяется под свободной лицензией **GNU Affero General Public License v3.0 (AGPLv3)**. Подробности — в файле [LICENSE](LICENSE).
+
 SoundCloud является зарегистрированным товарным знаком SoundCloud Ltd. Данный проект не аффилирован с SoundCloud.
