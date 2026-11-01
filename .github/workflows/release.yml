@@ -57,3 +57,24 @@ jobs:
           releaseName: "SoundCloud Desktop ${{ github.ref_name != 'main' && github.ref_name || inputs.tag_name }}"
           releaseDraft: false
           prerelease: false
+
+      - name: Upload Windows Portable Binaries
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name != 'main' && github.ref_name || inputs.tag_name }}"
+          mkdir -p dist_portable
+          cp src-tauri/target/release/soundcloud-desktop.exe dist_portable/SoundCloud.exe
+          cp src-tauri/target/release/soundcloud-desktop.exe ./SoundCloud.exe
+          cp src-tauri/target/release/soundcloud-desktop.exe ./soundcloud-desktop-portable.exe
+
+          # Download yt-dlp if available
+          curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -o dist_portable/yt-dlp.exe || true
+
+          # Create clean portable ZIP
+          (cd dist_portable && 7z a "../SoundCloud-Desktop-${TAG}-windows-x64.zip" SoundCloud.exe yt-dlp.exe)
+
+          # Upload portable standalone exe and zip to the release
+          gh release upload "$TAG" SoundCloud.exe soundcloud-desktop-portable.exe "SoundCloud-Desktop-${TAG}-windows-x64.zip" --clobber
