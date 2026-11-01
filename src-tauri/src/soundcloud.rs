@@ -649,6 +649,18 @@ impl SoundCloudClient {
             return Ok(0);
         }
 
+        // Fetch currently liked tracks on SoundCloud to prevent re-liking existing tracks
+        let remote_likes = self.get_liked_tracks(500).await.unwrap_or_default();
+        let remote_ids: std::collections::HashSet<String> = remote_likes.into_iter().map(|t| {
+            if let Some(n) = t.id.as_i64() {
+                n.to_string()
+            } else if let Some(s) = t.id.as_str() {
+                s.to_string()
+            } else {
+                t.id.to_string().trim_matches(&['"', '\''][..]).to_string()
+            }
+        }).collect();
+
         let mut pushed = 0;
         for track in local_tracks {
             let id_str = if let Some(n) = track.id.as_i64() {
@@ -659,6 +671,11 @@ impl SoundCloudClient {
                 track.id.to_string().trim_matches(&['"', '\''][..]).to_string()
             };
             if id_str.is_empty() || id_str == "null" {
+                continue;
+            }
+
+            // CRITICAL: Skip tracks that are ALREADY liked on SoundCloud
+            if remote_ids.contains(&id_str) {
                 continue;
             }
 
@@ -677,32 +694,15 @@ impl SoundCloudClient {
                 .send()
                 .await;
 
-            let mut ok = false;
             if let Ok(r) = res {
                 let st = r.status().as_u16();
                 if st == 200 || st == 201 || st == 204 {
-                    ok = true;
+                    pushed += 1;
                 }
             }
 
-            if !ok {
-                let me_url = format!(
-                    "https://api-v2.soundcloud.com/me/track_likes/{}?client_id={}",
-                    id_str, client_id
-                );
-                let _ = self.http.put(&me_url)
-                    .header("Authorization", &token)
-                    .header("Origin", "https://soundcloud.com")
-                    .header("Referer", "https://soundcloud.com/")
-                    .header("User-Agent", USER_AGENT)
-                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
-                    .header("Content-Length", "0")
-                    .body("")
-                    .send()
-                    .await;
-            }
-
-            pushed += 1;
+            // Polite delay between requests to never trigger rate limits
+            tokio::time::sleep(std::time::Duration::from_millis(350)).await;
         }
         Ok(pushed)
     }
@@ -3091,7 +3091,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
         let log_msg = |msg: &str| {
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
-                let _ = writeln!(f, "[{}] {}", "DEBUG", msg);
+                let _ = writeln!(f, "[DEBUG] {}", msg);
             }
         };
 
@@ -3100,20 +3100,15 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         // 1. Send to SoundCloud API v2 if logged in
         match self.ensure_active_user().await {
             Ok((user_id, token)) => {
-                log_msg(&format!("ensure_active_user OK: user_id={}, token_prefix={}", user_id, &token[..token.len().min(12)]));
+                log_msg(&format!("ensure_active_user OK: user_id={}, token_len={}", user_id, token.len()));
 
                 let candidate_urls = if should_like {
                     vec![
                         ("PUT", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                        ("PUT", format!("https://api-v2.soundcloud.com/me/track_likes/{}?client_id={}", id_str, client_id)),
-                        ("POST", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                        ("POST", format!("https://api-v2.soundcloud.com/likes/tracks/{}?client_id={}", id_str, client_id)),
                     ]
                 } else {
                     vec![
                         ("DELETE", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                        ("DELETE", format!("https://api-v2.soundcloud.com/me/track_likes/{}?client_id={}", id_str, client_id)),
-                        ("DELETE", format!("https://api-v2.soundcloud.com/likes/tracks/{}?client_id={}", id_str, client_id)),
                     ]
                 };
 
@@ -3121,7 +3116,6 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                     log_msg(&format!("Trying {} {}", method, url));
                     let mut req = match method {
                         "PUT" => self.http.put(&url).header("Content-Length", "0").body(""),
-                        "POST" => self.http.post(&url).header("Content-Length", "0").body(""),
                         "DELETE" => self.http.delete(&url),
                         _ => continue,
                     };
@@ -3139,6 +3133,9 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                             last_status = st;
                             log_msg(&format!("Response {} st={}", method, st));
                             if st == 200 || st == 201 || st == 204 {
+                                success = true;
+                                break;
+                            } else if st == 404 && !should_like {
                                 success = true;
                                 break;
                             }
@@ -3179,6 +3176,10 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         let _ = self.save_local_likes(&local_likes);
 
         log_msg(&format!("toggle_like finished: success={}, last_status={}, last_err={}", success, last_status, last_err));
+
+        if last_status == 429 {
+            return Err("SoundCloud временно заблокировал лайки за частые запросы (рейт-лимит 429). Подождите 5-10 минут.".to_string());
+        }
 
         Ok(success)
     }
