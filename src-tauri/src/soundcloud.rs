@@ -339,8 +339,6 @@ pub struct FormattedTrack {
     #[serde(default)]
     pub liked: bool,
     #[serde(default)]
-    pub stream_url: Option<String>,
-    #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
     pub genre: Option<String>,
