@@ -1374,22 +1374,6 @@ impl SoundCloudClient {
 
 
 
-        let cand_scratch = std::path::PathBuf::from(r"C:\Users\games\.gemini\antigravity\scratch\soundcloud-desktop\yt-dlp.exe");
-
-
-
-        if cand_scratch.exists() {
-
-
-
-            return cand_scratch;
-
-
-
-        }
-
-
-
         let cand_wg = std::path::PathBuf::from(r"C:\Users\games\AppData\Local\Microsoft\WinGet\Packages\yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe\yt-dlp.exe");
 
 
