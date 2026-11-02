@@ -8883,69 +8883,62 @@
           <!-- ========================================== -->
       <!-- TAB: ARTIST VIEW (tab-artist)              -->
       <!-- ========================================== -->
-      <div id="tab-artist" class="tab-content space-y-5 w-full max-w-6xl mx-auto hidden pb-20">
+      <div id="tab-artist" class="tab-content space-y-4 w-full max-w-4xl mx-auto pb-36">
         
         <!-- Back Button -->
         <div class="flex items-center gap-3 pt-1">
-          <button onclick="goBackFromArtist()" class="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold flex items-center gap-2 border border-white/10 transition cursor-pointer active:scale-95">
+          <button onclick="goBackFromArtist()" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold flex items-center gap-1.5 border border-white/10 transition cursor-pointer active:scale-95">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
             <span>Назад</span>
           </button>
         </div>
 
-        <!-- Artist Hero Card (Compact, clean avatar, no borders/glows) -->
-        <div class="card-glass profile-header-card rounded-2xl p-4 sm:p-6 relative overflow-hidden w-full border border-white/10 shadow-2xl">
-          <div id="artist-ambient-bg" class="absolute inset-0 bg-cover bg-center opacity-25 filter blur-3xl scale-125 pointer-events-none transition-all duration-700"></div>
-          <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent pointer-events-none"></div>
-          <div id="artist-glow-blob" class="absolute -right-20 -top-20 w-80 h-80 rounded-full blur-3xl pointer-events-none opacity-20" style="background-color: var(--accent);"></div>
+        <!-- Artist Hero Card (Ultra-compact, clean avatar, no borders/glows, low-res optimized) -->
+        <div class="card-glass profile-header-card rounded-2xl p-3.5 sm:p-4 relative overflow-hidden w-full border border-white/10 shadow-lg">
+          <div id="artist-ambient-bg" class="absolute inset-0 bg-cover bg-center opacity-20 filter blur-2xl scale-125 pointer-events-none transition-all duration-700"></div>
+          <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent pointer-events-none"></div>
 
-          <div class="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-5">
-            <!-- Clean Avatar: NO BORDER, NO GLOW, RESPONSIVE SIZE -->
-            <div id="artist-avatar-wrap" class="w-20 h-20 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shrink-0 shadow-lg">
+          <div class="relative z-10 flex flex-row items-center gap-3.5 sm:gap-4">
+            <!-- Clean Avatar: NO BORDER, NO GLOW, PURE SMOOTH CORNERS -->
+            <div id="artist-avatar-wrap" class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden shrink-0 bg-neutral-900">
               <img id="artist-avatar-img" src="" class="w-full h-full object-cover">
             </div>
 
             <!-- Artist Info -->
-            <div class="flex-1 text-center sm:text-left min-w-0">
-              <div class="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                <span class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border" style="color: var(--accent); background: rgba(255, 85, 0, 0.12); border-color: rgba(255, 85, 0, 0.25);">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-0.5">
+                <span class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md" style="color: #ff5500; background: rgba(255, 85, 0, 0.15); border: 1px solid rgba(255, 85, 0, 0.3);">
                   SoundCloud Artist
                 </span>
-                <span id="artist-location" class="text-xs text-neutral-400"></span>
+                <span id="artist-location" class="text-xs text-neutral-400 truncate"></span>
               </div>
 
-              <h1 id="artist-name" class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center justify-center sm:justify-start gap-2">
+              <h1 id="artist-name" class="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2 truncate">
                 <span></span>
-                <svg id="artist-verified-badge" class="w-5 h-5 text-orange-500 fill-current hidden" viewBox="0 0 24 24" title="Verified Artist">
+                <svg id="artist-verified-badge" class="w-4 h-4 text-orange-500 fill-current shrink-0 hidden" viewBox="0 0 24 24" title="Verified Artist">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
                 </svg>
               </h1>
 
-              <p id="artist-bio" class="text-xs text-neutral-300 mt-1.5 max-w-xl line-clamp-2 leading-relaxed"></p>
+              <p id="artist-bio" class="text-xs text-neutral-300 mt-1 max-w-xl line-clamp-1 leading-relaxed"></p>
 
-              <!-- Stats Badges -->
-              <div class="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-3 text-xs text-neutral-400">
-                <div class="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
-                  <strong id="artist-followers" class="text-white text-xs font-semibold">0</strong> подписчиков
-                </div>
-                <div class="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
-                  <strong id="artist-track-count" class="text-white text-xs font-semibold">0</strong> треков
-                </div>
-              </div>
-
-              <!-- Action buttons (with contrast text and icons visible on any theme) -->
-              <div class="flex items-center justify-center sm:justify-start gap-2.5 mt-4">
+              <!-- Stats & Action buttons row (Compact, always visible) -->
+              <div class="flex flex-wrap items-center gap-2.5 mt-2.5">
                 <button id="artist-play-all-btn" onclick="playAllArtistTracks()" 
-                        class="px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition hover:scale-105 active:scale-95 shadow-md cursor-pointer" 
-                        style="background-color: var(--accent); color: var(--accent-contrast, #0f172a);">
-                  <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                  <span>Слушать всё</span>
+                        class="px-3.5 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black font-bold text-xs flex items-center gap-1.5 transition active:scale-95 shadow cursor-pointer">
+                  <svg class="w-3.5 h-3.5 fill-black shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  <span class="text-black font-bold">Слушать всё</span>
                 </button>
                 <button id="artist-shuffle-btn" onclick="shuffleArtistTracks()" 
-                        class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-xs flex items-center gap-1.5 border border-white/10 transition active:scale-95 cursor-pointer">
+                        class="px-3.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs flex items-center gap-1.5 border border-white/10 transition active:scale-95 cursor-pointer">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                   <span>Перемешать</span>
                 </button>
+                <div class="flex items-center gap-2 text-xs text-neutral-400 ml-1">
+                  <span id="artist-followers" class="text-white font-medium">0</span> подп.
+                  <span>•</span>
+                  <span id="artist-track-count" class="text-white font-medium">0</span> треков
+                </div>
               </div>
 
             </div>
@@ -8954,7 +8947,7 @@
 
         <!-- Section: Popular Tracks -->
         <div>
-          <h2 class="text-xs sm:text-sm font-bold text-white mb-2.5 flex items-center justify-between">
+          <h2 class="text-xs sm:text-sm font-bold text-white mb-2 flex items-center justify-between">
             <span>Популярные треки</span>
             <span id="artist-tracks-header-count" class="text-xs text-neutral-500 font-normal"></span>
           </h2>
@@ -8965,23 +8958,17 @@
 
         <!-- Section: Albums / Releases -->
         <div id="artist-albums-section">
-          <h2 class="text-xs sm:text-sm font-bold text-white mb-2.5">Релизы и Альбомы</h2>
-          <div id="artist-albums-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+          <h2 class="text-xs sm:text-sm font-bold text-white mb-2">Релизы и Альбомы</h2>
+          <div id="artist-albums-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             <!-- Populated dynamically via renderArtistAlbums -->
           </div>
         </div>
 
       </div>
 
-</div>
+    </div>
 
-
-
-
-
-
-
-    <!-- Right Drawer: Queue (Очередь воспроизведения) -->
+<!-- Right Drawer: Queue (Очередь воспроизведения) -->
 
 
 
@@ -36278,6 +36265,9 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       previousTabBeforeArtist = localStorage.getItem('sc_desktop_active_tab') || 'tab-home';
       switchTab('tab-artist');
 
+      const scrollContainer = document.querySelector('.overflow-y-auto');
+      if (scrollContainer) scrollContainer.scrollTop = 0;
+
       const nameEl = document.getElementById('artist-name');
       if (nameEl) {
         const span = nameEl.querySelector('span');
@@ -36286,7 +36276,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       const bioEl = document.getElementById('artist-bio');
       if (bioEl) bioEl.textContent = 'Загрузка информации об исполнителе...';
       const tracksList = document.getElementById('artist-tracks-list');
-      if (tracksList) tracksList.innerHTML = '<div class="text-xs text-neutral-500 py-8 text-center animate-pulse">Загрузка треков исполнителя...</div>';
+      if (tracksList) tracksList.innerHTML = '<div class="text-xs text-neutral-500 py-8 text-center animate-pulse">Загрузка треков...</div>';
       const albumsGrid = document.getElementById('artist-albums-grid');
       if (albumsGrid) albumsGrid.innerHTML = '';
       const verifiedBadge = document.getElementById('artist-verified-badge');
@@ -36333,8 +36323,8 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           const span = nameEl.querySelector('span');
           if (span) span.textContent = String(artistIdOrName);
         }
-        if (bioEl) bioEl.textContent = 'Не удалось загрузить данные исполнителя: ' + (err.message || err);
-        if (tracksList) tracksList.innerHTML = '<div class="text-xs text-neutral-500 py-6 text-center">Треки не найдены</div>';
+        if (bioEl) bioEl.textContent = 'Не удалось загрузить данные: ' + (err.message || err);
+        if (tracksList) tracksList.innerHTML = '<div class="text-xs text-neutral-500 py-6 text-center">Ошибка при загрузке треков</div>';
       }
     }
 
@@ -36361,7 +36351,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         const isLiked = t.liked === true || (Array.isArray(allTracks) && allTracks.some(x => String(x.id) === String(t.id) && x.liked !== false));
         const accent = currentAccent || '#ff5500';
 
-        item.className = `flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        item.className = `flex items-center justify-between p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
         item.onclick = (e) => {
           if (e.target.closest('.search-like-btn')) return;
           playTrack(idx, currentArtistTracks);
@@ -36378,13 +36368,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
                 </div>
               ` : `${idx + 1}`}
             </div>
-            <div class="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 border border-white/5">
+            <div class="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-white/5">
               <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
             </div>
             <div class="min-w-0 flex-1 pr-2">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
-                <span class="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">☁️ SC</span>
+                <span class="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">SC</span>
               </div>
               <div class="text-[11px] text-neutral-400 truncate">${t.artist || 'Unknown Artist'}</div>
             </div>
@@ -36425,7 +36415,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       albums.forEach(album => {
         const card = document.createElement('div');
-        card.className = 'card-glass p-3 hover:border-white/20 transition-all cursor-pointer group';
+        card.className = 'card-glass p-2.5 rounded-xl hover:border-white/20 transition-all cursor-pointer group';
         card.onclick = () => {
           if (album.permalink_url) {
             api.searchTracks(album.permalink_url).then(tracks => {
@@ -36437,11 +36427,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         };
 
         card.innerHTML = `
-          <div class="relative aspect-square rounded-xl overflow-hidden mb-2.5">
+          <div class="relative aspect-square rounded-lg overflow-hidden mb-2">
             <img src="${album.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-              <div class="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-xl" style="background: var(--accent);">
-                <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <div class="w-9 h-9 rounded-full flex items-center justify-center text-white shadow-xl" style="background: var(--accent);">
+                <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
               </div>
             </div>
           </div>
