@@ -1713,150 +1713,86 @@ impl SoundCloudClient {
 
 
 
-    pub async fn resolve_official_youtube_stream(artist: &str, title: &str, _duration_ms: u64) -> Option<String> {
-
-
-
+    pub async fn resolve_official_youtube_stream(artist: &str, title: &str, duration_ms: u64) -> Option<String> {
         if artist.is_empty() && title.is_empty() {
-
-
-
             return None;
-
-
-
         }
-
-
-
-
-
-
 
         let clean_title = title.trim();
-
-
-
         let clean_artist = artist.trim();
-
-
-
         let query = if !clean_artist.is_empty() && !clean_title.is_empty() {
-
-
-
-            format!("ytsearch1:{} - {}", clean_artist, clean_title)
-
-
-
+            format!("ytsearch5:{} - {} audio", clean_artist, clean_title)
         } else {
-
-
-
-            format!("ytsearch1:{}", clean_title)
-
-
-
+            format!("ytsearch5:{} audio", clean_title)
         };
 
-
-
-
-
-
-
         let yt_bin = Self::find_yt_dlp();
-
-
-
-        let mut stream_cmd = tokio::process::Command::new(&yt_bin);
-
-
-
-        stream_cmd.args([
-
-
-
+        let mut search_cmd = tokio::process::Command::new(&yt_bin);
+        search_cmd.args([
             "--no-warnings",
-
-
-
             "--no-playlist",
-
-
-
-            "-g",
-
-
-
-            "-f",
-
-
-
-            "bestaudio[ext=m4a]/140/bestaudio",
-
-
-
+            "--flat-playlist",
+            "--print",
+            "%(id)s\t%(duration)s\t%(title)s\t%(uploader)s",
             &query,
-
-
-
         ]);
 
-
-
         #[cfg(windows)]
+        search_cmd.creation_flags(0x08000000);
 
-
-
-        stream_cmd.creation_flags(0x08000000);
-
-
-
-
-
-
-
-        let res = tokio::time::timeout(std::time::Duration::from_secs(14), stream_cmd.output()).await;
-
-
-
-        if let Ok(Ok(out)) = res {
-
-
-
+        let search_res = tokio::time::timeout(std::time::Duration::from_secs(10), search_cmd.output()).await;
+        if let Ok(Ok(out)) = search_res {
             if out.status.success() {
-
-
-
                 let stdout = String::from_utf8_lossy(&out.stdout);
+                let target_sec = duration_ms as f64 / 1000.0;
+                let lower_orig_title = clean_title.to_lowercase();
+                let unwanted_keywords = ["cover", "live", "remix", "reaction", "tutorial", "karaoke", "instrumental"];
 
+                let mut best_id: Option<String> = None;
+                let mut best_diff = f64::MAX;
 
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    if parts.is_empty() {
+                        continue;
+                    }
+                    let vid_id = parts[0].trim();
+                    if vid_id.is_empty() || vid_id == "NA" {
+                        continue;
+                    }
+                    let dur_sec: f64 = parts.get(1).and_then(|s| s.trim().parse().ok()).unwrap_or(0.0);
+                    let v_title = parts.get(2).map(|s| s.trim()).unwrap_or("");
+                    let lower_v_title = v_title.to_lowercase();
 
-                if let Some(url) = stdout.lines().find(|l| l.starts_with("http")) {
+                    let mut has_unwanted = false;
+                    for kw in &unwanted_keywords {
+                        if lower_v_title.contains(kw) && !lower_orig_title.contains(kw) {
+                            has_unwanted = true;
+                            break;
+                        }
+                    }
+                    if has_unwanted {
+                        continue;
+                    }
 
-
-
-                    return Some(url.trim().to_string());
-
-
-
+                    if target_sec > 0.0 && dur_sec > 0.0 {
+                        let diff = (dur_sec - target_sec).abs();
+                        if diff <= 8.0 && diff < best_diff {
+                            best_diff = diff;
+                            best_id = Some(vid_id.to_string());
+                        }
+                    } else if best_id.is_none() {
+                        best_id = Some(vid_id.to_string());
+                    }
                 }
 
-
-
+                if let Some(id) = best_id {
+                    return Self::resolve_youtube_stream_by_id(&id).await;
+                }
             }
-
-
-
         }
 
-
-
         None
-
-
-
     }
 
 
@@ -2501,11 +2437,18 @@ impl SoundCloudClient {
 
 
 
-                // If track is restricted or transcodings failed, DO NOT SUBSTITUTE!
+                // If track is DRM protected or transcodings failed, fallback to verified official YouTube audio
+                let track_title = track.get("title").and_then(|v| v.as_str()).or(opt_title.as_deref()).unwrap_or("");
+                let track_artist = track.get("user").and_then(|u| u.get("username")).and_then(|v| v.as_str()).or(opt_artist.as_deref()).unwrap_or("");
+                let track_dur = track.get("duration").and_then(|v| v.as_u64()).or(_opt_duration).unwrap_or(0);
 
+                if !track_title.is_empty() {
+                    if let Some(yt_stream) = Self::resolve_official_youtube_stream(track_artist, track_title, track_dur).await {
+                        return Ok(yt_stream);
+                    }
+                }
 
-
-                return Err("SoundCloud: трек недоступен в вашем регионе (ограничен автором)".to_string());
+                return Err("SoundCloud: трек защищён DRM и недоступен для воспроизведения".to_string());
 
 
 
@@ -2520,6 +2463,13 @@ impl SoundCloudClient {
 
 
 
+
+        if let Some(ref t) = opt_title {
+            let a = opt_artist.as_deref().unwrap_or("");
+            if let Some(yt_stream) = Self::resolve_official_youtube_stream(a, t, _opt_duration.unwrap_or(0)).await {
+                return Ok(yt_stream);
+            }
+        }
 
         Err(format!("SoundCloud: не удалось получить аудиопоток ({})", last_err))
 
