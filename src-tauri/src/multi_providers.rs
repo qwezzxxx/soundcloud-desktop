@@ -152,6 +152,9 @@ impl MultiProviders {
                         genre: Some("YouTube".to_string()),
                         permalink_url: Some(format!("https://music.youtube.com/watch?v={}", video_id)),
                         provider: Some("youtube".to_string()),
+                        user_id: None,
+                        user_permalink: None,
+                        user_avatar: None,
                     });
                 }
             }
@@ -249,6 +252,9 @@ impl MultiProviders {
                     genre: Some("Yandex".to_string()),
                     permalink_url: Some(format!("https://music.yandex.ru/track/{}", track_id_str)),
                     provider: Some("yandex".to_string()),
+                    user_id: None,
+                    user_permalink: None,
+                    user_avatar: None,
                 });
             }
         }
@@ -322,6 +328,9 @@ impl MultiProviders {
                     genre: Some("Spotify".to_string()),
                     permalink_url: it.get("link").and_then(|l| l.as_str()).map(|s| s.to_string()),
                     provider: Some("spotify".to_string()),
+                    user_id: None,
+                    user_permalink: None,
+                    user_avatar: None,
                 });
             }
         }
@@ -407,6 +416,9 @@ impl MultiProviders {
                     genre: Some("Spotify".to_string()),
                     permalink_url: Some(clean.to_string()),
                     provider: Some("spotify".to_string()),
+                    user_id: None,
+                    user_permalink: None,
+                    user_avatar: None,
                 });
             }
         } else {
@@ -438,6 +450,9 @@ impl MultiProviders {
                 genre: Some("Spotify".to_string()),
                 permalink_url: Some(clean.to_string()),
                 provider: Some("spotify".to_string()),
+                user_id: None,
+                user_permalink: None,
+                user_avatar: None,
             });
         }
 
