@@ -7,13 +7,13 @@
 
 <p align="center">
 <a href="https://github.com/qwezzxxx/soundcloud-desktop/releases/latest">
-<img src="https://img.shields.io/github/v/release/qwezzxxx/soundcloud-desktop?style=for-the-badge&logo=github&color=000000&label=ВЕРСИЯ" alt="Version"/>
+<img src="https://img.shields.io/github/v/release/qwezzxxx/soundcloud-desktop?style=for-the-badge&logo=github&color=000000" alt="Version"/>
 </a>
 <a href="https://github.com/qwezzxxx/soundcloud-desktop/releases">
-<img src="https://img.shields.io/github/downloads/qwezzxxx/soundcloud-desktop/total?style=for-the-badge&logo=download&color=222222&label=Скачивания" alt="Downloads"/>
+<img src="https://img.shields.io/github/downloads/qwezzxxx/soundcloud-desktop/total?style=for-the-badge&logo=github&color=222222" alt="Downloads"/>
 </a>
 <a href="LICENSE">
-<img src="https://img.shields.io/badge/Лицензия-AGPLv3-0055ff?style=for-the-badge" alt="License: AGPLv3"/>
+<img src="https://img.shields.io/badge/LICENSE-AGPLv3-0055ff?style=for-the-badge" alt="License: AGPLv3"/>
 </a>
 </p>
 
