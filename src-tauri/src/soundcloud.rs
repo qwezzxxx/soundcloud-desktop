@@ -1721,9 +1721,9 @@ impl SoundCloudClient {
         let clean_title = title.trim();
         let clean_artist = artist.trim();
         let query = if !clean_artist.is_empty() && !clean_title.is_empty() {
-            format!("ytsearch5:{} - {} audio", clean_artist, clean_title)
+            format!("ytsearch8:{} {}", clean_artist, clean_title)
         } else {
-            format!("ytsearch5:{} audio", clean_title)
+            format!("ytsearch8:{}", clean_title)
         };
 
         let yt_bin = Self::find_yt_dlp();
@@ -1746,10 +1746,11 @@ impl SoundCloudClient {
                 let stdout = String::from_utf8_lossy(&out.stdout);
                 let target_sec = duration_ms as f64 / 1000.0;
                 let lower_orig_title = clean_title.to_lowercase();
-                let unwanted_keywords = ["cover", "live", "remix", "reaction", "tutorial", "karaoke", "instrumental"];
+                let lower_orig_artist = clean_artist.to_lowercase();
+                let unwanted_keywords = ["live", "cover", "remix", "reaction", "tutorial", "karaoke", "instrumental", "hour"];
 
                 let mut best_id: Option<String> = None;
-                let mut best_diff = f64::MAX;
+                let mut best_score: i32 = -1;
 
                 for line in stdout.lines() {
                     let parts: Vec<&str> = line.split('\t').collect();
@@ -1762,8 +1763,22 @@ impl SoundCloudClient {
                     }
                     let dur_sec: f64 = parts.get(1).and_then(|s| s.trim().parse().ok()).unwrap_or(0.0);
                     let v_title = parts.get(2).map(|s| s.trim()).unwrap_or("");
+                    let uploader = parts.get(3).map(|s| s.trim()).unwrap_or("");
                     let lower_v_title = v_title.to_lowercase();
+                    let lower_uploader = uploader.to_lowercase();
 
+                    let diff = if target_sec > 0.0 && dur_sec > 0.0 {
+                        (dur_sec - target_sec).abs()
+                    } else {
+                        0.0
+                    };
+
+                    // Hard duration tolerance (within 8 sec)
+                    if target_sec > 0.0 && diff > 8.0 {
+                        continue;
+                    }
+
+                    // Check for unwanted keywords if original doesn't have them
                     let mut has_unwanted = false;
                     for kw in &unwanted_keywords {
                         if lower_v_title.contains(kw) && !lower_orig_title.contains(kw) {
@@ -1775,13 +1790,34 @@ impl SoundCloudClient {
                         continue;
                     }
 
-                    if target_sec > 0.0 && dur_sec > 0.0 {
-                        let diff = (dur_sec - target_sec).abs();
-                        if diff <= 8.0 && diff < best_diff {
-                            best_diff = diff;
-                            best_id = Some(vid_id.to_string());
-                        }
-                    } else if best_id.is_none() {
+                    let mut score: i32 = 0;
+
+                    // 1. Official artist channel / Topic priority (+100)
+                    if !lower_orig_artist.is_empty() && (lower_uploader == lower_orig_artist || lower_uploader.contains(&lower_orig_artist)) {
+                        score += 100;
+                    } else if lower_uploader.ends_with("- topic") || lower_uploader.contains("topic") {
+                        score += 60;
+                    }
+
+                    // 2. Exact Title match (+50)
+                    let clean_vt = lower_v_title
+                        .replace(&format!("{} - ", lower_orig_artist), "")
+                        .replace(&format!("{} – ", lower_orig_artist), "")
+                        .trim()
+                        .to_string();
+                    if clean_vt == lower_orig_title {
+                        score += 50;
+                    }
+
+                    // 3. Duration closeness (+30)
+                    if diff <= 2.0 {
+                        score += 30;
+                    } else if diff <= 5.0 {
+                        score += 15;
+                    }
+
+                    if score > best_score {
+                        best_score = score;
                         best_id = Some(vid_id.to_string());
                     }
                 }
