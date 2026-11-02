@@ -1787,7 +1787,10 @@ impl SoundCloudClient {
                 }
 
                 if let Some(id) = best_id {
-                    return Self::resolve_youtube_stream_by_id(&id).await;
+                    if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&id).await {
+                        let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&raw_url));
+                        return Some(proxied);
+                    }
                 }
             }
         }
