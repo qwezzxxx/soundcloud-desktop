@@ -5738,6 +5738,7 @@
 
 
 
+          <div id="search-artist-result" class="hidden mb-4"></div>
           <div id="search-results-list" class="space-y-1">
 
 
@@ -9087,7 +9088,99 @@
 
 
 
-    </div> <!-- /Main View Container -->
+          <!-- ========================================== -->
+      <!-- TAB: ARTIST VIEW (tab-artist)              -->
+      <!-- ========================================== -->
+      <div id="tab-artist" class="tab-content space-y-6 w-full max-w-6xl mx-auto hidden pb-24">
+        
+        <!-- Back Button -->
+        <div class="flex items-center gap-3 pt-1">
+          <button onclick="goBackFromArtist()" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-2 border border-white/10 transition cursor-pointer active:scale-95">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            <span>Назад</span>
+          </button>
+        </div>
+
+        <!-- Artist Hero Card (ONYX card-glass profile header) -->
+        <div class="card-glass profile-header-card rounded-3xl p-6 sm:p-8 relative overflow-hidden w-full border border-white/10 shadow-2xl">
+          <div id="artist-ambient-bg" class="absolute inset-0 bg-cover bg-center opacity-25 filter blur-3xl scale-125 pointer-events-none transition-all duration-700"></div>
+          <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent pointer-events-none"></div>
+          <div id="artist-glow-blob" class="absolute -right-20 -top-20 w-80 h-80 rounded-full blur-3xl pointer-events-none opacity-30" style="background-color: var(--accent);"></div>
+
+          <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
+            <!-- Big Avatar with illuminated ring -->
+            <div class="relative group shrink-0">
+              <div id="artist-avatar-wrap" class="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-neutral-900 border-2 border-white/20 p-0.5 shadow-2xl overflow-hidden" style="box-shadow: 0 0 30px rgba(255, 85, 0, 0.25);">
+                <img id="artist-avatar-img" src="" class="w-full h-full object-cover rounded-xl">
+              </div>
+            </div>
+
+            <!-- Artist Info -->
+            <div class="flex-1 text-center md:text-left min-w-0">
+              <div class="flex items-center justify-center md:justify-start gap-2 mb-1.5">
+                <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border" style="color: var(--accent); background: rgba(255, 85, 0, 0.12); border-color: rgba(255, 85, 0, 0.25);">
+                  SoundCloud Artist
+                </span>
+                <span id="artist-location" class="text-xs text-neutral-400"></span>
+              </div>
+
+              <h1 id="artist-name" class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center justify-center md:justify-start gap-2.5">
+                <span></span>
+                <svg id="artist-verified-badge" class="w-6 h-6 text-orange-500 fill-current hidden" viewBox="0 0 24 24" title="Verified Artist">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+              </h1>
+
+              <p id="artist-bio" class="text-xs text-neutral-300 mt-2 max-w-xl line-clamp-2 leading-relaxed"></p>
+
+              <!-- Stats Badges -->
+              <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-4 text-xs text-neutral-400">
+                <div class="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
+                  <strong id="artist-followers" class="text-white text-xs font-semibold">0</strong> подписчиков
+                </div>
+                <div class="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
+                  <strong id="artist-track-count" class="text-white text-xs font-semibold">0</strong> треков
+                </div>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="flex items-center justify-center md:justify-start gap-3 mt-5">
+                <button id="artist-play-all-btn" onclick="playAllArtistTracks()" class="px-5 py-2.5 rounded-xl text-white font-semibold text-xs flex items-center gap-2 transition hover:scale-105 active:scale-95 shadow-lg cursor-pointer" style="background-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow);">
+                  <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  Слушать всё
+                </button>
+                <button id="artist-shuffle-btn" onclick="shuffleArtistTracks()" class="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-xs flex items-center gap-2 border border-white/10 transition active:scale-95 cursor-pointer">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  Перемешать
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Popular Tracks -->
+        <div>
+          <h2 class="text-sm font-bold text-white mb-3 flex items-center justify-between">
+            <span>Популярные треки</span>
+            <span id="artist-tracks-header-count" class="text-xs text-neutral-500 font-normal"></span>
+          </h2>
+          <div id="artist-tracks-list" class="space-y-1">
+            <!-- Populated dynamically via renderArtistTracks -->
+          </div>
+        </div>
+
+        <!-- Section: Albums / Releases -->
+        <div id="artist-albums-section">
+          <h2 class="text-sm font-bold text-white mb-3">Релизы и Альбомы</h2>
+          <div id="artist-albums-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <!-- Populated dynamically via renderArtistAlbums -->
+          </div>
+        </div>
+
+      </div>
+
+</div> <!-- /Main View Container -->
 
 
 
@@ -9255,7 +9348,7 @@
 
 
 
-            <span id="player-artist" class="truncate hover:text-white cursor-pointer" title="Развернуть на весь экран (Esc)">SoundCloud</span>
+            <span id="player-artist" class="truncate hover:text-white hover:underline cursor-pointer transition-colors select-none" title="Развернуть на весь экран (Esc)">SoundCloud</span>
 
 
 
@@ -11893,6 +11986,10 @@
 
 
       getRelatedTracks: (trackId) => api.invoke('get_related_tracks', { trackId }),
+      searchArtists: (query, limit = 5) => api.invoke('search_artists', { query, limit }),
+      getArtist: (query) => api.invoke('get_artist', { query }),
+      getArtistTracks: (userId, limit = 50) => api.invoke('get_artist_tracks', { userId, limit }),
+      getArtistAlbums: (userId, limit = 20) => api.invoke('get_artist_albums', { userId, limit }),
 
 
 
@@ -20560,7 +20657,13 @@
 
 
 
-        const liveResults = await api.searchTracks(q, currentSearchProvider);
+        api.searchArtists(q, 1).then(artists => {
+        renderSearchArtistCard(artists && artists.length > 0 ? artists[0] : null);
+      }).catch(() => {
+        renderSearchArtistCard(null);
+      });
+
+      const liveResults = await api.searchTracks(q, currentSearchProvider);
 
 
 
@@ -30973,7 +31076,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    if (playerArtist) playerArtist.addEventListener('click', openImmersiveView);
+    if (playerArtist) playerArtist.addEventListener('click', (e) => { e.stopPropagation(); openArtistProfileFromCurrentTrack(); });
 
 
 
@@ -36175,7 +36278,251 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-  </script>
+  
+    // ==========================================
+    // ARTIST PROFILE LOGIC & SEARCH INTEGRATION
+    // ==========================================
+    let currentArtistTracks = [];
+    let previousTabBeforeArtist = 'tab-home';
+
+    function openArtistProfileFromCurrentTrack() {
+      const track = currentQueue[currentTrackIndex];
+      if (track && (track.user_id || track.artist)) {
+        openArtistProfile(track.user_id || track.artist);
+      }
+    }
+
+    async function openArtistProfile(artistIdOrName) {
+      if (!artistIdOrName) return;
+      previousTabBeforeArtist = localStorage.getItem('sc_desktop_active_tab') || 'tab-home';
+      switchTab('tab-artist');
+
+      const nameEl = document.getElementById('artist-name');
+      if (nameEl) {
+        const span = nameEl.querySelector('span');
+        if (span) span.textContent = 'Загрузка...';
+      }
+      const bioEl = document.getElementById('artist-bio');
+      if (bioEl) bioEl.textContent = 'Загрузка информации об исполнителе...';
+      const tracksList = document.getElementById('artist-tracks-list');
+      if (tracksList) tracksList.innerHTML = '<div class="text-xs text-neutral-500 py-8 text-center animate-pulse">Загрузка треков исполнителя...</div>';
+      const albumsGrid = document.getElementById('artist-albums-grid');
+      if (albumsGrid) albumsGrid.innerHTML = '';
+      const verifiedBadge = document.getElementById('artist-verified-badge');
+      if (verifiedBadge) verifiedBadge.classList.add('hidden');
+
+      try {
+        const artist = await api.getArtist(String(artistIdOrName));
+        if (!artist) throw new Error("Исполнитель не найден");
+
+        if (nameEl) {
+          const span = nameEl.querySelector('span');
+          if (span) span.textContent = artist.username || 'Исполнитель';
+        }
+        const avatarImg = document.getElementById('artist-avatar-img');
+        if (avatarImg) avatarImg.src = artist.avatar_url || DEFAULT_COVER;
+        const ambientBg = document.getElementById('artist-ambient-bg');
+        if (ambientBg) ambientBg.style.backgroundImage = `url('${artist.avatar_url || ''}')`;
+        if (verifiedBadge) {
+          if (artist.verified) verifiedBadge.classList.remove('hidden');
+          else verifiedBadge.classList.add('hidden');
+        }
+        const locationEl = document.getElementById('artist-location');
+        if (locationEl) {
+          const loc = [artist.city, artist.country].filter(Boolean).join(', ');
+          locationEl.textContent = loc ? `• ${loc}` : '';
+        }
+        if (bioEl) bioEl.textContent = artist.description || 'Профиль исполнителя в SoundCloud.';
+        const followersEl = document.getElementById('artist-followers');
+        if (followersEl) followersEl.textContent = (artist.followers_count || 0).toLocaleString();
+        const trackCountEl = document.getElementById('artist-track-count');
+        if (trackCountEl) trackCountEl.textContent = (artist.track_count || 0).toLocaleString();
+
+        const [tracks, albums] = await Promise.all([
+          api.getArtistTracks(artist.id, 50).catch(() => []),
+          api.getArtistAlbums(artist.id, 20).catch(() => [])
+        ]);
+
+        currentArtistTracks = tracks || [];
+        renderArtistTracks(currentArtistTracks);
+        renderArtistAlbums(albums || []);
+      } catch (err) {
+        console.error("Failed to load artist:", err);
+        if (nameEl) {
+          const span = nameEl.querySelector('span');
+          if (span) span.textContent = String(artistIdOrName);
+        }
+        if (bioEl) bioEl.textContent = 'Не удалось загрузить данные исполнителя: ' + (err.message || err);
+        if (tracksList) tracksList.innerHTML = '<div class="text-xs text-neutral-500 py-6 text-center">Треки не найдены</div>';
+      }
+    }
+
+    function goBackFromArtist() {
+      switchTab(previousTabBeforeArtist || 'tab-home');
+    }
+
+    function renderArtistTracks(tracks) {
+      const container = document.getElementById('artist-tracks-list');
+      const countEl = document.getElementById('artist-tracks-header-count');
+      if (countEl) countEl.textContent = `${tracks.length} треков`;
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (!tracks || tracks.length === 0) {
+        container.innerHTML = '<div class="text-xs text-neutral-500 py-6 text-center">У этого исполнителя пока нет доступных треков</div>';
+        return;
+      }
+
+      tracks.forEach((t, idx) => {
+        const item = document.createElement('div');
+        const isCurrent = currentQueue[currentTrackIndex] && String(currentQueue[currentTrackIndex].id) === String(t.id);
+        const isThisPlaying = isCurrent && isPlaying;
+        const isLiked = t.liked === true || (Array.isArray(allTracks) && allTracks.some(x => String(x.id) === String(t.id) && x.liked !== false));
+        const accent = currentAccent || '#ff5500';
+
+        item.className = `flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        item.onclick = (e) => {
+          if (e.target.closest('.search-like-btn')) return;
+          playTrack(idx, currentArtistTracks);
+        };
+
+        item.innerHTML = `
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <div class="w-6 text-center text-xs text-neutral-500 font-medium shrink-0">
+              ${isThisPlaying ? `
+                <div class="flex items-end justify-center gap-[2px] h-4">
+                  <span class="w-[2.5px] bg-rose-500 rounded-full animate-pulse h-3"></span>
+                  <span class="w-[2.5px] bg-rose-500 rounded-full animate-pulse h-4" style="animation-delay: 0.2s;"></span>
+                  <span class="w-[2.5px] bg-rose-500 rounded-full animate-pulse h-2" style="animation-delay: 0.4s;"></span>
+                </div>
+              ` : `${idx + 1}`}
+            </div>
+            <div class="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 border border-white/5">
+              <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
+            </div>
+            <div class="min-w-0 flex-1 pr-2">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
+                <span class="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">☁️ SC</span>
+              </div>
+              <div class="text-[11px] text-neutral-400 truncate">${t.artist || 'Unknown Artist'}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-xs text-neutral-500 font-mono hidden sm:inline">${t.duration || '0:00'}</span>
+            <button class="search-like-btn p-1.5 transition-transform hover:scale-125 active:scale-75 cursor-pointer select-none" title="Нравится" style="${isLiked ? `color: ${accent}; fill: ${accent};` : 'color: #737373;'}">
+              <svg class="w-4 h-4 fill-current pointer-events-none" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </button>
+          </div>
+        `;
+
+        const likeBtn = item.querySelector('.search-like-btn');
+        if (likeBtn) {
+          likeBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (typeof toggleTrackLikeInList === 'function') {
+              toggleTrackLikeInList(t, likeBtn);
+            }
+          };
+        }
+
+        container.appendChild(item);
+      });
+    }
+
+    function renderArtistAlbums(albums) {
+      const container = document.getElementById('artist-albums-grid');
+      const section = document.getElementById('artist-albums-section');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (!albums || albums.length === 0) {
+        if (section) section.classList.add('hidden');
+        return;
+      }
+      if (section) section.classList.remove('hidden');
+
+      albums.forEach(album => {
+        const card = document.createElement('div');
+        card.className = 'card-glass p-3 hover:border-white/20 transition-all cursor-pointer group';
+        card.onclick = () => {
+          if (album.permalink_url) {
+            api.searchTracks(album.permalink_url).then(tracks => {
+              if (tracks && tracks.length > 0) {
+                playTrack(0, tracks);
+              }
+            }).catch(console.error);
+          }
+        };
+
+        card.innerHTML = `
+          <div class="relative aspect-square rounded-xl overflow-hidden mb-2.5">
+            <img src="${album.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-xl" style="background: var(--accent);">
+                <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="text-xs font-semibold text-white truncate">${album.title || 'Untitled Album'}</div>
+          <div class="text-[11px] text-neutral-400 mt-0.5">${album.release_year ? album.release_year + ' • ' : ''}${album.track_count || 0} треков</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function playAllArtistTracks() {
+      if (currentArtistTracks && currentArtistTracks.length > 0) {
+        playTrack(0, currentArtistTracks);
+      }
+    }
+
+    function shuffleArtistTracks() {
+      if (currentArtistTracks && currentArtistTracks.length > 0) {
+        const shuffled = [...currentArtistTracks].sort(() => Math.random() - 0.5);
+        playTrack(0, shuffled);
+      }
+    }
+
+    function renderSearchArtistCard(artist) {
+      const container = document.getElementById('search-artist-result');
+      if (!container) return;
+
+      if (!artist) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+      }
+
+      container.classList.remove('hidden');
+      container.innerHTML = `
+        <div class="card-glass p-3.5 sm:p-4 border border-white/10 flex items-center justify-between cursor-pointer hover:border-orange-500/40 transition group" onclick="openArtistProfile('${artist.id}')">
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="relative shrink-0">
+              <img src="${artist.avatar_url || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border border-white/10 group-hover:scale-105 transition">
+              ${artist.verified ? `
+                <span class="absolute -bottom-1 -right-1 bg-neutral-900 rounded-full p-0.5">
+                  <svg class="w-3.5 h-3.5 text-orange-500 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                </span>
+              ` : ''}
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-white group-hover:text-orange-400 transition truncate">${artist.username || 'Исполнитель'}</span>
+                <span class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0" style="color: var(--accent); background: rgba(255,85,0,0.15);">Исполнитель</span>
+              </div>
+              <div class="text-xs text-neutral-400 mt-0.5 truncate">${(artist.followers_count || 0).toLocaleString()} подписчиков • ${(artist.track_count || 0).toLocaleString()} треков в SoundCloud</div>
+            </div>
+          </div>
+          <button class="px-3.5 py-1.5 rounded-xl bg-white/10 group-hover:bg-orange-500 text-white text-xs font-medium transition flex items-center gap-1.5 shrink-0 ml-3">
+            <span>Открыть</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      `;
+    }
+
+</script>
 
 
 

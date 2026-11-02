@@ -346,6 +346,39 @@ pub struct FormattedTrack {
     pub permalink_url: Option<String>,
     #[serde(default)]
     pub provider: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<Value>,
+    #[serde(default)]
+    pub user_permalink: Option<String>,
+    #[serde(default)]
+    pub user_avatar: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FormattedArtist {
+    pub id: Value,
+    pub username: String,
+    pub permalink: String,
+    pub avatar_url: String,
+    pub banner_url: Option<String>,
+    pub followers_count: u64,
+    pub track_count: u64,
+    pub description: Option<String>,
+    pub verified: bool,
+    pub city: Option<String>,
+    pub country: Option<String>,
+    pub permalink_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FormattedAlbum {
+    pub id: Value,
+    pub title: String,
+    pub artist: String,
+    pub cover: String,
+    pub track_count: usize,
+    pub release_year: Option<String>,
+    pub permalink_url: Option<String>,
 }
 
 
@@ -1262,59 +1295,275 @@ impl SoundCloudClient {
 
 
 
+        let user_id = t.get("user").and_then(|u| u.get("id")).cloned();
+        let user_permalink = t.get("user").and_then(|u| u.get("permalink")).and_then(|v| v.as_str()).map(|s| s.to_string());
+        let user_avatar = t.get("user").and_then(|u| u.get("avatar_url")).and_then(|v| v.as_str()).map(|s| s.to_string());
+
         FormattedTrack {
-
-
-
             id,
-
-
-
             title,
-
-
-
             artist,
-
-
-
             duration,
-
-
-
             duration_ms,
-
-
-
             cover: artwork,
-
-
-
             liked,
-
-
-
             description,
-
-
-
             genre,
-
-
-
             permalink_url,
-
-
-
             provider: Some("soundcloud".to_string()),
-
-
-
+            user_id,
+            user_permalink,
+            user_avatar,
         }
 
 
 
     }
+
+    pub fn format_artist(u: &Value) -> FormattedArtist {
+        let id = u.get("id").cloned().unwrap_or(Value::Null);
+        let username = u.get("username").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
+        let permalink = u.get("permalink").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        
+        let mut avatar = u.get("avatar_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if avatar.contains("large.jpg") {
+            avatar = avatar.replace("large.jpg", "t500x500.jpg");
+        }
+        if avatar.is_empty() {
+            avatar = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300".to_string();
+        }
+
+        let banner_url = u.get("visuals")
+            .and_then(|v| v.get("visuals"))
+            .and_then(|arr| arr.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|v| v.get("visual_url"))
+            .and_then(|s| s.as_str())
+            .map(|s| s.to_string());
+
+        let followers_count = u.get("followers_count").and_then(|v| v.as_u64()).unwrap_or(0);
+        let track_count = u.get("track_count").and_then(|v| v.as_u64()).unwrap_or(0);
+        let description = u.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
+        
+        let verified = u.get("verified").and_then(|v| v.as_bool()).unwrap_or_else(|| {
+            u.get("badges").and_then(|b| b.get("verified")).and_then(|v| v.as_bool()).unwrap_or(false)
+        });
+
+        let city = u.get("city").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let country = u.get("country_code").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let permalink_url = u.get("permalink_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+        FormattedArtist {
+            id,
+            username,
+            permalink,
+            avatar_url: avatar,
+            banner_url,
+            followers_count,
+            track_count,
+            description,
+            verified,
+            city,
+            country,
+            permalink_url,
+        }
+    }
+
+    pub fn format_album(a: &Value) -> FormattedAlbum {
+        let id = a.get("id").cloned().unwrap_or(Value::Null);
+        let title = a.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled Album").to_string();
+        let artist = a.get("user").and_then(|u| u.get("username")).and_then(|v| v.as_str()).unwrap_or("Unknown Artist").to_string();
+        let mut cover = a.get("artwork_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if cover.contains("large.jpg") {
+            cover = cover.replace("large.jpg", "t500x500.jpg");
+        }
+        let track_count = a.get("track_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let release_year = a.get("release_date")
+            .or_else(|| a.get("created_at"))
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.get(0..4))
+            .map(|s| s.to_string());
+        let permalink_url = a.get("permalink_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+        FormattedAlbum {
+            id,
+            title,
+            artist,
+            cover,
+            track_count,
+            release_year,
+            permalink_url,
+        }
+    }
+
+    pub async fn search_artists(&self, query: &str, limit: Option<usize>) -> Result<Vec<FormattedArtist>, String> {
+        let clean = query.trim();
+        if clean.is_empty() {
+            return Ok(Vec::new());
+        }
+        let client_id = self.get_client_id().await;
+        let lim = limit.unwrap_or(5);
+        let url = format!(
+            "https://api-v2.soundcloud.com/search/users?q={}&limit={}&client_id={}",
+            urlencoding_simple(clean),
+            lim,
+            client_id
+        );
+        let cfg = self.load_config();
+        let mut req = self.http.get(&url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        if res.status().is_success() {
+            let data: Value = res.json().await.map_err(|e| e.to_string())?;
+            let mut artists = Vec::new();
+            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                for u in arr {
+                    artists.push(Self::format_artist(u));
+                }
+            }
+            Ok(artists)
+        } else {
+            Err(format!("Search artists failed: status {}", res.status()))
+        }
+    }
+
+    pub async fn get_artist(&self, query: &str) -> Result<FormattedArtist, String> {
+        let clean = query.trim();
+        if clean.is_empty() {
+            return Err("Artist query cannot be empty".to_string());
+        }
+        let client_id = self.get_client_id().await;
+        let cfg = self.load_config();
+
+        let is_numeric = clean.chars().all(|c| c.is_ascii_digit());
+        let url = if is_numeric {
+            format!("https://api-v2.soundcloud.com/users/{}?client_id={}", clean, client_id)
+        } else {
+            format!(
+                "https://api-v2.soundcloud.com/search/users?q={}&limit=1&client_id={}",
+                urlencoding_simple(clean),
+                client_id
+            )
+        };
+
+        let mut req = self.http.get(&url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        if res.status().is_success() {
+            let data: Value = res.json().await.map_err(|e| e.to_string())?;
+            if is_numeric {
+                Ok(Self::format_artist(&data))
+            } else {
+                let collection = data.get("collection").and_then(|v| v.as_array());
+                if let Some(arr) = collection {
+                    if let Some(first) = arr.first() {
+                        return Ok(Self::format_artist(first));
+                    }
+                }
+                Err(format!("Artist '{}' not found", clean))
+            }
+        } else {
+            Err(format!("Get artist failed: status {}", res.status()))
+        }
+    }
+
+    pub async fn get_artist_tracks(&self, user_id: Value, limit: Option<usize>) -> Result<Vec<FormattedTrack>, String> {
+        let client_id = self.get_client_id().await;
+        let cfg = self.load_config();
+        let id_str = if let Some(n) = user_id.as_i64() {
+            n.to_string()
+        } else if let Some(s) = user_id.as_str() {
+            s.trim_matches('"').to_string()
+        } else {
+            user_id.to_string().trim_matches('"').to_string()
+        };
+        let lim = limit.unwrap_or(50);
+        let url = format!(
+            "https://api-v2.soundcloud.com/users/{}/tracks?limit={}&client_id={}",
+            id_str,
+            lim,
+            client_id
+        );
+        let mut req = self.http.get(&url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        if res.status().is_success() {
+            let data: Value = res.json().await.map_err(|e| e.to_string())?;
+            let mut tracks = Vec::new();
+            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                for t in arr {
+                    tracks.push(Self::format_track(t, false));
+                }
+            }
+            Ok(tracks)
+        } else {
+            Err(format!("Get artist tracks failed: status {}", res.status()))
+        }
+    }
+
+    pub async fn get_artist_albums(&self, user_id: Value, limit: Option<usize>) -> Result<Vec<FormattedAlbum>, String> {
+        let client_id = self.get_client_id().await;
+        let cfg = self.load_config();
+        let id_str = if let Some(n) = user_id.as_i64() {
+            n.to_string()
+        } else if let Some(s) = user_id.as_str() {
+            s.trim_matches('"').to_string()
+        } else {
+            user_id.to_string().trim_matches('"').to_string()
+        };
+        let lim = limit.unwrap_or(20);
+        let url = format!(
+            "https://api-v2.soundcloud.com/users/{}/albums?limit={}&client_id={}",
+            id_str,
+            lim,
+            client_id
+        );
+        let mut req = self.http.get(&url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        let mut albums = Vec::new();
+        if res.status().is_success() {
+            let data: Value = res.json().await.map_err(|e| e.to_string())?;
+            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                for a in arr {
+                    albums.push(Self::format_album(a));
+                }
+            }
+        }
+        if albums.is_empty() {
+            let pl_url = format!(
+                "https://api-v2.soundcloud.com/users/{}/playlists_without_albums?limit={}&client_id={}",
+                id_str,
+                lim,
+                client_id
+            );
+            let mut pl_req = self.http.get(&pl_url);
+            if let Some(auth) = self.auth_header(&cfg) {
+                pl_req = pl_req.header("Authorization", auth);
+            }
+            if let Ok(pl_res) = pl_req.send().await {
+                if pl_res.status().is_success() {
+                    if let Ok(pl_data) = pl_res.json::<Value>().await {
+                        if let Some(arr) = pl_data.get("collection").and_then(|v| v.as_array()) {
+                            for a in arr {
+                                albums.push(Self::format_album(a));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(albums)
+    }
+
 
 
 

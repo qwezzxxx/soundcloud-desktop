@@ -207,6 +207,26 @@ async fn search_tracks(query: String, provider: Option<String>, state: State<'_,
 }
 
 #[tauri::command]
+async fn search_artists(query: String, limit: Option<usize>, state: State<'_, AppState>) -> Result<Vec<soundcloud::FormattedArtist>, String> {
+    state.sc.search_artists(&query, limit).await
+}
+
+#[tauri::command]
+async fn get_artist(query: String, state: State<'_, AppState>) -> Result<soundcloud::FormattedArtist, String> {
+    state.sc.get_artist(&query).await
+}
+
+#[tauri::command]
+async fn get_artist_tracks(user_id: Value, limit: Option<usize>, state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
+    state.sc.get_artist_tracks(user_id, limit).await
+}
+
+#[tauri::command]
+async fn get_artist_albums(user_id: Value, limit: Option<usize>, state: State<'_, AppState>) -> Result<Vec<soundcloud::FormattedAlbum>, String> {
+    state.sc.get_artist_albums(user_id, limit).await
+}
+
+#[tauri::command]
 async fn resolve_tracks(ids: Vec<Value>, state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
     state.sc.resolve_tracks(ids).await
 }
@@ -720,6 +740,10 @@ pub fn run() {
             get_stream_url,
             toggle_like,
             search_tracks,
+            search_artists,
+            get_artist,
+            get_artist_tracks,
+            get_artist_albums,
             resolve_tracks,
             get_mixed_selections,
             get_system_playlist,
