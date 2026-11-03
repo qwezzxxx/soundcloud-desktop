@@ -538,6 +538,7 @@ fn win_toggle_maximize(window: tauri::Window) -> Result<(), String> {
 #[tauri::command]
 fn win_close(window: tauri::Window) -> Result<(), String> {
     // Background mode: hide window to tray / background so music continues playing
+    let _ = window.set_skip_taskbar(true);
     window.hide().map_err(|e| e.to_string())
 }
 
@@ -548,7 +549,10 @@ fn win_exit(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 fn win_show(window: tauri::Window) -> Result<(), String> {
-    window.show().map_err(|e| e.to_string())
+    let _ = window.set_skip_taskbar(false);
+    let _ = window.show();
+    let _ = window.unminimize();
+    window.set_focus().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -631,6 +635,17 @@ pub fn run() {
     {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
+    #[cfg(target_os = "windows")]
+    {
+        let existing = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS").unwrap_or_default();
+        let bg_flags = "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --autoplay-policy=no-user-gesture-required";
+        let new_args = if existing.is_empty() {
+            bg_flags.to_string()
+        } else {
+            format!("{} {}", existing, bg_flags)
+        };
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS", new_args);
+    }
     let _ = std::fs::write("app_run.log", "lib::run() started\n");
     let config_path = resolve_config_path();
 
@@ -693,6 +708,7 @@ pub fn run() {
                             }
                             "show" => {
                                 if let Some(w) = app.get_webview_window("main") {
+                                    let _ = w.set_skip_taskbar(false);
                                     let _ = w.show();
                                     let _ = w.unminimize();
                                     let _ = w.set_focus();
@@ -707,14 +723,18 @@ pub fn run() {
                             if let Some(w) = app.get_webview_window("main") {
                                 if let Ok(is_visible) = w.is_visible() {
                                     if is_visible {
+                                        let _ = w.set_skip_taskbar(true);
                                         let _ = w.hide();
                                     } else {
+                                        let _ = w.set_skip_taskbar(false);
                                         let _ = w.show();
                                         let _ = w.unminimize();
                                         let _ = w.set_focus();
                                     }
                                 } else {
+                                    let _ = w.set_skip_taskbar(false);
                                     let _ = w.show();
+                                    let _ = w.unminimize();
                                     let _ = w.set_focus();
                                 }
                             }
@@ -767,6 +787,14 @@ pub fn run() {
             load_custom_wallpaper,
             clear_custom_wallpaper
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Prevent window destruction; hide to tray so music plays in background
+                api.prevent_close();
+                let _ = window.set_skip_taskbar(true);
+                let _ = window.hide();
+            }
+        })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app_handle, event| {

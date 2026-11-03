@@ -26,6 +26,7 @@
           0,
           255
         ],
+        "additionalBrowserArgs": "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --autoplay-policy=no-user-gesture-required",
         "devtools": true
       }
     ],
