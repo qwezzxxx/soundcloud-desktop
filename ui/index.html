@@ -36527,36 +36527,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
     function syncArtistAlbumsState(playing = isPlaying) {
-      const container = document.getElementById('artist-albums-grid');
-      if (!container || !currentArtistAlbums || currentArtistAlbums.length === 0) return;
-
-      const cards = container.querySelectorAll('.artist-album-card');
-      cards.forEach(card => {
-        const albumUrl = card.dataset.albumUrl;
-        const isThisActive = Boolean(currentPlayingAlbumUrl && currentPlayingAlbumUrl === albumUrl);
-        const isThisPlaying = isThisActive && playing;
-
-        const overlay = card.querySelector('.album-play-overlay');
-        const iconWrap = card.querySelector('.album-play-icon');
-
-        if (overlay && iconWrap) {
-          if (isThisActive) {
-            overlay.classList.remove('opacity-0');
-            overlay.classList.add('opacity-100');
-          } else {
-            overlay.classList.add('opacity-0');
-            overlay.classList.remove('opacity-100');
-          }
-
-          if (isThisPlaying) {
-            iconWrap.innerHTML = '<svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-            iconWrap.title = 'Пауза';
-          } else {
-            iconWrap.innerHTML = '<svg class="w-5 h-5 fill-current ml-0.5 pointer-events-none" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
-            iconWrap.title = 'Воспроизвести';
-          }
-        }
-      });
+      // Album cards remain purely clean without overlay or white bars
     }
 
     function renderArtistAlbums(albums) {
@@ -36574,52 +36545,21 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       albums.forEach(album => {
         const card = document.createElement('div');
-        const albumUrl = album.permalink_url || String(album.id || '');
-        const isThisActive = Boolean(currentPlayingAlbumUrl && currentPlayingAlbumUrl === albumUrl);
-        const isThisPlaying = isThisActive && isPlaying;
-
-        card.className = 'artist-album-card card-dark p-3.5 cursor-pointer group rounded-2xl transition-all relative select-none outline-none';
-        card.dataset.albumUrl = albumUrl;
+        card.className = 'card-dark p-3.5 cursor-pointer group rounded-2xl transition-all relative select-none outline-none';
 
         card.onclick = () => {
-          const isCurrentlyActive = Boolean(currentPlayingAlbumUrl && currentPlayingAlbumUrl === albumUrl);
-          if (isCurrentlyActive) {
-            togglePlay();
-            syncArtistAlbumsState();
-          } else {
-            currentPlayingAlbumUrl = albumUrl;
-            syncArtistAlbumsState(true);
-            if (album.permalink_url) {
-              const iconWrap = card.querySelector('.album-play-icon');
-              if (iconWrap) {
-                iconWrap.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>';
+          if (album.permalink_url) {
+            api.searchTracks(album.permalink_url).then(tracks => {
+              if (tracks && tracks.length > 0) {
+                playTrack(0, tracks);
               }
-              api.searchTracks(album.permalink_url).then(tracks => {
-                if (tracks && tracks.length > 0) {
-                  playTrack(0, tracks);
-                  syncArtistAlbumsState(true);
-                }
-              }).catch(err => {
-                console.error("Failed to load album tracks:", err);
-                currentPlayingAlbumUrl = null;
-                syncArtistAlbumsState(false);
-              });
-            }
+            }).catch(console.error);
           }
         };
 
         card.innerHTML = `
           <div class="relative aspect-square rounded-2xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5 select-none">
             <img src="${album.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300 pointer-events-none">
-            <div class="album-play-overlay absolute inset-0 bg-black/40 ${isThisActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} flex items-center justify-center transition">
-              <div class="album-play-icon w-10 h-10 rounded-full flex items-center justify-center bg-black/60 hover:bg-black/80 backdrop-blur text-white shadow-xl hover:scale-105 active:scale-95 transition cursor-pointer select-none">
-                ${isThisPlaying ? `
-                  <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-                ` : `
-                  <svg class="w-5 h-5 fill-current ml-0.5 pointer-events-none" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                `}
-              </div>
-            </div>
           </div>
           <div class="text-xs font-bold text-white truncate">${album.title || 'Untitled Album'}</div>
           <div class="text-[11px] text-neutral-400 mt-0.5">${album.release_year ? album.release_year + ' • ' : ''}${album.track_count || 0} треков</div>
