@@ -756,6 +756,50 @@
 
 
 
+    .card-dark {
+      background: #111115;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 18px;
+      transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+    .card-dark:hover {
+      background: #17171d;
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    body.theme-light .card-dark {
+      background: #ffffff;
+      border-color: rgba(0, 0, 0, 0.08);
+    }
+    body.theme-light .card-dark:hover {
+      background: #f8fafc;
+      border-color: rgba(0, 0, 0, 0.15);
+    }
+
+    @keyframes artistWavePulse {
+      0%, 100% { height: 4px; }
+      50% { height: 16px; }
+    }
+    .artist-wave-bar {
+      width: 2.5px;
+      background: var(--accent, #f43f5e);
+      border-radius: 9999px;
+      animation: artistWavePulse 1.1s ease-in-out infinite;
+    }
+    .artist-wave-bar:nth-child(2) { animation-delay: 0.2s; }
+    .artist-wave-bar:nth-child(3) { animation-delay: 0.4s; }
+
+    .artist-interactive-hint {
+      position: relative;
+      cursor: pointer;
+      display: inline-block;
+      transition: all 0.2s ease;
+    }
+    .artist-interactive-hint:hover {
+      color: #ffffff;
+      text-decoration: underline;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+    }
+
     /* Frameless Karaoke Lyrics Styles */
 
 
@@ -5738,6 +5782,7 @@
 
 
 
+          <div id="search-artist-result" class="hidden mb-4"></div>
           <div id="search-results-list" class="space-y-1">
 
 
@@ -6475,7 +6520,7 @@
 
 
 
-                  <span id="settings-username" class="text-xs font-semibold text-white">Гость</span>
+                  <span id="settings-username" class="text-xs font-semibold text-white">Не авторизован</span>
 
 
 
@@ -8879,15 +8924,104 @@
 
 
 
+          <!-- ========================================== -->
+      <!-- TAB: ARTIST VIEW (tab-artist)              -->
+      <!-- ========================================== -->
+      <div id="tab-artist" class="tab-content space-y-6 w-full max-w-7xl mx-auto pb-36">
+        
+        <!-- Back Navigation Bar -->
+        <div class="flex items-center gap-3 pt-1">
+          <button onclick="goBackFromArtist()" class="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold flex items-center gap-2 border border-white/10 transition cursor-pointer active:scale-95 shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            <span>Назад</span>
+          </button>
+          <span class="text-xs text-neutral-400">/ Страница исполнителя <span id="artist-breadcrumb-name" class="text-white font-medium"></span></span>
+        </div>
+
+        <!-- ARTIST HERO BANNER -->
+        <div class="card-dark p-6 sm:p-8 relative overflow-hidden w-full shadow-2xl">
+          <!-- Ambient blur glow -->
+          <div id="artist-ambient-bg" class="absolute inset-0 bg-cover bg-center opacity-20 filter blur-3xl scale-125 pointer-events-none transition-all duration-700"></div>
+          <div class="absolute -right-20 -top-20 w-72 h-72 rounded-full blur-3xl pointer-events-none opacity-20" style="background-color: var(--accent, #f43f5e);"></div>
+
+          <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
+            
+            <!-- Large Avatar -->
+            <div id="artist-avatar-wrap" class="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden border-2 border-white/20 shadow-2xl shrink-0 bg-neutral-900">
+              <img id="artist-avatar-img" src="" class="w-full h-full object-cover">
+            </div>
+
+            <!-- Artist Details -->
+            <div class="flex-1 text-center md:text-left min-w-0">
+              <div class="flex items-center justify-center md:justify-start gap-2 mb-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md" style="color: var(--accent, #f43f5e); background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.3);">
+                  SoundCloud Artist
+                </span>
+                <span id="artist-location" class="text-xs text-neutral-400 truncate"></span>
+              </div>
+
+              <h1 id="artist-name" class="text-3xl sm:text-4xl font-extrabold text-white flex items-center justify-center md:justify-start gap-2.5 mt-1">
+                <span></span>
+                <svg id="artist-verified-badge" class="w-5 h-5 text-orange-500 fill-current shrink-0 hidden" viewBox="0 0 24 24" title="Verified Artist" style="color: var(--accent, #f43f5e);">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+              </h1>
+
+              <p id="artist-bio" class="text-xs text-neutral-300 mt-2 max-w-xl leading-relaxed"></p>
+
+              <div class="flex items-center justify-center md:justify-start gap-4 mt-3 text-xs text-neutral-400">
+                <div><strong id="artist-followers" class="text-white font-bold">0</strong> подписчиков</div>
+                <div><strong id="artist-track-count" class="text-white font-bold">0</strong> треков</div>
+                <div id="artist-likes-stat"><strong id="artist-likes" class="text-white font-bold">0</strong> лайков</div>
+              </div>
+
+              <!-- Action buttons -->
+              <div class="flex items-center justify-center md:justify-start gap-3 mt-4">
+                <button id="artist-play-all-btn" onclick="playAllArtistTracks()" 
+                        class="px-5 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black font-bold text-xs flex items-center gap-2 hover:scale-105 transition active:scale-95 shadow-lg cursor-pointer">
+                  <svg class="w-4 h-4 fill-black shrink-0" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  <span class="text-black font-bold">Слушать всё</span>
+                </button>
+                <button id="artist-shuffle-btn" onclick="shuffleArtistTracks()" 
+                        class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-xs flex items-center gap-2 border border-white/10 transition active:scale-95 cursor-pointer">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  <span>Перемешать</span>
+                </button>
+                <button id="artist-fav-btn" onclick="toggleArtistFavorite()" 
+                        class="p-2 rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/10 transition active:scale-95 cursor-pointer" title="В избранное">
+                  <svg id="artist-fav-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Section: Popular Tracks -->
+        <div class="space-y-2 pt-2">
+          <h2 class="text-sm font-bold text-white mb-2 flex items-center justify-between">
+            <span>Популярные треки <span id="artist-tracks-name"></span></span>
+            <span id="artist-tracks-header-count" class="text-xs text-neutral-500 font-normal"></span>
+          </h2>
+          <div id="artist-tracks-list" class="space-y-1">
+            <!-- Populated dynamically via renderArtistTracks -->
+          </div>
+        </div>
+
+        <!-- Section: Albums / Releases -->
+        <div id="artist-albums-section" class="space-y-3 pt-4 pb-12">
+          <h2 class="text-sm font-bold text-white mb-2">Релизы и Альбомы</h2>
+          <div id="artist-albums-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <!-- Populated dynamically via renderArtistAlbums -->
+          </div>
+        </div>
+
+      </div>
+
     </div>
 
-
-
-
-
-
-
-    <!-- Right Drawer: Queue (Очередь воспроизведения) -->
+<!-- Right Drawer: Queue (Очередь воспроизведения) -->
 
 
 
@@ -9087,7 +9221,7 @@
 
 
 
-    </div> <!-- /Main View Container -->
+          </div> <!-- /Main View Container -->
 
 
 
@@ -9255,7 +9389,7 @@
 
 
 
-            <span id="player-artist" class="truncate hover:text-white cursor-pointer" title="Развернуть на весь экран (Esc)">SoundCloud</span>
+            <span id="player-artist" class="truncate hover:text-white hover:underline cursor-pointer transition-colors select-none" title="Открыть страницу исполнителя">SoundCloud</span>
 
 
 
@@ -10073,7 +10207,7 @@
 
 
 
-        <span id="modal-user-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-[#22212b] text-neutral-300 border border-white/5">Гость</span>
+        <span id="modal-user-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-[#22212b] text-neutral-300 border border-white/5">Вход в аккаунт</span>
 
 
 
@@ -10092,24 +10226,21 @@
         
       </div>
 
-      <!-- Explanatory note about Token Requirement -->
-      <div class="p-3 rounded-xl bg-[#191512] border border-[#ff5500]/25 text-neutral-300 text-[11px] leading-relaxed">
+      <!-- Explanatory note about Account Requirement -->
+      <div class="p-3.5 rounded-xl bg-[#191512] border border-[#ff5500]/25 text-neutral-300 text-xs leading-relaxed">
         <div class="flex items-center gap-1.5 text-[#ff7722] font-semibold text-xs mb-1">
-          <svg class="w-3.5 h-3.5 text-[#ff5500] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span>Только через токен плеер работает полноценно</span>
+          <svg class="w-4 h-4 text-[#ff5500] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          <span>Вход только через аккаунт</span>
         </div>
-        <p class="text-neutral-400">
-          При входе <strong class="text-white font-medium">через токен (OAuth)</strong> открываются все возможности: сохранение лайков в один клик, бесконечный поток <span class="text-white font-medium">«Моя волна»</span>, персональные рекомендации и приватные плейлисты.
-        </p>
-        <p class="text-neutral-500 mt-1">
-          Кнопка выше делает это автоматически. Если вводить только никнейм/ссылку — плеер будет работать в режиме гостя (без лайков и волны).
+        <p class="text-neutral-400 text-[11px]">
+          Для работы плеера требуется авторизация в SoundCloud. Гостевой режим отключен. Нажмите кнопку <strong class="text-white">«Войти через SoundCloud»</strong> выше для автоматического входа через браузер или вставьте ваш <strong class="text-white">OAuth токен</strong> вручную ниже.
         </p>
       </div>
 
       <!-- Divider -->
       <div class="relative flex items-center justify-center pt-1">
         <div class="border-t border-[#232328] w-full"></div>
-        <span class="bg-[#111114] px-2.5 text-[10px] text-neutral-500 uppercase tracking-wider font-medium whitespace-nowrap">или вручную по токену / нику</span>
+        <span class="bg-[#111114] px-2.5 text-[10px] text-neutral-500 uppercase tracking-wider font-medium whitespace-nowrap">или вручную по OAuth токену</span>
         <div class="border-t border-[#232328] w-full"></div>
       </div>
 
@@ -10144,10 +10275,10 @@
 
 
 
-          <label class="block text-xs font-semibold text-neutral-300 mb-1.5">OAuth токен (рекомендуется) или никнейм / ссылка</label>
-          <input id="login-identifier-input" type="text" placeholder="OAuth токен (напр. 2-293...-...) или никнейм..." class="w-full bg-[#17171c] border border-[#26262e] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all font-mono">
+          <label class="block text-xs font-semibold text-neutral-300 mb-1.5">SoundCloud OAuth токен</label>
+          <input id="login-identifier-input" type="text" placeholder="OAuth токен (напр. 2-293...-...) ..." class="w-full bg-[#17171c] border border-[#26262e] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all font-mono">
           <div class="mt-1.5 text-[11px] text-neutral-500">
-            <span>Вставьте OAuth токен для полного доступа (из cookie oauth_token) или никнейм для гостевого режима</span>
+            <span>Вставьте значение cookie oauth_token из вашего аккаунта на soundcloud.com</span>
           </div>
 
 
@@ -10204,7 +10335,7 @@
 
 
 
-          <span id="login-btn-text" class="text-black font-semibold tracking-wide">Войти в аккаунт</span>
+          <span id="login-btn-text" class="text-black font-semibold tracking-wide">Войти по токену</span>
 
 
 
@@ -11893,6 +12024,10 @@
 
 
       getRelatedTracks: (trackId) => api.invoke('get_related_tracks', { trackId }),
+      searchArtists: (query, limit = 5) => api.invoke('search_artists', { query, limit }),
+      getArtist: (query) => api.invoke('get_artist', { query }),
+      getArtistTracks: (userId, limit = 50) => api.invoke('get_artist_tracks', { userId, limit }),
+      getArtistAlbums: (userId, limit = 20) => api.invoke('get_artist_albums', { userId, limit }),
 
 
 
@@ -16911,7 +17046,12 @@
         }
       } catch (err) {
         console.warn('Like toggle sync error:', err);
-        notify('Ошибка синхронизации лайка с SoundCloud: ' + (err.message || err), '⚠️');
+        const msg = String((err && err.message) || err || '');
+        if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('ограничил') || msg.includes('рейт-лимит')) {
+          notify('SoundCloud временно ограничил лайки (429). Лайк сохранён локально в ONYX.', '⚠️');
+        } else {
+          notify('Ошибка синхронизации лайка с SoundCloud: ' + msg, '⚠️');
+        }
       }
 
 
@@ -19201,6 +19341,8 @@
     function syncPlayPauseState(playing) {
       if (typeof syncWavePlayButton === 'function') syncWavePlayButton(playing);
       if (typeof renderWaveTrackList === 'function' && isWaveActive) renderWaveTrackList();
+      if (typeof syncArtistAlbumsState === 'function') syncArtistAlbumsState(playing);
+      if (typeof syncArtistTracksState === 'function') syncArtistTracksState(playing);
       const pIcon = document.getElementById('play-icon');
       const sIcon = document.getElementById('pause-icon');
       const immPlay = document.getElementById('immersive-play-icon');
@@ -19256,33 +19398,13 @@
           btn.style.color = isActive ? col : '';
           btn.classList.toggle('text-white', isActive && !isLight);
           btn.classList.toggle('text-neutral-400', !isActive);
-          
-          let badge = btn.querySelector('.repeat-one-badge');
-          if (isActive) {
-            if (!badge) {
-              badge = document.createElement('span');
-              badge.className = 'repeat-one-badge absolute -top-1 -right-1 text-[9px] font-black leading-none px-1 py-0.5 rounded-full pointer-events-none';
-              badge.style.backgroundColor = col;
-              badge.style.color = '#ffffff';
-              badge.textContent = '1';
-              btn.style.position = 'relative';
-              btn.appendChild(badge);
-            } else {
-              badge.style.display = 'block';
-              badge.style.backgroundColor = col;
-            }
-            btn.title = "Повтор трека: Вкл";
-          } else {
-            if (badge) badge.style.display = 'none';
-            btn.title = "Повтор: Выкл";
-          }
+          btn.title = isActive ? "Повтор трека: Вкл" : "Повтор: Выкл";
+
+          const badge = btn.querySelector('.repeat-one-badge');
+          if (badge) badge.remove();
         }
       });
     }
-
-    // Global player helpers for immediate bulletproof onclick & shortcuts
-
-
 
     window.playTrack = playTrack;
     window.togglePlay = togglePlay;
@@ -20555,7 +20677,13 @@
 
 
 
-        const liveResults = await api.searchTracks(q, currentSearchProvider);
+        api.searchArtists(q, 1).then(artists => {
+        renderSearchArtistCard(artists && artists.length > 0 ? artists[0] : null);
+      }).catch(() => {
+        renderSearchArtistCard(null);
+      });
+
+      const liveResults = await api.searchTracks(q, currentSearchProvider);
 
 
 
@@ -22883,7 +23011,7 @@
 
 
 
-      const username = isLoggedIn ? (user.username || user.permalink || 'Пользователь') : 'Гость';
+      const username = isLoggedIn ? (user.username || user.permalink || 'Пользователь') : 'Не авторизован';
 
 
 
@@ -23011,7 +23139,7 @@
 
 
 
-        libUser.textContent = isLoggedIn ? username : 'Гость';
+        libUser.textContent = isLoggedIn ? username : 'Не авторизован';
 
 
 
@@ -24250,7 +24378,7 @@
 
 
 
-          modalBadge.textContent = 'Гость';
+          modalBadge.textContent = 'Требуется вход';
 
 
 
@@ -24307,6 +24435,10 @@
 
 
         loginModal.classList.remove('hidden');
+        if (closeLoginModalBtn) {
+          if (!currentUser || !currentUser.id) closeLoginModalBtn.classList.add('hidden');
+          else closeLoginModalBtn.classList.remove('hidden');
+        }
 
 
 
@@ -24419,21 +24551,11 @@
 
 
     function closeLogin() {
-
-
-
-
-
-
-
+      if (!currentUser || !currentUser.id) {
+        if (loginStatusMsg) loginStatusMsg.textContent = 'Для использования плеера необходимо войти в аккаунт.';
+        return;
+      }
       if (loginModal) loginModal.classList.add('hidden');
-
-
-
-
-
-
-
     }
 
 
@@ -24540,7 +24662,9 @@
 
     if (loginModal) {
       loginModal.addEventListener('click', (e) => {
-        if (e.target === loginModal) closeLogin();
+        if (e.target === loginModal) {
+          if (currentUser && currentUser.id) closeLogin();
+        }
       });
     }
     if (loginIdInput) {
@@ -25191,30 +25315,17 @@
 
 
 
-          const isToken = inputVal.startsWith('eyJ') || inputVal.startsWith('2-') || inputVal.startsWith('OAuth ') || inputVal.length > 60;
+          const isToken = inputVal.startsWith('eyJ') || inputVal.startsWith('2-') || inputVal.startsWith('OAuth ') || inputVal.length > 40;
+          if (!isToken) {
+            submitLoginBtn.disabled = false;
+            if (loginSpinner) loginSpinner.classList.add('hidden');
+            if (loginBtnText) loginBtnText.textContent = 'Войти по токену';
+            if (loginStatusMsg) loginStatusMsg.textContent = 'Гостевой режим отключен. Введите ваш OAuth токен или нажмите кнопку "Войти через SoundCloud" выше.';
+            return;
+          }
 
-
-
-
-
-
-
-          const identifier = isToken ? '' : inputVal;
-
-
-
-
-
-
-
-          const token = isToken ? inputVal : null;
-
-
-
-
-
-
-
+          const identifier = '';
+          const token = inputVal;
           const res = await api.loginAccount(identifier, token);
 
 
@@ -30968,7 +31079,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    if (playerArtist) playerArtist.addEventListener('click', openImmersiveView);
+    if (playerArtist) playerArtist.addEventListener('click', (e) => { e.stopPropagation(); openArtistProfileFromCurrentTrack(); });
 
 
 
@@ -36170,7 +36281,328 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-  </script>
+  
+    // ==========================================
+    // ARTIST PROFILE LOGIC & SEARCH INTEGRATION
+    // ==========================================
+    let currentArtistTracks = [];
+    let currentArtistData = null;
+    let previousTabBeforeArtist = 'tab-home';
+    let favoriteArtists = [];
+    try {
+      favoriteArtists = JSON.parse(localStorage.getItem('sc_fav_artists') || '[]');
+    } catch (_) { favoriteArtists = []; }
+
+    function isArtistFavorite(id) {
+      return Array.isArray(favoriteArtists) && favoriteArtists.some(a => String(a.id) === String(id));
+    }
+
+    function toggleArtistFavorite() {
+      if (!currentArtistData) return;
+      const exists = isArtistFavorite(currentArtistData.id);
+      if (exists) {
+        favoriteArtists = favoriteArtists.filter(a => String(a.id) !== String(currentArtistData.id));
+      } else {
+        favoriteArtists.push({
+          id: currentArtistData.id,
+          username: currentArtistData.username,
+          avatar_url: currentArtistData.avatar_url
+        });
+      }
+      try {
+        localStorage.setItem('sc_fav_artists', JSON.stringify(favoriteArtists));
+      } catch (_) {}
+      updateArtistFavBtn();
+    }
+
+    function updateArtistFavBtn() {
+      const btn = document.getElementById('artist-fav-btn');
+      const icon = document.getElementById('artist-fav-icon');
+      if (!btn || !icon || !currentArtistData) return;
+      const isFav = isArtistFavorite(currentArtistData.id);
+      if (isFav) {
+        icon.classList.add('text-rose-500', 'fill-current');
+        icon.classList.remove('text-white');
+        btn.classList.add('border-rose-500/30', 'bg-rose-500/10');
+      } else {
+        icon.classList.remove('text-rose-500', 'fill-current');
+        icon.classList.add('text-white');
+        btn.classList.remove('border-rose-500/30', 'bg-rose-500/10');
+      }
+    }
+
+    function openArtistProfileFromCurrentTrack() {
+      const track = currentQueue[currentTrackIndex];
+      if (track && (track.user_id || track.artist)) {
+        openArtistProfile(track.user_id || track.artist);
+      }
+    }
+
+    async function openArtistProfile(artistIdOrName) {
+      if (!artistIdOrName) return;
+      previousTabBeforeArtist = localStorage.getItem('sc_desktop_active_tab') || 'tab-home';
+      switchTab('tab-artist');
+
+      const scrollContainer = document.querySelector('.overflow-y-auto');
+      if (scrollContainer) scrollContainer.scrollTop = 0;
+
+      const nameEl = document.getElementById('artist-name');
+      if (nameEl) {
+        const span = nameEl.querySelector('span');
+        if (span) span.textContent = 'Загрузка...';
+      }
+      const breadcrumbEl = document.getElementById('artist-breadcrumb-name');
+      if (breadcrumbEl) breadcrumbEl.textContent = '...';
+      const tracksNameEl = document.getElementById('artist-tracks-name');
+      if (tracksNameEl) tracksNameEl.textContent = '';
+      const bioEl = document.getElementById('artist-bio');
+      if (bioEl) bioEl.textContent = 'Загрузка информации об исполнителе...';
+      const tracksList = document.getElementById('artist-tracks-list');
+      if (tracksList) tracksList.innerHTML = '<div class="text-xs text-neutral-500 py-8 text-center animate-pulse">Загрузка треков...</div>';
+      const albumsGrid = document.getElementById('artist-albums-grid');
+      if (albumsGrid) albumsGrid.innerHTML = '';
+      const verifiedBadge = document.getElementById('artist-verified-badge');
+      if (verifiedBadge) verifiedBadge.classList.add('hidden');
+
+      try {
+        const artist = await api.getArtist(String(artistIdOrName));
+        if (!artist) throw new Error("Исполнитель не найден");
+
+        currentArtistData = artist;
+        updateArtistFavBtn();
+
+        if (nameEl) {
+          const span = nameEl.querySelector('span');
+          if (span) span.textContent = artist.username || 'Исполнитель';
+        }
+        if (breadcrumbEl) breadcrumbEl.textContent = artist.username || '';
+        if (tracksNameEl) tracksNameEl.textContent = artist.username ? `${artist.username}` : '';
+
+        const avatarImg = document.getElementById('artist-avatar-img');
+        if (avatarImg) avatarImg.src = artist.avatar_url || DEFAULT_COVER;
+        const ambientBg = document.getElementById('artist-ambient-bg');
+        if (ambientBg) ambientBg.style.backgroundImage = `url('${artist.avatar_url || ''}')`;
+        if (verifiedBadge) {
+          if (artist.verified) verifiedBadge.classList.remove('hidden');
+          else verifiedBadge.classList.add('hidden');
+        }
+        const locationEl = document.getElementById('artist-location');
+        if (locationEl) {
+          const loc = [artist.city, artist.country].filter(Boolean).join(', ');
+          locationEl.textContent = loc ? `• ${loc}` : '';
+        }
+        if (bioEl) bioEl.textContent = artist.description || 'Профиль исполнителя в SoundCloud.';
+        const followersEl = document.getElementById('artist-followers');
+        if (followersEl) followersEl.textContent = (artist.followers_count || 0).toLocaleString();
+        const trackCountEl = document.getElementById('artist-track-count');
+        if (trackCountEl) trackCountEl.textContent = (artist.track_count || 0).toLocaleString();
+        const likesEl = document.getElementById('artist-likes');
+        if (likesEl) likesEl.textContent = (artist.public_favorites_count || artist.likes_count || 0).toLocaleString();
+
+        const [tracks, albums] = await Promise.all([
+          api.getArtistTracks(artist.id, 50).catch(() => []),
+          api.getArtistAlbums(artist.id, 20).catch(() => [])
+        ]);
+
+        currentArtistTracks = tracks || [];
+        renderArtistTracks(currentArtistTracks);
+        renderArtistAlbums(albums || []);
+      } catch (err) {
+        console.error("Failed to load artist:", err);
+        if (nameEl) {
+          const span = nameEl.querySelector('span');
+          if (span) span.textContent = String(artistIdOrName);
+        }
+        if (breadcrumbEl) breadcrumbEl.textContent = String(artistIdOrName);
+        if (bioEl) bioEl.textContent = 'Не удалось загрузить данные: ' + (err.message || err);
+        if (tracksList) tracksList.innerHTML = '<div class="text-xs text-neutral-500 py-6 text-center">Ошибка при загрузке треков</div>';
+      }
+    }
+
+    function goBackFromArtist() {
+      switchTab(previousTabBeforeArtist || 'tab-home');
+    }
+
+    function renderArtistTracks(tracks) {
+      const container = document.getElementById('artist-tracks-list');
+      const countEl = document.getElementById('artist-tracks-header-count');
+      if (countEl) countEl.textContent = `${tracks.length} треков`;
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (!tracks || tracks.length === 0) {
+        container.innerHTML = '<div class="text-xs text-neutral-500 py-6 text-center">У этого исполнителя пока нет доступных треков</div>';
+        return;
+      }
+
+      tracks.forEach((t, idx) => {
+        const item = document.createElement('div');
+        const isCurrent = currentQueue[currentTrackIndex] && String(currentQueue[currentTrackIndex].id) === String(t.id);
+        const isThisPlaying = isCurrent && isPlaying;
+        const isLiked = t.liked === true || (Array.isArray(allTracks) && allTracks.some(x => String(x.id) === String(t.id) && x.liked !== false));
+        const accent = currentAccent || '#ff5500';
+
+        item.className = `flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition cursor-pointer group ${isCurrent ? 'bg-white/[0.07] border border-white/10' : ''}`;
+        item.onclick = (e) => {
+          if (e.target.closest('.search-like-btn')) return;
+          currentPlayingAlbumUrl = null;
+          syncArtistAlbumsState();
+          playTrack(idx, currentArtistTracks);
+        };
+
+        item.innerHTML = `
+          <div class="flex items-center gap-3.5 min-w-0 flex-1">
+            <div class="w-6 text-center text-xs text-neutral-500 font-medium shrink-0 flex items-center justify-center">
+              ${isThisPlaying ? `
+                <div class="flex items-end justify-center gap-[2px] h-4">
+                  <span class="artist-wave-bar"></span>
+                  <span class="artist-wave-bar"></span>
+                  <span class="artist-wave-bar"></span>
+                </div>
+              ` : `<span>${idx + 1}</span>`}
+            </div>
+            <div class="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/5 shadow-sm">
+              <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
+            </div>
+            <div class="min-w-0 flex-1 pr-2">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
+                <span class="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">SC</span>
+              </div>
+              <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist || 'Unknown Artist'}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-4 text-xs font-mono text-neutral-400 shrink-0">
+            <span class="hidden sm:inline">${t.duration || '0:00'}</span>
+            <button class="search-like-btn p-1.5 transition-transform hover:scale-125 active:scale-75 cursor-pointer select-none" title="Нравится" style="${isLiked ? `color: ${accent}; fill: ${accent};` : 'color: #737373;'}">
+              <svg class="w-4 h-4 fill-current pointer-events-none" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </button>
+          </div>
+        `;
+
+        const likeBtn = item.querySelector('.search-like-btn');
+        if (likeBtn) {
+          likeBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (typeof toggleTrackLikeInList === 'function') {
+              toggleTrackLikeInList(t, likeBtn);
+            }
+          };
+        }
+
+        container.appendChild(item);
+      });
+    }
+
+    let currentPlayingAlbumUrl = null;
+    let currentArtistAlbums = [];
+
+    function syncArtistTracksState(playing = isPlaying) {
+      const container = document.getElementById('artist-tracks-list');
+      if (!container) return;
+      const waveBars = container.querySelectorAll('.artist-wave-bar');
+      waveBars.forEach(b => {
+        b.style.animationPlayState = playing ? 'running' : 'paused';
+      });
+    }
+
+    function syncArtistAlbumsState(playing = isPlaying) {
+      // Album cards remain purely clean without overlay or white bars
+    }
+
+    function renderArtistAlbums(albums) {
+      const container = document.getElementById('artist-albums-grid');
+      const section = document.getElementById('artist-albums-section');
+      if (!container) return;
+      container.innerHTML = '';
+      currentArtistAlbums = albums || [];
+
+      if (!albums || albums.length === 0) {
+        if (section) section.classList.add('hidden');
+        return;
+      }
+      if (section) section.classList.remove('hidden');
+
+      albums.forEach(album => {
+        const card = document.createElement('div');
+        card.className = 'card-dark p-3.5 cursor-pointer group rounded-2xl transition-all relative select-none outline-none';
+
+        card.onclick = () => {
+          if (album.permalink_url) {
+            api.searchTracks(album.permalink_url).then(tracks => {
+              if (tracks && tracks.length > 0) {
+                playTrack(0, tracks);
+              }
+            }).catch(console.error);
+          }
+        };
+
+        card.innerHTML = `
+          <div class="relative aspect-square rounded-2xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5 select-none">
+            <img src="${album.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300 pointer-events-none">
+          </div>
+          <div class="text-xs font-bold text-white truncate">${album.title || 'Untitled Album'}</div>
+          <div class="text-[11px] text-neutral-400 mt-0.5">${album.release_year ? album.release_year + ' • ' : ''}${album.track_count || 0} треков</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function playAllArtistTracks() {
+      if (currentArtistTracks && currentArtistTracks.length > 0) {
+        currentPlayingAlbumUrl = null;
+        syncArtistAlbumsState();
+        playTrack(0, currentArtistTracks);
+      }
+    }
+
+    function shuffleArtistTracks() {
+      if (currentArtistTracks && currentArtistTracks.length > 0) {
+        currentPlayingAlbumUrl = null;
+        syncArtistAlbumsState();
+        const shuffled = [...currentArtistTracks].sort(() => Math.random() - 0.5);
+        playTrack(0, shuffled);
+      }
+    }
+
+    function renderSearchArtistCard(artist) {
+      const container = document.getElementById('search-artist-result');
+      if (!container) return;
+
+      if (!artist) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+      }
+
+      container.classList.remove('hidden');
+      container.innerHTML = `
+        <div class="card-dark p-4 flex items-center justify-between cursor-pointer border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition group rounded-2xl" onclick="openArtistProfile('${artist.id}')">
+          <div class="flex items-center gap-4 min-w-0">
+            <div class="relative shrink-0">
+              <img src="${artist.avatar_url || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-14 h-14 rounded-full object-cover border border-white/10 group-hover:scale-105 transition">
+              ${artist.verified ? `
+                <span class="absolute -bottom-1 -right-1 bg-neutral-900 rounded-full p-0.5">
+                  <svg class="w-3.5 h-3.5 text-white fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                </span>
+              ` : ''}
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-white group-hover:text-white transition truncate">${artist.username || 'Исполнитель'}</span>
+                <span class="text-[9px] font-bold px-2 py-0.5 rounded-md uppercase shrink-0 bg-white/10 text-neutral-300 border border-white/10">Исполнитель</span>
+              </div>
+              <div class="text-xs text-neutral-400 mt-0.5 truncate">${(artist.followers_count || 0).toLocaleString()} подписчиков • ${(artist.track_count || 0).toLocaleString()} треков в SoundCloud</div>
+            </div>
+          </div>
+          <button class="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition flex items-center gap-1.5 shrink-0 ml-3">
+            <span>Открыть профиль →</span>
+          </button>
+        </div>
+      `;
+    }
+
+</script>
 
 
 

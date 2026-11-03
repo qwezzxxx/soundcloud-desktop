@@ -16911,7 +16911,12 @@
         }
       } catch (err) {
         console.warn('Like toggle sync error:', err);
-        notify('Ошибка синхронизации лайка с SoundCloud: ' + (err.message || err), '⚠️');
+        const msg = String((err && err.message) || err || '');
+        if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('ограничил') || msg.includes('рейт-лимит')) {
+          notify('SoundCloud временно ограничил лайки (429). Лайк сохранён локально в ONYX.', '⚠️');
+        } else {
+          notify('Ошибка синхронизации лайка с SoundCloud: ' + msg, '⚠️');
+        }
       }
 
 
@@ -19256,33 +19261,13 @@
           btn.style.color = isActive ? col : '';
           btn.classList.toggle('text-white', isActive && !isLight);
           btn.classList.toggle('text-neutral-400', !isActive);
-          
-          let badge = btn.querySelector('.repeat-one-badge');
-          if (isActive) {
-            if (!badge) {
-              badge = document.createElement('span');
-              badge.className = 'repeat-one-badge absolute -top-1 -right-1 text-[9px] font-black leading-none px-1 py-0.5 rounded-full pointer-events-none';
-              badge.style.backgroundColor = col;
-              badge.style.color = '#ffffff';
-              badge.textContent = '1';
-              btn.style.position = 'relative';
-              btn.appendChild(badge);
-            } else {
-              badge.style.display = 'block';
-              badge.style.backgroundColor = col;
-            }
-            btn.title = "Повтор трека: Вкл";
-          } else {
-            if (badge) badge.style.display = 'none';
-            btn.title = "Повтор: Выкл";
-          }
+          btn.title = isActive ? "Повтор трека: Вкл" : "Повтор: Выкл";
+
+          const badge = btn.querySelector('.repeat-one-badge');
+          if (badge) badge.remove();
         }
       });
     }
-
-    // Global player helpers for immediate bulletproof onclick & shortcuts
-
-
 
     window.playTrack = playTrack;
     window.togglePlay = togglePlay;

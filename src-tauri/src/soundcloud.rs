@@ -346,6 +346,39 @@ pub struct FormattedTrack {
     pub permalink_url: Option<String>,
     #[serde(default)]
     pub provider: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<Value>,
+    #[serde(default)]
+    pub user_permalink: Option<String>,
+    #[serde(default)]
+    pub user_avatar: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FormattedArtist {
+    pub id: Value,
+    pub username: String,
+    pub permalink: String,
+    pub avatar_url: String,
+    pub banner_url: Option<String>,
+    pub followers_count: u64,
+    pub track_count: u64,
+    pub description: Option<String>,
+    pub verified: bool,
+    pub city: Option<String>,
+    pub country: Option<String>,
+    pub permalink_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FormattedAlbum {
+    pub id: Value,
+    pub title: String,
+    pub artist: String,
+    pub cover: String,
+    pub track_count: usize,
+    pub release_year: Option<String>,
+    pub permalink_url: Option<String>,
 }
 
 
@@ -355,17 +388,9 @@ pub struct FormattedTrack {
 
 
 pub struct SoundCloudClient {
-
-
-
     http: reqwest::Client,
-
-
-
     config_path: PathBuf,
-
-
-
+    like_rate_limited_until: std::sync::Mutex<Option<std::time::Instant>>,
 }
 
 
@@ -379,13 +404,24 @@ impl SoundCloudClient {
 
 
     pub fn http_client(&self) -> &reqwest::Client {
-
-
-
         &self.http
+    }
 
+    pub fn is_like_rate_limited(&self) -> bool {
+        if let Ok(guard) = self.like_rate_limited_until.lock() {
+            if let Some(until) = *guard {
+                if std::time::Instant::now() < until {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 
-
+    pub fn set_like_rate_limited(&self, duration: std::time::Duration) {
+        if let Ok(mut guard) = self.like_rate_limited_until.lock() {
+            *guard = Some(std::time::Instant::now() + duration);
+        }
     }
 
 
@@ -415,17 +451,9 @@ impl SoundCloudClient {
 
 
         Self {
-
-
-
             http,
-
-
-
             config_path: config_path.as_ref().to_path_buf(),
-
-
-
+            like_rate_limited_until: std::sync::Mutex::new(None),
         }
 
 
@@ -716,6 +744,9 @@ impl SoundCloudClient {
     }
 
     pub async fn push_local_likes_to_soundcloud(&self) -> Result<usize, String> {
+        if self.is_like_rate_limited() {
+            return Err("SoundCloud кулдаун 429 активен. Автоматическая отправка лайков приостановлена.".to_string());
+        }
         let (user_id, token) = match self.ensure_active_user().await {
             Ok(pair) => pair,
             Err(_) => return Ok(0),
@@ -773,7 +804,8 @@ impl SoundCloudClient {
                 if st == 200 || st == 201 || st == 204 {
                     pushed += 1;
                 } else if st == 429 {
-                    return Err("SoundCloud временно заблокировал добавление лайков (рейт-лимит 429). Подождите 10-15 минут.".to_string());
+                    self.set_like_rate_limited(std::time::Duration::from_secs(1800));
+                    return Err("SoundCloud временно заблокировал добавление лайков (рейт-лимит 429). Подождите 15-30 минут.".to_string());
                 }
             }
 
@@ -1263,59 +1295,275 @@ impl SoundCloudClient {
 
 
 
+        let user_id = t.get("user").and_then(|u| u.get("id")).cloned();
+        let user_permalink = t.get("user").and_then(|u| u.get("permalink")).and_then(|v| v.as_str()).map(|s| s.to_string());
+        let user_avatar = t.get("user").and_then(|u| u.get("avatar_url")).and_then(|v| v.as_str()).map(|s| s.to_string());
+
         FormattedTrack {
-
-
-
             id,
-
-
-
             title,
-
-
-
             artist,
-
-
-
             duration,
-
-
-
             duration_ms,
-
-
-
             cover: artwork,
-
-
-
             liked,
-
-
-
             description,
-
-
-
             genre,
-
-
-
             permalink_url,
-
-
-
             provider: Some("soundcloud".to_string()),
-
-
-
+            user_id,
+            user_permalink,
+            user_avatar,
         }
 
 
 
     }
+
+    pub fn format_artist(u: &Value) -> FormattedArtist {
+        let id = u.get("id").cloned().unwrap_or(Value::Null);
+        let username = u.get("username").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
+        let permalink = u.get("permalink").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        
+        let mut avatar = u.get("avatar_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if avatar.contains("large.jpg") {
+            avatar = avatar.replace("large.jpg", "t500x500.jpg");
+        }
+        if avatar.is_empty() {
+            avatar = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300".to_string();
+        }
+
+        let banner_url = u.get("visuals")
+            .and_then(|v| v.get("visuals"))
+            .and_then(|arr| arr.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|v| v.get("visual_url"))
+            .and_then(|s| s.as_str())
+            .map(|s| s.to_string());
+
+        let followers_count = u.get("followers_count").and_then(|v| v.as_u64()).unwrap_or(0);
+        let track_count = u.get("track_count").and_then(|v| v.as_u64()).unwrap_or(0);
+        let description = u.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
+        
+        let verified = u.get("verified").and_then(|v| v.as_bool()).unwrap_or_else(|| {
+            u.get("badges").and_then(|b| b.get("verified")).and_then(|v| v.as_bool()).unwrap_or(false)
+        });
+
+        let city = u.get("city").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let country = u.get("country_code").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let permalink_url = u.get("permalink_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+        FormattedArtist {
+            id,
+            username,
+            permalink,
+            avatar_url: avatar,
+            banner_url,
+            followers_count,
+            track_count,
+            description,
+            verified,
+            city,
+            country,
+            permalink_url,
+        }
+    }
+
+    pub fn format_album(a: &Value) -> FormattedAlbum {
+        let id = a.get("id").cloned().unwrap_or(Value::Null);
+        let title = a.get("title").and_then(|v| v.as_str()).unwrap_or("Untitled Album").to_string();
+        let artist = a.get("user").and_then(|u| u.get("username")).and_then(|v| v.as_str()).unwrap_or("Unknown Artist").to_string();
+        let mut cover = a.get("artwork_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if cover.contains("large.jpg") {
+            cover = cover.replace("large.jpg", "t500x500.jpg");
+        }
+        let track_count = a.get("track_count").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let release_year = a.get("release_date")
+            .or_else(|| a.get("created_at"))
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.get(0..4))
+            .map(|s| s.to_string());
+        let permalink_url = a.get("permalink_url").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+        FormattedAlbum {
+            id,
+            title,
+            artist,
+            cover,
+            track_count,
+            release_year,
+            permalink_url,
+        }
+    }
+
+    pub async fn search_artists(&self, query: &str, limit: Option<usize>) -> Result<Vec<FormattedArtist>, String> {
+        let clean = query.trim();
+        if clean.is_empty() {
+            return Ok(Vec::new());
+        }
+        let client_id = self.get_client_id().await;
+        let lim = limit.unwrap_or(5);
+        let url = format!(
+            "https://api-v2.soundcloud.com/search/users?q={}&limit={}&client_id={}",
+            urlencoding_simple(clean),
+            lim,
+            client_id
+        );
+        let cfg = self.load_config();
+        let mut req = self.http.get(&url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        if res.status().is_success() {
+            let data: Value = res.json().await.map_err(|e| e.to_string())?;
+            let mut artists = Vec::new();
+            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                for u in arr {
+                    artists.push(Self::format_artist(u));
+                }
+            }
+            Ok(artists)
+        } else {
+            Err(format!("Search artists failed: status {}", res.status()))
+        }
+    }
+
+    pub async fn get_artist(&self, query: &str) -> Result<FormattedArtist, String> {
+        let clean = query.trim();
+        if clean.is_empty() {
+            return Err("Artist query cannot be empty".to_string());
+        }
+        let client_id = self.get_client_id().await;
+        let cfg = self.load_config();
+
+        let is_numeric = clean.chars().all(|c| c.is_ascii_digit());
+        let url = if is_numeric {
+            format!("https://api-v2.soundcloud.com/users/{}?client_id={}", clean, client_id)
+        } else {
+            format!(
+                "https://api-v2.soundcloud.com/search/users?q={}&limit=1&client_id={}",
+                urlencoding_simple(clean),
+                client_id
+            )
+        };
+
+        let mut req = self.http.get(&url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        if res.status().is_success() {
+            let data: Value = res.json().await.map_err(|e| e.to_string())?;
+            if is_numeric {
+                Ok(Self::format_artist(&data))
+            } else {
+                let collection = data.get("collection").and_then(|v| v.as_array());
+                if let Some(arr) = collection {
+                    if let Some(first) = arr.first() {
+                        return Ok(Self::format_artist(first));
+                    }
+                }
+                Err(format!("Artist '{}' not found", clean))
+            }
+        } else {
+            Err(format!("Get artist failed: status {}", res.status()))
+        }
+    }
+
+    pub async fn get_artist_tracks(&self, user_id: Value, limit: Option<usize>) -> Result<Vec<FormattedTrack>, String> {
+        let client_id = self.get_client_id().await;
+        let cfg = self.load_config();
+        let id_str = if let Some(n) = user_id.as_i64() {
+            n.to_string()
+        } else if let Some(s) = user_id.as_str() {
+            s.trim_matches('"').to_string()
+        } else {
+            user_id.to_string().trim_matches('"').to_string()
+        };
+        let lim = limit.unwrap_or(50);
+        let url = format!(
+            "https://api-v2.soundcloud.com/users/{}/tracks?limit={}&client_id={}",
+            id_str,
+            lim,
+            client_id
+        );
+        let mut req = self.http.get(&url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        if res.status().is_success() {
+            let data: Value = res.json().await.map_err(|e| e.to_string())?;
+            let mut tracks = Vec::new();
+            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                for t in arr {
+                    tracks.push(Self::format_track(t, false));
+                }
+            }
+            Ok(tracks)
+        } else {
+            Err(format!("Get artist tracks failed: status {}", res.status()))
+        }
+    }
+
+    pub async fn get_artist_albums(&self, user_id: Value, limit: Option<usize>) -> Result<Vec<FormattedAlbum>, String> {
+        let client_id = self.get_client_id().await;
+        let cfg = self.load_config();
+        let id_str = if let Some(n) = user_id.as_i64() {
+            n.to_string()
+        } else if let Some(s) = user_id.as_str() {
+            s.trim_matches('"').to_string()
+        } else {
+            user_id.to_string().trim_matches('"').to_string()
+        };
+        let lim = limit.unwrap_or(20);
+        let url = format!(
+            "https://api-v2.soundcloud.com/users/{}/albums?limit={}&client_id={}",
+            id_str,
+            lim,
+            client_id
+        );
+        let mut req = self.http.get(&url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        let res = req.send().await.map_err(|e| e.to_string())?;
+        let mut albums = Vec::new();
+        if res.status().is_success() {
+            let data: Value = res.json().await.map_err(|e| e.to_string())?;
+            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                for a in arr {
+                    albums.push(Self::format_album(a));
+                }
+            }
+        }
+        if albums.is_empty() {
+            let pl_url = format!(
+                "https://api-v2.soundcloud.com/users/{}/playlists_without_albums?limit={}&client_id={}",
+                id_str,
+                lim,
+                client_id
+            );
+            let mut pl_req = self.http.get(&pl_url);
+            if let Some(auth) = self.auth_header(&cfg) {
+                pl_req = pl_req.header("Authorization", auth);
+            }
+            if let Ok(pl_res) = pl_req.send().await {
+                if pl_res.status().is_success() {
+                    if let Ok(pl_data) = pl_res.json::<Value>().await {
+                        if let Some(arr) = pl_data.get("collection").and_then(|v| v.as_array()) {
+                            for a in arr {
+                                albums.push(Self::format_album(a));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(albums)
+    }
+
 
 
 
@@ -1714,150 +1962,125 @@ impl SoundCloudClient {
 
 
 
-    pub async fn resolve_official_youtube_stream(artist: &str, title: &str, _duration_ms: u64) -> Option<String> {
-
-
-
+    pub async fn resolve_official_youtube_stream(artist: &str, title: &str, duration_ms: u64) -> Option<String> {
         if artist.is_empty() && title.is_empty() {
-
-
-
             return None;
-
-
-
         }
-
-
-
-
-
-
 
         let clean_title = title.trim();
-
-
-
         let clean_artist = artist.trim();
-
-
-
         let query = if !clean_artist.is_empty() && !clean_title.is_empty() {
-
-
-
-            format!("ytsearch1:{} - {}", clean_artist, clean_title)
-
-
-
+            format!("ytsearch8:{} {}", clean_artist, clean_title)
         } else {
-
-
-
-            format!("ytsearch1:{}", clean_title)
-
-
-
+            format!("ytsearch8:{}", clean_title)
         };
 
-
-
-
-
-
-
         let yt_bin = Self::find_yt_dlp();
-
-
-
-        let mut stream_cmd = tokio::process::Command::new(&yt_bin);
-
-
-
-        stream_cmd.args([
-
-
-
+        let mut search_cmd = tokio::process::Command::new(&yt_bin);
+        search_cmd.args([
             "--no-warnings",
-
-
-
             "--no-playlist",
-
-
-
-            "-g",
-
-
-
-            "-f",
-
-
-
-            "bestaudio[ext=m4a]/140/bestaudio",
-
-
-
+            "--flat-playlist",
+            "--print",
+            "%(id)s\t%(duration)s\t%(title)s\t%(uploader)s",
             &query,
-
-
-
         ]);
 
-
-
         #[cfg(windows)]
+        search_cmd.creation_flags(0x08000000);
 
-
-
-        stream_cmd.creation_flags(0x08000000);
-
-
-
-
-
-
-
-        let res = tokio::time::timeout(std::time::Duration::from_secs(14), stream_cmd.output()).await;
-
-
-
-        if let Ok(Ok(out)) = res {
-
-
-
+        let search_res = tokio::time::timeout(std::time::Duration::from_secs(10), search_cmd.output()).await;
+        if let Ok(Ok(out)) = search_res {
             if out.status.success() {
-
-
-
                 let stdout = String::from_utf8_lossy(&out.stdout);
+                let target_sec = duration_ms as f64 / 1000.0;
+                let lower_orig_title = clean_title.to_lowercase();
+                let lower_orig_artist = clean_artist.to_lowercase();
+                let unwanted_keywords = ["live", "cover", "remix", "reaction", "tutorial", "karaoke", "instrumental", "hour"];
 
+                let mut best_id: Option<String> = None;
+                let mut best_score: i32 = -1;
 
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split('\t').collect();
+                    if parts.is_empty() {
+                        continue;
+                    }
+                    let vid_id = parts[0].trim();
+                    if vid_id.is_empty() || vid_id == "NA" {
+                        continue;
+                    }
+                    let dur_sec: f64 = parts.get(1).and_then(|s| s.trim().parse().ok()).unwrap_or(0.0);
+                    let v_title = parts.get(2).map(|s| s.trim()).unwrap_or("");
+                    let uploader = parts.get(3).map(|s| s.trim()).unwrap_or("");
+                    let lower_v_title = v_title.to_lowercase();
+                    let lower_uploader = uploader.to_lowercase();
 
-                if let Some(url) = stdout.lines().find(|l| l.starts_with("http")) {
+                    let diff = if target_sec > 0.0 && dur_sec > 0.0 {
+                        (dur_sec - target_sec).abs()
+                    } else {
+                        0.0
+                    };
 
+                    // Hard duration tolerance (within 8 sec)
+                    if target_sec > 0.0 && diff > 8.0 {
+                        continue;
+                    }
 
+                    // Check for unwanted keywords if original doesn't have them
+                    let mut has_unwanted = false;
+                    for kw in &unwanted_keywords {
+                        if lower_v_title.contains(kw) && !lower_orig_title.contains(kw) {
+                            has_unwanted = true;
+                            break;
+                        }
+                    }
+                    if has_unwanted {
+                        continue;
+                    }
 
-                    return Some(url.trim().to_string());
+                    let mut score: i32 = 0;
 
+                    // 1. Official artist channel / Topic priority (+100)
+                    if !lower_orig_artist.is_empty() && (lower_uploader == lower_orig_artist || lower_uploader.contains(&lower_orig_artist)) {
+                        score += 100;
+                    } else if lower_uploader.ends_with("- topic") || lower_uploader.contains("topic") {
+                        score += 60;
+                    }
 
+                    // 2. Exact Title match (+50)
+                    let clean_vt = lower_v_title
+                        .replace(&format!("{} - ", lower_orig_artist), "")
+                        .replace(&format!("{} – ", lower_orig_artist), "")
+                        .trim()
+                        .to_string();
+                    if clean_vt == lower_orig_title {
+                        score += 50;
+                    }
 
+                    // 3. Duration closeness (+30)
+                    if diff <= 2.0 {
+                        score += 30;
+                    } else if diff <= 5.0 {
+                        score += 15;
+                    }
+
+                    if score > best_score {
+                        best_score = score;
+                        best_id = Some(vid_id.to_string());
+                    }
                 }
 
-
-
+                if let Some(id) = best_id {
+                    if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&id).await {
+                        let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&raw_url));
+                        return Some(proxied);
+                    }
+                }
             }
-
-
-
         }
 
-
-
         None
-
-
-
     }
 
 
@@ -2502,11 +2725,18 @@ impl SoundCloudClient {
 
 
 
-                // If track is restricted or transcodings failed, DO NOT SUBSTITUTE!
+                // If track is DRM protected or transcodings failed, fallback to verified official YouTube audio
+                let track_title = track.get("title").and_then(|v| v.as_str()).or(opt_title.as_deref()).unwrap_or("");
+                let track_artist = track.get("user").and_then(|u| u.get("username")).and_then(|v| v.as_str()).or(opt_artist.as_deref()).unwrap_or("");
+                let track_dur = track.get("duration").and_then(|v| v.as_u64()).or(_opt_duration).unwrap_or(0);
 
+                if !track_title.is_empty() {
+                    if let Some(yt_stream) = Self::resolve_official_youtube_stream(track_artist, track_title, track_dur).await {
+                        return Ok(yt_stream);
+                    }
+                }
 
-
-                return Err("SoundCloud: трек недоступен в вашем регионе (ограничен автором)".to_string());
+                return Err("SoundCloud: трек защищён DRM и недоступен для воспроизведения".to_string());
 
 
 
@@ -2521,6 +2751,13 @@ impl SoundCloudClient {
 
 
 
+
+        if let Some(ref t) = opt_title {
+            let a = opt_artist.as_deref().unwrap_or("");
+            if let Some(yt_stream) = Self::resolve_official_youtube_stream(a, t, _opt_duration.unwrap_or(0)).await {
+                return Ok(yt_stream);
+            }
+        }
 
         Err(format!("SoundCloud: не удалось получить аудиопоток ({})", last_err))
 
@@ -3203,58 +3440,66 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         log_msg(&format!("toggle_like called: track_id={}, should_like={}", id_str, should_like));
 
         // 1. Send to SoundCloud API v2 if logged in
-        match self.ensure_active_user().await {
-            Ok((user_id, token)) => {
-                log_msg(&format!("ensure_active_user OK: user_id={}, token_len={}", user_id, token.len()));
+        if should_like && self.is_like_rate_limited() {
+            log_msg("Rate limit cooldown 429 active; skipping network PUT to protect SoundCloud account");
+            last_status = 429;
+        } else {
+            match self.ensure_active_user().await {
+                Ok((user_id, token)) => {
+                    log_msg(&format!("ensure_active_user OK: user_id={}, token_len={}", user_id, token.len()));
 
-                let candidate_urls = if should_like {
-                    vec![
-                        ("PUT", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                    ]
-                } else {
-                    vec![
-                        ("DELETE", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                    ]
-                };
-
-                for (method, url) in candidate_urls {
-                    log_msg(&format!("Trying {} {}", method, url));
-                    let mut req = match method {
-                        "PUT" => self.http.put(&url).header("Content-Length", "0").body(""),
-                        "DELETE" => self.http.delete(&url),
-                        _ => continue,
+                    let candidate_urls = if should_like {
+                        vec![
+                            ("PUT", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
+                        ]
+                    } else {
+                        vec![
+                            ("DELETE", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
+                        ]
                     };
 
-                    req = req
-                        .header("Authorization", &token)
-                        .header("Origin", "https://soundcloud.com")
-                        .header("Referer", "https://soundcloud.com/")
-                        .header("User-Agent", USER_AGENT)
-                        .header("Accept", "application/json, text/javascript, */*; q=0.01");
+                    for (method, url) in candidate_urls {
+                        log_msg(&format!("Trying {} {}", method, url));
+                        let mut req = match method {
+                            "PUT" => self.http.put(&url).header("Content-Length", "0").body(""),
+                            "DELETE" => self.http.delete(&url),
+                            _ => continue,
+                        };
 
-                    match req.send().await {
-                        Ok(res) => {
-                            let st = res.status().as_u16();
-                            last_status = st;
-                            log_msg(&format!("Response {} st={}", method, st));
-                            if st == 200 || st == 201 || st == 204 {
-                                success = true;
-                                break;
-                            } else if st == 404 && !should_like {
-                                success = true;
-                                break;
+                        req = req
+                            .header("Authorization", &token)
+                            .header("Origin", "https://soundcloud.com")
+                            .header("Referer", "https://soundcloud.com/")
+                            .header("User-Agent", USER_AGENT)
+                            .header("Accept", "application/json, text/javascript, */*; q=0.01");
+
+                        match req.send().await {
+                            Ok(res) => {
+                                let st = res.status().as_u16();
+                                last_status = st;
+                                log_msg(&format!("Response {} st={}", method, st));
+                                if st == 200 || st == 201 || st == 204 {
+                                    success = true;
+                                    break;
+                                } else if st == 404 && !should_like {
+                                    success = true;
+                                    break;
+                                } else if st == 429 {
+                                    self.set_like_rate_limited(std::time::Duration::from_secs(1800));
+                                    break;
+                                }
                             }
-                        }
-                        Err(e) => {
-                            last_err = e.to_string();
-                            log_msg(&format!("Request error: {}", e));
+                            Err(e) => {
+                                last_err = e.to_string();
+                                log_msg(&format!("Request error: {}", e));
+                            }
                         }
                     }
                 }
-            }
-            Err(e) => {
-                last_err = e.clone();
-                log_msg(&format!("ensure_active_user FAILED: {}", e));
+                Err(e) => {
+                    last_err = e.clone();
+                    log_msg(&format!("ensure_active_user FAILED: {}", e));
+                }
             }
         }
 
@@ -3293,7 +3538,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         log_msg(&format!("toggle_like finished: success={}, last_status={}, last_err={}", success, last_status, last_err));
 
         if last_status == 429 {
-            return Err("SoundCloud временно заблокировал лайки за частые запросы (рейт-лимит 429). Подождите 5-10 минут.".to_string());
+            return Err("SoundCloud временно ограничил добавление лайков (429 Too Many Requests). Лайк сохранён локально в ONYX.".to_string());
         }
 
         Ok(success)

@@ -154,7 +154,6 @@ async fn get_likes(limit: Option<usize>, state: State<'_, AppState>) -> Result<V
 
 #[tauri::command]
 async fn sync_likes(state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
-    let _ = state.sc.push_local_likes_to_soundcloud().await;
     state.sc.get_liked_tracks(500).await
 }
 
@@ -205,6 +204,26 @@ async fn search_tracks(query: String, provider: Option<String>, state: State<'_,
     let prov = provider.as_deref().unwrap_or("all");
     let tracks = MultiProviders::search_unified(state.sc.http_client(), &state.sc, clean, Some(prov)).await;
     Ok(tracks)
+}
+
+#[tauri::command]
+async fn search_artists(query: String, limit: Option<usize>, state: State<'_, AppState>) -> Result<Vec<soundcloud::FormattedArtist>, String> {
+    state.sc.search_artists(&query, limit).await
+}
+
+#[tauri::command]
+async fn get_artist(query: String, state: State<'_, AppState>) -> Result<soundcloud::FormattedArtist, String> {
+    state.sc.get_artist(&query).await
+}
+
+#[tauri::command]
+async fn get_artist_tracks(user_id: Value, limit: Option<usize>, state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
+    state.sc.get_artist_tracks(user_id, limit).await
+}
+
+#[tauri::command]
+async fn get_artist_albums(user_id: Value, limit: Option<usize>, state: State<'_, AppState>) -> Result<Vec<soundcloud::FormattedAlbum>, String> {
+    state.sc.get_artist_albums(user_id, limit).await
 }
 
 #[tauri::command]
@@ -408,7 +427,6 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                     // 3. Process full account authorization (profile, likes, sync)
                     match sc_inner.set_oauth_token(&tok_clone).await {
                         Ok(profile_data) => {
-                            let _ = sc_inner.push_local_likes_to_soundcloud().await;
                             let fresh_likes = sc_inner.get_liked_tracks(500).await.unwrap_or_default();
                             let mut res_data = profile_data;
                             if let Some(obj) = res_data.as_object_mut() {
@@ -520,6 +538,7 @@ fn win_toggle_maximize(window: tauri::Window) -> Result<(), String> {
 #[tauri::command]
 fn win_close(window: tauri::Window) -> Result<(), String> {
     // Background mode: hide window to tray / background so music continues playing
+    let _ = window.set_skip_taskbar(true);
     window.hide().map_err(|e| e.to_string())
 }
 
@@ -530,7 +549,10 @@ fn win_exit(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 fn win_show(window: tauri::Window) -> Result<(), String> {
-    window.show().map_err(|e| e.to_string())
+    let _ = window.set_skip_taskbar(false);
+    let _ = window.show();
+    let _ = window.unminimize();
+    window.set_focus().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -613,6 +635,17 @@ pub fn run() {
     {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
+    #[cfg(target_os = "windows")]
+    {
+        let existing = std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS").unwrap_or_default();
+        let bg_flags = "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --autoplay-policy=no-user-gesture-required";
+        let new_args = if existing.is_empty() {
+            bg_flags.to_string()
+        } else {
+            format!("{} {}", existing, bg_flags)
+        };
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS", new_args);
+    }
     let _ = std::fs::write("app_run.log", "lib::run() started\n");
     let config_path = resolve_config_path();
 
@@ -675,6 +708,7 @@ pub fn run() {
                             }
                             "show" => {
                                 if let Some(w) = app.get_webview_window("main") {
+                                    let _ = w.set_skip_taskbar(false);
                                     let _ = w.show();
                                     let _ = w.unminimize();
                                     let _ = w.set_focus();
@@ -689,14 +723,18 @@ pub fn run() {
                             if let Some(w) = app.get_webview_window("main") {
                                 if let Ok(is_visible) = w.is_visible() {
                                     if is_visible {
+                                        let _ = w.set_skip_taskbar(true);
                                         let _ = w.hide();
                                     } else {
+                                        let _ = w.set_skip_taskbar(false);
                                         let _ = w.show();
                                         let _ = w.unminimize();
                                         let _ = w.set_focus();
                                     }
                                 } else {
+                                    let _ = w.set_skip_taskbar(false);
                                     let _ = w.show();
+                                    let _ = w.unminimize();
                                     let _ = w.set_focus();
                                 }
                             }
@@ -722,6 +760,10 @@ pub fn run() {
             get_stream_url,
             toggle_like,
             search_tracks,
+            search_artists,
+            get_artist,
+            get_artist_tracks,
+            get_artist_albums,
             resolve_tracks,
             get_mixed_selections,
             get_system_playlist,
@@ -745,6 +787,14 @@ pub fn run() {
             load_custom_wallpaper,
             clear_custom_wallpaper
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Prevent window destruction; hide to tray so music plays in background
+                api.prevent_close();
+                let _ = window.set_skip_taskbar(true);
+                let _ = window.hide();
+            }
+        })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app_handle, event| {
