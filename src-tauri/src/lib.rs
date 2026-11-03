@@ -18,7 +18,6 @@ pub struct AppState {
 
 #[tauri::command]
 async fn init_app(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
-    let _ = std::fs::write("init_app_called.log", "init_app was called!\n");
     let cfg = state.sc.load_config();
     let mut likes = state.sc.load_local_likes();
     if likes.is_empty() {
@@ -413,66 +412,37 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
     let app_nav = app_handle.clone();
     let sc_nav = sc_clone.clone();
 
+    // IMPORTANT: this callback runs inside WebView2's COM event handler
+    // (NavigationStarting) on the UI thread. A panic raised here cannot unwind and
+    // aborts the whole process, which is why the app used to vanish right after the
+    // token was captured. Therefore:
+    //   * never call `tokio::spawn` here - this thread is outside the Tokio runtime;
+    //   * never let a panic escape - catch it and keep the app alive.
     builder = builder.on_navigation(move |url| {
-        let url_str = url.as_str();
-        if url_str.contains("onyx_oauth_token=") {
-            let token = if let Some(idx) = url_str.find("onyx_oauth_token=") {
-                let rest = &url_str[idx + 17..];
-                let end = rest.find('&').unwrap_or(rest.len());
-                let clean = &rest[..end];
-                urlencoding::decode(clean).unwrap_or_else(|_| clean.into()).to_string()
-            } else {
-                String::new()
-            };
+        let app_inner = app_nav.clone();
+        let sc_inner = sc_nav.clone();
 
-            let trimmed = token.trim().trim_matches(&['"', '\''][..]).trim();
-            if !trimmed.is_empty() {
-                let app_inner = app_nav.clone();
-                let sc_inner = sc_nav.clone();
-                let tok_clone = trimmed.to_string();
-                tokio::spawn(async move {
-                    use tauri::Emitter;
-
-                    if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
-                        let _ = win.hide();
-                    }
-
-                    // Validate the token with SoundCloud BEFORE persisting anything.
-                    // An expired token must surface an error instead of silently
-                    // restoring the previously cached account.
-                    match sc_inner.set_oauth_token(&tok_clone).await {
-                        Ok(profile_data) => {
-                            let fresh_likes = sc_inner.get_liked_tracks(500).await.unwrap_or_default();
-                            let mut res_data = profile_data;
-                            if let Some(obj) = res_data.as_object_mut() {
-                                if let Ok(val) = serde_json::to_value(&fresh_likes) {
-                                    obj.insert("likes".to_string(), val);
-                                }
-                            }
-                            let _ = app_inner.emit("sc_auth_success", &res_data);
-                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                            if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
-                                let _ = win.close();
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("set_oauth_token error: {}", e);
-                            let _ = app_inner.emit("sc_auth_error", e);
-                            // Keep the sign-in window visible so the user can retry.
-                            if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
-                                let _ = win.show();
-                                let _ = win.set_focus();
-                            }
-                        }
-                    }
-                });
-                return false;
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            handle_oauth_navigation(url, &app_inner, &sc_inner)
+        })) {
+            Ok(allow) => allow,
+            Err(payload) => {
+                let msg = payload
+                    .downcast_ref::<&str>()
+                    .map(|s| s.to_string())
+                    .or_else(|| payload.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic".to_string());
+                use std::io::Write;
+                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("panic.log") {
+                    let _ = writeln!(f, "PANIC caught in sign-in navigation handler: {}", msg);
+                }
+                true
             }
         }
-        true
     });
 
     let _win = builder.build().map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -484,6 +454,80 @@ fn close_login_window(app: tauri::AppHandle) -> Result<(), String> {
         let _ = win.close();
     }
     Ok(())
+}
+
+/// Handles a navigation performed by the sign-in webview.
+///
+/// When the injected script appends `onyx_oauth_token=<token>` to the redirect URL,
+/// the token must be captured: the navigation itself is cancelled and the token is
+/// validated/persisted asynchronously. Returns `true` when the navigation is allowed.
+///
+/// This function is called from WebView2's COM event handler, so it must never panic
+/// and must never rely on a Tokio runtime context on the calling thread.
+fn handle_oauth_navigation(
+    url: &tauri::Url,
+    app: &tauri::AppHandle,
+    sc: &Arc<SoundCloudClient>,
+) -> bool {
+    const MARKER: &str = "onyx_oauth_token=";
+    let url_str = url.as_str();
+    let Some(idx) = url_str.find(MARKER) else {
+        return true;
+    };
+
+    let rest = &url_str[idx + MARKER.len()..];
+    let end = rest.find('&').unwrap_or(rest.len());
+    let clean = &rest[..end];
+    let decoded = urlencoding::decode(clean)
+        .map(|c| c.to_string())
+        .unwrap_or_else(|_| clean.to_string());
+    let trimmed = decoded.trim().trim_matches(&['"', '\''][..]).trim().to_string();
+    if trimmed.is_empty() {
+        return true;
+    }
+
+    let app_inner = app.clone();
+    let sc_inner = sc.clone();
+
+    // Background work must be dispatched through Tauri's global runtime: the caller
+    // thread (UI thread inside WebView2) has no Tokio reactor of its own.
+    tauri::async_runtime::spawn(async move {
+        use tauri::{Emitter, Manager};
+
+        if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
+            let _ = win.hide();
+        }
+
+        // Validate the token with SoundCloud BEFORE persisting anything.
+        // An expired token must surface an error instead of silently
+        // restoring the previously cached account.
+        match sc_inner.set_oauth_token(&trimmed).await {
+            Ok(profile_data) => {
+                let fresh_likes = sc_inner.get_liked_tracks(500).await.unwrap_or_default();
+                let mut res_data = profile_data;
+                if let Some(obj) = res_data.as_object_mut() {
+                    if let Ok(val) = serde_json::to_value(&fresh_likes) {
+                        obj.insert("likes".to_string(), val);
+                    }
+                }
+                let _ = app_inner.emit("sc_auth_success", &res_data);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
+                    let _ = win.close();
+                }
+            }
+            Err(e) => {
+                let _ = app_inner.emit("sc_auth_error", e);
+                // Keep the sign-in window visible so the user can retry.
+                if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                }
+            }
+        }
+    });
+
+    false
 }
 
 #[tauri::command]
@@ -654,7 +698,6 @@ pub fn run() {
         };
         std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGS", new_args);
     }
-    let _ = std::fs::write("app_run.log", "lib::run() started\n");
     let config_path = resolve_config_path();
 
     let sc = Arc::new(SoundCloudClient::new(config_path));
