@@ -638,6 +638,83 @@ impl SoundCloudClient {
         Ok((numeric_id, token))
     }
 
+    pub async fn fetch_remote_liked_ids(
+        &self,
+        user_id: i64,
+        token: &str,
+        client_id: &str,
+    ) -> Result<std::collections::HashSet<String>, String> {
+        let mut ids = std::collections::HashSet::new();
+        let mut next_url = Some(format!(
+            "https://api-v2.soundcloud.com/users/{}/track_likes?client_id={}&limit=50&linked_partitioning=1",
+            user_id, client_id
+        ));
+        let mut pages = 0;
+
+        while let Some(url) = next_url {
+            pages += 1;
+            if pages > 20 || ids.len() >= 1000 {
+                break;
+            }
+
+            let req = self.http.get(&url)
+                .header("Authorization", token)
+                .header("User-Agent", USER_AGENT)
+                .header("Accept", "application/json")
+                .header("Origin", "https://soundcloud.com")
+                .header("Referer", "https://soundcloud.com/");
+
+            let res = req.send().await.map_err(|e| e.to_string())?;
+            let status = res.status().as_u16();
+            if status == 429 {
+                return Err("SoundCloud временно ограничил запросы (429 Too Many Requests).".to_string());
+            }
+            if !res.status().is_success() {
+                break;
+            }
+
+            let body: Value = res.json().await.map_err(|e| e.to_string())?;
+            let collection = body.get("collection").and_then(|v| v.as_array());
+            if let Some(items) = collection {
+                if items.is_empty() {
+                    break;
+                }
+                for item in items {
+                    let track_obj = if item.get("track").is_some() {
+                        item.get("track").unwrap()
+                    } else {
+                        item
+                    };
+                    if let Some(id_val) = track_obj.get("id") {
+                        let id_str = if let Some(n) = id_val.as_i64() {
+                            n.to_string()
+                        } else if let Some(s) = id_val.as_str() {
+                            s.to_string()
+                        } else {
+                            id_val.to_string().trim_matches(&['"', '\''][..]).to_string()
+                        };
+                        if !id_str.is_empty() && id_str != "null" {
+                            ids.insert(id_str);
+                        }
+                    }
+                }
+            } else {
+                break;
+            }
+
+            next_url = body.get("next_href").and_then(|v| v.as_str()).map(|s| {
+                if !s.contains("client_id=") {
+                    let sep = if s.contains('?') { "&" } else { "?" };
+                    format!("{}{}client_id={}", s, sep, client_id)
+                } else {
+                    s.to_string()
+                }
+            });
+        }
+
+        Ok(ids)
+    }
+
     pub async fn push_local_likes_to_soundcloud(&self) -> Result<usize, String> {
         let (user_id, token) = match self.ensure_active_user().await {
             Ok(pair) => pair,
@@ -649,6 +726,15 @@ impl SoundCloudClient {
             return Ok(0);
         }
 
+        // Fetch currently liked tracks directly from SoundCloud API v2 (WITHOUT local cache merge)
+        let remote_ids = match self.fetch_remote_liked_ids(user_id, &token, &client_id).await {
+            Ok(ids) => ids,
+            Err(e) => {
+                // If remote fetch failed (e.g. rate limited or offline), abort safely without spamming
+                return Err(e);
+            }
+        };
+
         let mut pushed = 0;
         for track in local_tracks {
             let id_str = if let Some(n) = track.id.as_i64() {
@@ -659,6 +745,11 @@ impl SoundCloudClient {
                 track.id.to_string().trim_matches(&['"', '\''][..]).to_string()
             };
             if id_str.is_empty() || id_str == "null" {
+                continue;
+            }
+
+            // Skip tracks that are ALREADY liked on SoundCloud
+            if remote_ids.contains(&id_str) {
                 continue;
             }
 
@@ -677,32 +768,17 @@ impl SoundCloudClient {
                 .send()
                 .await;
 
-            let mut ok = false;
             if let Ok(r) = res {
                 let st = r.status().as_u16();
                 if st == 200 || st == 201 || st == 204 {
-                    ok = true;
+                    pushed += 1;
+                } else if st == 429 {
+                    return Err("SoundCloud временно заблокировал добавление лайков (рейт-лимит 429). Подождите 10-15 минут.".to_string());
                 }
             }
 
-            if !ok {
-                let me_url = format!(
-                    "https://api-v2.soundcloud.com/me/track_likes/{}?client_id={}",
-                    id_str, client_id
-                );
-                let _ = self.http.put(&me_url)
-                    .header("Authorization", &token)
-                    .header("Origin", "https://soundcloud.com")
-                    .header("Referer", "https://soundcloud.com/")
-                    .header("User-Agent", USER_AGENT)
-                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
-                    .header("Content-Length", "0")
-                    .body("")
-                    .send()
-                    .await;
-            }
-
-            pushed += 1;
+            // Polite delay between requests to never trigger rate limits
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
         Ok(pushed)
     }
@@ -1387,6 +1463,35 @@ impl SoundCloudClient {
         }
 
         if !all_tracks.is_empty() {
+            // Preserve pending local likes that have not synced to SoundCloud yet
+            let local = self.load_local_likes();
+            let mut pending_local = Vec::new();
+            for loc in local {
+                let loc_id = if let Some(n) = loc.id.as_i64() {
+                    n.to_string()
+                } else if let Some(s) = loc.id.as_str() {
+                    s.to_string()
+                } else {
+                    loc.id.to_string()
+                };
+                let exists_in_remote = all_tracks.iter().any(|r| {
+                    let rid = if let Some(n) = r.id.as_i64() {
+                        n.to_string()
+                    } else if let Some(s) = r.id.as_str() {
+                        s.to_string()
+                    } else {
+                        r.id.to_string()
+                    };
+                    rid == loc_id
+                });
+                if !exists_in_remote && loc.liked {
+                    pending_local.push(loc);
+                }
+            }
+            if !pending_local.is_empty() {
+                pending_local.extend(all_tracks);
+                all_tracks = pending_local;
+            }
             let _ = self.save_local_likes(&all_tracks);
             Ok(all_tracks)
         } else if !existing_cached.is_empty() {
@@ -3091,7 +3196,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
         let log_msg = |msg: &str| {
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
-                let _ = writeln!(f, "[{}] {}", "DEBUG", msg);
+                let _ = writeln!(f, "[DEBUG] {}", msg);
             }
         };
 
@@ -3100,20 +3205,15 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         // 1. Send to SoundCloud API v2 if logged in
         match self.ensure_active_user().await {
             Ok((user_id, token)) => {
-                log_msg(&format!("ensure_active_user OK: user_id={}, token_prefix={}", user_id, &token[..token.len().min(12)]));
+                log_msg(&format!("ensure_active_user OK: user_id={}, token_len={}", user_id, token.len()));
 
                 let candidate_urls = if should_like {
                     vec![
                         ("PUT", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                        ("PUT", format!("https://api-v2.soundcloud.com/me/track_likes/{}?client_id={}", id_str, client_id)),
-                        ("POST", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                        ("POST", format!("https://api-v2.soundcloud.com/likes/tracks/{}?client_id={}", id_str, client_id)),
                     ]
                 } else {
                     vec![
                         ("DELETE", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                        ("DELETE", format!("https://api-v2.soundcloud.com/me/track_likes/{}?client_id={}", id_str, client_id)),
-                        ("DELETE", format!("https://api-v2.soundcloud.com/likes/tracks/{}?client_id={}", id_str, client_id)),
                     ]
                 };
 
@@ -3121,7 +3221,6 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                     log_msg(&format!("Trying {} {}", method, url));
                     let mut req = match method {
                         "PUT" => self.http.put(&url).header("Content-Length", "0").body(""),
-                        "POST" => self.http.post(&url).header("Content-Length", "0").body(""),
                         "DELETE" => self.http.delete(&url),
                         _ => continue,
                     };
@@ -3139,6 +3238,9 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                             last_status = st;
                             log_msg(&format!("Response {} st={}", method, st));
                             if st == 200 || st == 201 || st == 204 {
+                                success = true;
+                                break;
+                            } else if st == 404 && !should_like {
                                 success = true;
                                 break;
                             }
@@ -3164,10 +3266,20 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             serde_json::json!(id_str)
         };
 
+        let to_str_id = |val: &Value| -> String {
+            if let Some(n) = val.as_i64() {
+                n.to_string()
+            } else if let Some(s) = val.as_str() {
+                s.to_string()
+            } else {
+                val.to_string().trim_matches(&['\"', '\''][..]).to_string()
+            }
+        };
+
         if !should_like {
-            local_likes.retain(|t| t.id != id_val);
+            local_likes.retain(|t| to_str_id(&t.id) != id_str);
         } else {
-            if !local_likes.iter().any(|t| t.id == id_val) {
+            if !local_likes.iter().any(|t| to_str_id(&t.id) == id_str) {
                 if let Ok(mut resolved) = self.resolve_tracks(vec![id_val.clone()]).await {
                     if let Some(mut ft) = resolved.pop() {
                         ft.liked = true;
@@ -3179,6 +3291,10 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         let _ = self.save_local_likes(&local_likes);
 
         log_msg(&format!("toggle_like finished: success={}, last_status={}, last_err={}", success, last_status, last_err));
+
+        if last_status == 429 {
+            return Err("SoundCloud временно заблокировал лайки за частые запросы (рейт-лимит 429). Подождите 5-10 минут.".to_string());
+        }
 
         Ok(success)
     }
