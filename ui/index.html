@@ -6520,7 +6520,7 @@
 
 
 
-                  <span id="settings-username" class="text-xs font-semibold text-white">Гость</span>
+                  <span id="settings-username" class="text-xs font-semibold text-white">Не авторизован</span>
 
 
 
@@ -10207,7 +10207,7 @@
 
 
 
-        <span id="modal-user-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-[#22212b] text-neutral-300 border border-white/5">Гость</span>
+        <span id="modal-user-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-[#22212b] text-neutral-300 border border-white/5">Вход в аккаунт</span>
 
 
 
@@ -10226,24 +10226,21 @@
         
       </div>
 
-      <!-- Explanatory note about Token Requirement -->
-      <div class="p-3 rounded-xl bg-[#191512] border border-[#ff5500]/25 text-neutral-300 text-[11px] leading-relaxed">
+      <!-- Explanatory note about Account Requirement -->
+      <div class="p-3.5 rounded-xl bg-[#191512] border border-[#ff5500]/25 text-neutral-300 text-xs leading-relaxed">
         <div class="flex items-center gap-1.5 text-[#ff7722] font-semibold text-xs mb-1">
-          <svg class="w-3.5 h-3.5 text-[#ff5500] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span>Только через токен плеер работает полноценно</span>
+          <svg class="w-4 h-4 text-[#ff5500] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          <span>Вход только через аккаунт</span>
         </div>
-        <p class="text-neutral-400">
-          При входе <strong class="text-white font-medium">через токен (OAuth)</strong> открываются все возможности: сохранение лайков в один клик, бесконечный поток <span class="text-white font-medium">«Моя волна»</span>, персональные рекомендации и приватные плейлисты.
-        </p>
-        <p class="text-neutral-500 mt-1">
-          Кнопка выше делает это автоматически. Если вводить только никнейм/ссылку — плеер будет работать в режиме гостя (без лайков и волны).
+        <p class="text-neutral-400 text-[11px]">
+          Для работы плеера требуется авторизация в SoundCloud. Гостевой режим отключен. Нажмите кнопку <strong class="text-white">«Войти через SoundCloud»</strong> выше для автоматического входа через браузер или вставьте ваш <strong class="text-white">OAuth токен</strong> вручную ниже.
         </p>
       </div>
 
       <!-- Divider -->
       <div class="relative flex items-center justify-center pt-1">
         <div class="border-t border-[#232328] w-full"></div>
-        <span class="bg-[#111114] px-2.5 text-[10px] text-neutral-500 uppercase tracking-wider font-medium whitespace-nowrap">или вручную по токену / нику</span>
+        <span class="bg-[#111114] px-2.5 text-[10px] text-neutral-500 uppercase tracking-wider font-medium whitespace-nowrap">или вручную по OAuth токену</span>
         <div class="border-t border-[#232328] w-full"></div>
       </div>
 
@@ -10278,10 +10275,10 @@
 
 
 
-          <label class="block text-xs font-semibold text-neutral-300 mb-1.5">OAuth токен (рекомендуется) или никнейм / ссылка</label>
-          <input id="login-identifier-input" type="text" placeholder="OAuth токен (напр. 2-293...-...) или никнейм..." class="w-full bg-[#17171c] border border-[#26262e] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all font-mono">
+          <label class="block text-xs font-semibold text-neutral-300 mb-1.5">SoundCloud OAuth токен</label>
+          <input id="login-identifier-input" type="text" placeholder="OAuth токен (напр. 2-293...-...) ..." class="w-full bg-[#17171c] border border-[#26262e] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/30 transition-all font-mono">
           <div class="mt-1.5 text-[11px] text-neutral-500">
-            <span>Вставьте OAuth токен для полного доступа (из cookie oauth_token) или никнейм для гостевого режима</span>
+            <span>Вставьте значение cookie oauth_token из вашего аккаунта на soundcloud.com</span>
           </div>
 
 
@@ -10338,7 +10335,7 @@
 
 
 
-          <span id="login-btn-text" class="text-black font-semibold tracking-wide">Войти в аккаунт</span>
+          <span id="login-btn-text" class="text-black font-semibold tracking-wide">Войти по токену</span>
 
 
 
@@ -23014,7 +23011,7 @@
 
 
 
-      const username = isLoggedIn ? (user.username || user.permalink || 'Пользователь') : 'Гость';
+      const username = isLoggedIn ? (user.username || user.permalink || 'Пользователь') : 'Не авторизован';
 
 
 
@@ -23142,7 +23139,7 @@
 
 
 
-        libUser.textContent = isLoggedIn ? username : 'Гость';
+        libUser.textContent = isLoggedIn ? username : 'Не авторизован';
 
 
 
@@ -24381,7 +24378,7 @@
 
 
 
-          modalBadge.textContent = 'Гость';
+          modalBadge.textContent = 'Требуется вход';
 
 
 
@@ -24438,6 +24435,10 @@
 
 
         loginModal.classList.remove('hidden');
+        if (closeLoginModalBtn) {
+          if (!currentUser || !currentUser.id) closeLoginModalBtn.classList.add('hidden');
+          else closeLoginModalBtn.classList.remove('hidden');
+        }
 
 
 
@@ -24550,21 +24551,11 @@
 
 
     function closeLogin() {
-
-
-
-
-
-
-
+      if (!currentUser || !currentUser.id) {
+        if (loginStatusMsg) loginStatusMsg.textContent = 'Для использования плеера необходимо войти в аккаунт.';
+        return;
+      }
       if (loginModal) loginModal.classList.add('hidden');
-
-
-
-
-
-
-
     }
 
 
@@ -24671,7 +24662,9 @@
 
     if (loginModal) {
       loginModal.addEventListener('click', (e) => {
-        if (e.target === loginModal) closeLogin();
+        if (e.target === loginModal) {
+          if (currentUser && currentUser.id) closeLogin();
+        }
       });
     }
     if (loginIdInput) {
@@ -25322,30 +25315,17 @@
 
 
 
-          const isToken = inputVal.startsWith('eyJ') || inputVal.startsWith('2-') || inputVal.startsWith('OAuth ') || inputVal.length > 60;
+          const isToken = inputVal.startsWith('eyJ') || inputVal.startsWith('2-') || inputVal.startsWith('OAuth ') || inputVal.length > 40;
+          if (!isToken) {
+            submitLoginBtn.disabled = false;
+            if (loginSpinner) loginSpinner.classList.add('hidden');
+            if (loginBtnText) loginBtnText.textContent = 'Войти по токену';
+            if (loginStatusMsg) loginStatusMsg.textContent = 'Гостевой режим отключен. Введите ваш OAuth токен или нажмите кнопку "Войти через SoundCloud" выше.';
+            return;
+          }
 
-
-
-
-
-
-
-          const identifier = isToken ? '' : inputVal;
-
-
-
-
-
-
-
-          const token = isToken ? inputVal : null;
-
-
-
-
-
-
-
+          const identifier = '';
+          const token = inputVal;
           const res = await api.loginAccount(identifier, token);
 
 
