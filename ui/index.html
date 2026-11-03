@@ -36538,12 +36538,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
         const overlay = card.querySelector('.album-play-overlay');
         const iconWrap = card.querySelector('.album-play-icon');
-        const badge = card.querySelector('.album-playing-badge');
-
-        if (badge) {
-          if (isThisActive) badge.classList.remove('hidden');
-          else badge.classList.add('hidden');
-        }
 
         if (overlay && iconWrap) {
           if (isThisActive) {
@@ -36584,7 +36578,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         const isThisActive = Boolean(currentPlayingAlbumUrl && currentPlayingAlbumUrl === albumUrl);
         const isThisPlaying = isThisActive && isPlaying;
 
-        card.className = 'artist-album-card card-dark p-3.5 cursor-pointer group rounded-2xl transition-all relative';
+        card.className = 'artist-album-card card-dark p-3.5 cursor-pointer group rounded-2xl transition-all relative select-none outline-none';
         card.dataset.albumUrl = albumUrl;
 
         card.onclick = () => {
@@ -36615,12 +36609,8 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         };
 
         card.innerHTML = `
-          <div class="relative aspect-square rounded-2xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
-            <div class="album-playing-badge ${isThisActive ? '' : 'hidden'} absolute top-2 left-2 px-2 py-0.5 rounded-md text-[9px] font-bold text-white flex items-center gap-1 shadow-lg z-10" style="background: var(--accent, #f43f5e);">
-              <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-              <span>В эфире</span>
-            </div>
-            <img src="${album.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300">
+          <div class="relative aspect-square rounded-2xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5 select-none">
+            <img src="${album.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300 pointer-events-none">
             <div class="album-play-overlay absolute inset-0 bg-black/40 ${isThisActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} flex items-center justify-center transition">
               <div class="album-play-icon station-play-badge card-play-btn w-10 h-10 rounded-full flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition cursor-pointer" style="background-color: var(--accent, #f43f5e); color: var(--accent-contrast, #ffffff);">
                 ${isThisPlaying ? `
