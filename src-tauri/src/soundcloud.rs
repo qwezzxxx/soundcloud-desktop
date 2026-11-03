@@ -2261,11 +2261,11 @@ impl SoundCloudClient {
 
 
 
-                    let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&audio_url));
+                    // resolve_official_youtube_stream already returns a 127.0.0.1 proxy URL:
 
 
 
-                    return Ok(proxied);
+                    return Ok(audio_url);
 
 
 
@@ -2313,11 +2313,11 @@ impl SoundCloudClient {
 
 
 
-                    let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&audio_url));
+                    // resolve_official_youtube_stream already returns a 127.0.0.1 proxy URL:
 
 
 
-                    return Ok(proxied);
+                    return Ok(audio_url);
 
 
 

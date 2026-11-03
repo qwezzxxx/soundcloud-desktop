@@ -17580,15 +17580,42 @@
 
     // Fast audio stream cache & idle prefetcher
     const streamUrlCache = new Map();
+    const streamUrlCacheAt = new Map();
+    // SoundCloud CDN links carry an `expires` signature (valid for ~1-2 hours).
+    // Serving a stale link makes HLS fail with a 403, so never trust the cache for long.
+    const STREAM_URL_TTL_MS = 30 * 60 * 1000;
+
+    function cacheStreamUrl(trackId, url) {
+      if (!trackId || !url) return;
+      streamUrlCache.set(trackId, url);
+      streamUrlCacheAt.set(trackId, Date.now());
+    }
+
+    function invalidateStreamUrl(trackId) {
+      if (!trackId) return;
+      streamUrlCache.delete(trackId);
+      streamUrlCacheAt.delete(trackId);
+    }
+
+    function getCachedStreamUrl(trackId) {
+      if (!trackId || !streamUrlCache.has(trackId)) return null;
+      const cachedAt = streamUrlCacheAt.get(trackId) || 0;
+      if (Date.now() - cachedAt > STREAM_URL_TTL_MS) {
+        invalidateStreamUrl(trackId);
+        return null;
+      }
+      return streamUrlCache.get(trackId);
+    }
+
     function prefetchNextTrack(index) {
       if (!currentQueue || index < 0 || index >= currentQueue.length) return;
       const nextT = currentQueue[index];
-      if (!nextT || !nextT.id || streamUrlCache.has(nextT.id)) return;
+      if (!nextT || !nextT.id || getCachedStreamUrl(nextT.id)) return;
       setTimeout(async () => {
         try {
           if (api && api.getStreamUrl) {
             const res = await api.getStreamUrl(nextT.id);
-            if (res) streamUrlCache.set(nextT.id, res);
+            if (res) cacheStreamUrl(nextT.id, res);
           }
         } catch (_) {}
       }, 1200);
@@ -17686,10 +17713,20 @@
 
         if (!track.id) return;
 
-        let streamInfo = streamUrlCache.get(track.id);
+        let streamInfo = getCachedStreamUrl(track.id);
         if (!streamInfo) {
-          streamInfo = await api.getStreamUrl(track.id);
-          if (streamInfo) streamUrlCache.set(track.id, streamInfo);
+          try {
+            streamInfo = await api.getStreamUrl(track.id);
+            if (streamInfo) cacheStreamUrl(track.id, streamInfo);
+          } catch (resolveErr) {
+            const msg = resolveErr && resolveErr.message ? resolveErr.message : String(resolveErr || '');
+            logD(`getStreamUrl failed for ${track.id}: ${msg}`);
+            if (requestId === currentPlayRequestId) {
+              notify(`⚠️ ${msg || 'Не удалось получить поток трека'}`, '❌');
+              handleTrackPlaybackFailure(track, 'resolveError', { noRetry: true });
+            }
+            return;
+          }
         }
         if (requestId !== currentPlayRequestId) return;
         prefetchNextTrack(currentTrackIndex + 1);
@@ -17699,6 +17736,7 @@
 
         if (!streamUrl) {
           notify("⚠️ Поток трека недоступен на серверах SoundCloud", "❌");
+          handleTrackPlaybackFailure(track, 'emptyStream', { noRetry: true });
           return;
         }
 
@@ -17729,9 +17767,15 @@
         } else if (isHls && window.Hls && Hls.isSupported()) {
           const hls = new Hls({
             enableWorker: true,
-            lowLatencyMode: true,
-            maxBufferLength: 15,
-            maxMaxBufferLength: 30
+            lowLatencyMode: false,
+            backBufferLength: 30,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 120,
+            manifestLoadingMaxRetry: 3,
+            manifestLoadingRetryDelay: 500,
+            fragLoadingMaxRetry: 6,
+            fragLoadingRetryDelay: 500,
+            levelLoadingMaxRetry: 3
           });
           window.currentHls = hls;
           hls.loadSource(streamUrl);
@@ -17741,27 +17785,99 @@
             audioEngine.play().then(handlePlaybackStart).catch(e => console.log('HLS play error:', e.message));
           });
           hls.on(Hls.Events.ERROR, (event, data) => {
-            if (data.fatal && requestId === currentPlayRequestId) {
-              console.log('HLS fatal, switching to native fallback:', data.type);
-              try {
-                hls.destroy();
-              } catch (_) {}
-              window.currentHls = null;
-              audioEngine.src = streamUrl;
-              audioEngine.play().then(handlePlaybackStart).catch(err => console.log('Native fallback error:', err.message));
-            }
+            const httpCode = data && data.response ? data.response.code : '';
+            logD(`HLS ${data && data.fatal ? 'FATAL' : 'error'}: type=${data ? data.type : ''} details=${data ? data.details : ''}${httpCode ? ' http=' + httpCode : ''}`);
+            if (!data || !data.fatal || requestId !== currentPlayRequestId) return;
+            // Never feed the raw m3u8 URL to <audio>: Chromium cannot demux HLS on its own
+            // (that produced MEDIA_ERR_SRC_NOT_SUPPORTED / DEMUXER_ERROR_COULD_NOT_PARSE).
+            // Instead drop the (possibly stale) link and resolve the track again.
+            try {
+              hls.destroy();
+            } catch (_) {}
+            if (window.currentHls === hls) window.currentHls = null;
+            handleTrackPlaybackFailure(track, 'hlsFatal:' + (data.type || 'unknown'));
           });
+        } else if (isHls) {
+          // HLS stream but MSE/Hls.js is unavailable - a raw playlist can never be demuxed
+          // by <audio>, so surface the problem instead of silently freezing.
+          logD('HLS stream but Hls.js is not supported in this webview');
+          notify('⚠️ HLS-поток не поддерживается этим движком', '❌');
+          handleTrackPlaybackFailure(track, 'hlsUnsupported', { noRetry: true });
         } else {
           audioEngine.src = streamUrl;
           audioEngine.play().then(handlePlaybackStart).catch(err => {
-            console.log('Native audio play error:', err.message);
+            logD('Native audio play error: ' + err.message);
             if (requestId === currentPlayRequestId && err.name !== 'AbortError') {
               notify("⚠️ Ошибка воспроизведения");
+              handleTrackPlaybackFailure(track, 'nativePlayError');
             }
           });
         }
       } catch (e) {
         console.error("Error in playTrack:", e);
+        logD('Error in playTrack: ' + (e && e.message ? e.message : e));
+      }
+    }
+
+    // Per-track playback failure bookkeeping. Without this the player simply froze on the
+    // failing track: no retry, no skip, no message (the old code called a function that
+    // was never defined, so nothing happened at all).
+    const playbackFailures = new Map();
+    const playbackRetryTimers = new Map();
+    let recentPlaybackFailureTimes = [];
+
+    function handleTrackPlaybackFailure(track, source, opts) {
+      try {
+        if (!track || !track.id) return;
+        if (currentlyPlayingTrackId && currentlyPlayingTrackId !== track.id) return;
+
+        const noRetry = !!(opts && opts.noRetry);
+        const attempts = playbackFailures.get(track.id) || 0;
+        logD(`playback failure #${attempts + 1} for track ${track.id} (${source})`);
+
+        if (!noRetry && attempts < 2) {
+          playbackFailures.set(track.id, attempts + 1);
+          // A cached CDN link may be stale or the HLS session may be broken - start over
+          // with a freshly resolved URL instead of dying on the same one.
+          invalidateStreamUrl(track.id);
+          if (window.currentHls) {
+            try {
+              window.currentHls.destroy();
+            } catch (_) {}
+            window.currentHls = null;
+          }
+          if (!playbackRetryTimers.has(track.id)) {
+            const retryId = setTimeout(() => {
+              playbackRetryTimers.delete(track.id);
+              if (currentlyPlayingTrackId !== track.id) return;
+              playTrack(currentTrackIndex).catch(() => {});
+            }, 400 + attempts * 500);
+            playbackRetryTimers.set(track.id, retryId);
+          }
+          return;
+        }
+
+        // Out of retries: report it and keep the queue moving instead of going silent.
+        playbackFailures.delete(track.id);
+        invalidateStreamUrl(track.id);
+        notify(`⚠️ Не удалось воспроизвести: ${track.title || 'трек'}`, '❌');
+
+        const now = Date.now();
+        recentPlaybackFailureTimes = recentPlaybackFailureTimes.filter(t => now - t < 20000);
+        recentPlaybackFailureTimes.push(now);
+        if (recentPlaybackFailureTimes.length >= 5) {
+          logD('too many playback failures in a row - stopping auto-skip');
+          isPlaying = false;
+          syncPlayPauseState(false);
+          notify('⚠️ Много треков не воспроизводится подряд. Проверьте подключение к сети.', '❌');
+          try {
+            audioEngine.pause();
+          } catch (_) {}
+          return;
+        }
+        playNextTrack();
+      } catch (e) {
+        logD('handleTrackPlaybackFailure crashed: ' + (e && e.message ? e.message : e));
       }
     }
 
@@ -32424,7 +32540,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('playing', () => logD('audioEngine: playing event fired (sound active!)'));
+    audioEngine.addEventListener('playing', () => {
+      logD('audioEngine: playing event fired (sound active!)');
+      // A track that really started playing is healthy again: forget its failure budget.
+      if (currentlyPlayingTrackId) playbackFailures.delete(currentlyPlayingTrackId);
+    });
 
 
 
