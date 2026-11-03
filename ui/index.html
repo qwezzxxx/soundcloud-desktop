@@ -24741,11 +24741,12 @@
 
     let authPollingTimer = null;
 
-
-
-
-
-
+    function stopAuthWatcher() {
+      if (authPollingTimer) {
+        clearInterval(authPollingTimer);
+        authPollingTimer = null;
+      }
+    }
 
     function startAuthWatcher() {
 
@@ -24829,19 +24830,8 @@
 
             appConfig = freshCfg;
 
-
-
-
-
-
-
-            api.closeLoginWindow().catch(() => {});
-
-
-
-
-
-
+            // NOTE: the Rust side closes the sign-in window only after the token is
+            // validated; closing it here would hide a failed attempt.
 
             const freshProfile = await api.getProfile().catch(() => null);
 
@@ -24851,7 +24841,15 @@
 
 
 
-            if (freshProfile) currentUser = freshProfile;
+            if (!freshProfile || !freshProfile.id) {
+              stopAuthWatcher();
+              if (loginStatusMsg) {
+                loginStatusMsg.className = 'text-xs text-rose-400 min-h-[16px]';
+                loginStatusMsg.textContent = 'Токен SoundCloud не принят. Войдите в аккаунт заново.';
+              }
+              return;
+            }
+            currentUser = freshProfile;
 
 
 
@@ -26664,6 +26662,20 @@
                 }
               } catch (e) {
                 console.warn('sc_auth_success handler error:', e);
+              }
+            });
+
+            window.__TAURI__.event.listen('sc_auth_error', (event) => {
+              try {
+                const msg = (event && event.payload) ? String(event.payload) : 'Не удалось войти в аккаунт SoundCloud.';
+                if (typeof stopAuthWatcher === 'function') stopAuthWatcher();
+                if (loginStatusMsg) {
+                  loginStatusMsg.className = 'text-xs text-rose-400 min-h-[16px]';
+                  loginStatusMsg.textContent = msg;
+                }
+                notify(msg, '❌');
+              } catch (e) {
+                console.warn('sc_auth_error handler error:', e);
               }
             });
           } catch (_) {}

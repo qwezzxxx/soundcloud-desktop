@@ -276,6 +276,20 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
         return Ok(());
     }
 
+    // Isolated, always-fresh profile for the login webview.
+    // This guarantees that no leftover SoundCloud cookies can silently re-authorize
+    // a previously saved account, and forces a real sign-in every time.
+    #[cfg(target_os = "windows")]
+    let login_data_dir = {
+        let base = std::env::var("LOCALAPPDATA")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| std::env::temp_dir());
+        let dir = base.join("com.onyx.player").join("login-webview");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    };
+
     let auth_script = r#"
         (function() {
             if (window.__ONYX_AUTH_INJECTED__) return;
@@ -391,6 +405,11 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
     .center()
     .initialization_script(auth_script);
 
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.data_directory(login_data_dir);
+    }
+
     let app_nav = app_handle.clone();
     let sc_nav = sc_clone.clone();
 
@@ -412,19 +431,15 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                 let sc_inner = sc_nav.clone();
                 let tok_clone = trimmed.to_string();
                 tokio::spawn(async move {
-                    // 1. Immediately persist token so it is NEVER lost
-                    {
-                        let mut cfg = sc_inner.load_config();
-                        cfg.oauth_token = Some(tok_clone.clone());
-                        let _ = sc_inner.save_raw_config(&cfg);
-                    }
+                    use tauri::Emitter;
 
-                    // 2. Hide webview immediately so UI feels instant
                     if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
                         let _ = win.hide();
                     }
 
-                    // 3. Process full account authorization (profile, likes, sync)
+                    // Validate the token with SoundCloud BEFORE persisting anything.
+                    // An expired token must surface an error instead of silently
+                    // restoring the previously cached account.
                     match sc_inner.set_oauth_token(&tok_clone).await {
                         Ok(profile_data) => {
                             let fresh_likes = sc_inner.get_liked_tracks(500).await.unwrap_or_default();
@@ -434,28 +449,21 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                                     obj.insert("likes".to_string(), val);
                                 }
                             }
-                            use tauri::Emitter;
                             let _ = app_inner.emit("sc_auth_success", &res_data);
+                            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                            if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
+                                let _ = win.close();
+                            }
                         }
                         Err(e) => {
                             eprintln!("set_oauth_token error: {}", e);
-                            let cfg = sc_inner.load_config();
-                            let profile = cfg.user_profile.clone();
-                            let likes = cfg.cached_likes.clone().unwrap_or_default();
-                            let fallback = serde_json::json!({
-                                "profile": profile,
-                                "likes": likes,
-                                "config": cfg
-                            });
-                            use tauri::Emitter;
-                            let _ = app_inner.emit("sc_auth_success", &fallback);
+                            let _ = app_inner.emit("sc_auth_error", e);
+                            // Keep the sign-in window visible so the user can retry.
+                            if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
+                                let _ = win.show();
+                                let _ = win.set_focus();
+                            }
                         }
-                    }
-
-                    // 4. Safely destroy webview without closing application
-                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                    if let Some(win) = app_inner.get_webview_window("soundcloud_login") {
-                        let _ = win.close();
                     }
                 });
                 return false;
@@ -789,10 +797,13 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // Prevent window destruction; hide to tray so music plays in background
-                api.prevent_close();
-                let _ = window.set_skip_taskbar(true);
-                let _ = window.hide();
+                // Only the main player window minimizes to tray; auxiliary windows
+                // (e.g. the SoundCloud sign-in window) must be able to close normally.
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.set_skip_taskbar(true);
+                    let _ = window.hide();
+                }
             }
         })
         .build(tauri::generate_context!())

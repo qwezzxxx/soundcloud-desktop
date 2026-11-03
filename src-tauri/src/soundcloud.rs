@@ -3239,20 +3239,18 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
         let u_val = match user_data {
-
-
-
             Some(u) => u,
-
-
-
             None => {
+                // A supplied token that SoundCloud rejected must never fall back to a
+                // previously cached profile: doing so silently resurrects an old account.
+                if resolved_token.is_some() {
+                    return Err(
+                        "Токен SoundCloud недействителен или истёк. Войдите в аккаунт заново."
+                            .to_string(),
+                    );
+                }
 
-
-
-                if let Some(ref prof) = cfg.user_profile {
-                    prof.clone()
-                } else if !clean.is_empty() {
+                if !clean.is_empty() {
                     let clean_name = clean.to_string();
                     let fake_id = clean.parse::<i64>().unwrap_or(1000000);
                     serde_json::json!({
@@ -3265,23 +3263,11 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                         "followers_count": 0,
                         "followings_count": 0
                     })
-                } else if resolved_token.is_some() {
-                    serde_json::json!({
-                        "id": 1000000,
-                        "username": "SoundCloud User",
-                        "permalink": "user",
-                        "avatar_url": "https://a1.sndcdn.com/images/default_avatar_large.png",
-                        "track_count": 0,
-                        "public_favorites_count": 0,
-                        "followers_count": 0,
-                        "followings_count": 0
-                    })
+                } else if let Some(ref prof) = cfg.user_profile {
+                    prof.clone()
                 } else {
                     return Err("Пользователь не найден. Проверьте никнейм, ID, ссылку или токен.".to_string());
                 }
-
-
-
             }
 
 
@@ -3403,11 +3389,25 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         if clean.is_empty() {
             return Err("Token is empty".to_string());
         }
-        let mut cfg = self.load_config();
-        cfg.oauth_token = Some(clean.to_string());
-        let _ = self.save_raw_config(&cfg);
 
-        self.login_account(String::new(), Some(clean.to_string())).await
+        // Validate against SoundCloud first: a rejected token must never be persisted,
+        // otherwise the UI keeps reporting a stale "signed in" state.
+        match self.login_account(String::new(), Some(clean.to_string())).await {
+            Ok(data) => {
+                let mut cfg = self.load_config();
+                cfg.oauth_token = Some(clean.to_string());
+                let _ = self.save_raw_config(&cfg);
+                Ok(data)
+            }
+            Err(e) => {
+                let mut cfg = self.load_config();
+                if cfg.oauth_token.as_deref() == Some(clean) {
+                    cfg.oauth_token = None;
+                    let _ = self.save_raw_config(&cfg);
+                }
+                Err(e)
+            }
+        }
     }
 
     pub async fn toggle_like(&self, track_id: Value, should_like: bool) -> Result<bool, String> {
