@@ -9390,6 +9390,7 @@
 
 
             <span id="player-artist" class="truncate hover:text-white hover:underline cursor-pointer transition-colors select-none" title="Открыть страницу исполнителя">SoundCloud</span>
+            <span id="player-loading" class="hidden items-center gap-1 shrink-0 text-[10px] font-medium text-orange-400/90 animate-pulse select-none">Загрузка потока…</span>
 
 
 
@@ -17607,18 +17608,55 @@
       return streamUrlCache.get(trackId);
     }
 
+    // Tracks without a SoundCloud stream are resolved through YouTube, which spawns
+    // yt-dlp (a few seconds). Prefetch and playback used to ask for the same track at
+    // the same time and run yt-dlp twice; share a single in-flight promise instead.
+    const streamRequests = new Map();
+    function requestStreamUrl(trackId) {
+      if (!trackId) return Promise.reject(new Error('empty track id'));
+      const existing = streamRequests.get(trackId);
+      if (existing) return existing;
+      const pending = api.getStreamUrl(trackId).finally(() => {
+        if (streamRequests.get(trackId) === pending) streamRequests.delete(trackId);
+      });
+      streamRequests.set(trackId, pending);
+      return pending;
+    }
+
+    // Visible feedback while a stream is resolved (YouTube fallback can take a few seconds).
+    let playerLoadingTimer = null;
+    function setPlayerLoading(on) {
+      const el = document.getElementById('player-loading');
+      if (el) {
+        el.classList.toggle('hidden', !on);
+        el.classList.toggle('inline-flex', !!on);
+      }
+      if (playerLoadingTimer) {
+        clearTimeout(playerLoadingTimer);
+        playerLoadingTimer = null;
+      }
+      if (on) {
+        playerLoadingTimer = setTimeout(() => {
+          const node = document.getElementById('player-loading');
+          if (node) { node.classList.add('hidden'); node.classList.remove('inline-flex'); }
+        }, 20000);
+      }
+    }
+
     function prefetchNextTrack(index) {
       if (!currentQueue || index < 0 || index >= currentQueue.length) return;
       const nextT = currentQueue[index];
       if (!nextT || !nextT.id || getCachedStreamUrl(nextT.id)) return;
+      // Prefetch a bit earlier: YouTube-fallback tracks need several seconds, so waiting
+      // until the user clicks would make the switch feel frozen.
       setTimeout(async () => {
         try {
           if (api && api.getStreamUrl) {
-            const res = await api.getStreamUrl(nextT.id);
+            const res = await requestStreamUrl(nextT.id);
             if (res) cacheStreamUrl(nextT.id, res);
           }
         } catch (_) {}
-      }, 1200);
+      }, 600);
     }
 
     async function playTrack(index, newQueue = null, fromWave = false) {
@@ -17715,10 +17753,12 @@
 
         let streamInfo = getCachedStreamUrl(track.id);
         if (!streamInfo) {
+          setPlayerLoading(true);
           try {
-            streamInfo = await api.getStreamUrl(track.id);
+            streamInfo = await requestStreamUrl(track.id);
             if (streamInfo) cacheStreamUrl(track.id, streamInfo);
           } catch (resolveErr) {
+            setPlayerLoading(false);
             const msg = resolveErr && resolveErr.message ? resolveErr.message : String(resolveErr || '');
             logD(`getStreamUrl failed for ${track.id}: ${msg}`);
             if (requestId === currentPlayRequestId) {
@@ -17735,6 +17775,7 @@
         const isHls = ((typeof streamInfo === 'object' && streamInfo !== null && streamInfo.protocol === 'hls') || (streamUrl && streamUrl.includes('m3u8'))) && !streamUrl.includes('127.0.0.1:49221');
 
         if (!streamUrl) {
+          setPlayerLoading(false);
           notify("⚠️ Поток трека недоступен на серверах SoundCloud", "❌");
           handleTrackPlaybackFailure(track, 'emptyStream', { noRetry: true });
           return;
@@ -17860,6 +17901,7 @@
         // Out of retries: report it and keep the queue moving instead of going silent.
         playbackFailures.delete(track.id);
         invalidateStreamUrl(track.id);
+        setPlayerLoading(false);
         notify(`⚠️ Не удалось воспроизвести: ${track.title || 'трек'}`, '❌');
 
         const now = Date.now();
@@ -32542,6 +32584,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
     audioEngine.addEventListener('playing', () => {
       logD('audioEngine: playing event fired (sound active!)');
+      setPlayerLoading(false);
       // A track that really started playing is healthy again: forget its failure budget.
       if (currentlyPlayingTrackId) playbackFailures.delete(currentlyPlayingTrackId);
     });

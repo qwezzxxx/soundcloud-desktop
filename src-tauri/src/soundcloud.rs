@@ -387,6 +387,12 @@ pub struct FormattedAlbum {
 
 
 
+// Cache of YouTube search results: "artist|title|duration_ms" -> (video_id, timestamp).
+// The search step alone costs ~3s (yt-dlp process + network), so remember it per session.
+static YT_SEARCH_CACHE: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, (String, std::time::Instant)>>,
+> = std::sync::OnceLock::new();
+
 pub struct SoundCloudClient {
     http: reqwest::Client,
     config_path: PathBuf,
@@ -1975,6 +1981,29 @@ impl SoundCloudClient {
             format!("ytsearch8:{}", clean_title)
         };
 
+        let cache_key = format!(
+            "{}|{}|{}",
+            clean_artist.to_lowercase(),
+            clean_title.to_lowercase(),
+            duration_ms
+        );
+        let yt_cache = YT_SEARCH_CACHE
+            .get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+        if let Some((cached_id, cached_at)) = yt_cache
+            .lock()
+            .ok()
+            .and_then(|c| c.get(&cache_key).cloned())
+        {
+            if cached_at.elapsed() < std::time::Duration::from_secs(6 * 3600) {
+                if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&cached_id).await {
+                    return Some(format!(
+                        "http://127.0.0.1:49221/stream?url={}",
+                        urlencoding_simple(&raw_url)
+                    ));
+                }
+            }
+        }
+
         let yt_bin = Self::find_yt_dlp();
         let mut search_cmd = tokio::process::Command::new(&yt_bin);
         search_cmd.args([
@@ -2071,6 +2100,11 @@ impl SoundCloudClient {
                     }
                 }
 
+                if let Some(id_ref) = best_id.as_ref() {
+                    if let Ok(mut c) = yt_cache.lock() {
+                        c.insert(cache_key.clone(), (id_ref.clone(), std::time::Instant::now()));
+                    }
+                }
                 if let Some(id) = best_id {
                     if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&id).await {
                         let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&raw_url));

@@ -182,9 +182,15 @@ async fn get_stream_url(track_id: Value, state: State<'_, AppState>) -> Result<S
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
         let _ = writeln!(f, "[Rust] get_stream_url called with track_id={:?}", track_id);
     }
+    let started = std::time::Instant::now();
     let res = state.sc.resolve_stream_url(track_id).await;
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
-        let _ = writeln!(f, "[Rust] get_stream_url resolved: {:?}", res);
+        let _ = writeln!(
+            f,
+            "[Rust] get_stream_url resolved in {}ms: {:?}",
+            started.elapsed().as_millis(),
+            res
+        );
     }
     res
 }
