@@ -1185,23 +1185,20 @@ impl SoundCloudClient {
 
 
 
-        let artist = t.get("user")
-
-
-
+        let uploader = t.get("user")
             .and_then(|u| u.get("username"))
-
-
-
             .and_then(|v| v.as_str())
-
-
-
             .unwrap_or("Unknown Artist")
-
-
-
             .to_string();
+
+        let pub_artist = t.get("publisher_metadata")
+            .and_then(|p| p.get("artist"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        let artist = pub_artist.unwrap_or(uploader);
 
 
 
@@ -1448,7 +1445,7 @@ impl SoundCloudClient {
             format!("https://api-v2.soundcloud.com/users/{}?client_id={}", clean, client_id)
         } else {
             format!(
-                "https://api-v2.soundcloud.com/search/users?q={}&limit=1&client_id={}",
+                "https://api-v2.soundcloud.com/search/users?q={}&limit=5&client_id={}",
                 urlencoding_simple(clean),
                 client_id
             )
@@ -1466,8 +1463,32 @@ impl SoundCloudClient {
             } else {
                 let collection = data.get("collection").and_then(|v| v.as_array());
                 if let Some(arr) = collection {
-                    if let Some(first) = arr.first() {
-                        return Ok(Self::format_artist(first));
+                    if !arr.is_empty() {
+                        let clean_lower = clean.to_lowercase();
+                        // 1. Exact verified match (e.g. "The Smiths", "Alex G", "MF Doom")
+                        let best = arr.iter().find(|u| {
+                            let un = u.get("username").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            let pl = u.get("permalink").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            let ver = u.get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+                            ver && (un == clean_lower || pl == clean_lower)
+                        })
+                        // 2. Exact username / permalink match
+                        .or_else(|| arr.iter().find(|u| {
+                            let un = u.get("username").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            let pl = u.get("permalink").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            un == clean_lower || pl == clean_lower
+                        }))
+                        // 3. Any verified artist
+                        .or_else(|| arr.iter().find(|u| {
+                            u.get("verified").and_then(|v| v.as_bool()).unwrap_or(false)
+                        }))
+                        // 4. Fall back to user with the highest follower count
+                        .or_else(|| arr.iter().max_by_key(|u| {
+                            u.get("followers_count").and_then(|v| v.as_u64()).unwrap_or(0)
+                        }))
+                        .unwrap_or(&arr[0]);
+
+                        return Ok(Self::format_artist(best));
                     }
                 }
                 Err(format!("Artist '{}' not found", clean))
@@ -1488,6 +1509,35 @@ impl SoundCloudClient {
             user_id.to_string().trim_matches('"').to_string()
         };
         let lim = limit.unwrap_or(50);
+
+        // 1. Try /toptracks first so "Популярные треки" actually shows the artist's real top hits
+        let toptracks_url = format!(
+            "https://api-v2.soundcloud.com/users/{}/toptracks?limit={}&client_id={}",
+            id_str,
+            lim,
+            client_id
+        );
+        let mut req = self.http.get(&toptracks_url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        if let Ok(res) = req.send().await {
+            if res.status().is_success() {
+                if let Ok(data) = res.json::<Value>().await {
+                    let mut tracks = Vec::new();
+                    if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                        for t in arr {
+                            tracks.push(Self::format_track(t, false));
+                        }
+                    }
+                    if !tracks.is_empty() {
+                        return Ok(tracks);
+                    }
+                }
+            }
+        }
+
+        // 2. Fall back to /tracks if /toptracks is empty or unsupported
         let url = format!(
             "https://api-v2.soundcloud.com/users/{}/tracks?limit={}&client_id={}",
             id_str,

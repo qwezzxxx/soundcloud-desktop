@@ -12888,6 +12888,11 @@
           renderWaveTrackList();
         }
       }
+      if (tabId === 'tab-artist') {
+        if (typeof syncArtistTracksState === 'function') {
+          syncArtistTracksState(isPlaying);
+        }
+      }
 
 
 
@@ -36507,9 +36512,15 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
     function openArtistProfileFromCurrentTrack() {
-      const track = currentQueue[currentTrackIndex];
-      if (track && (track.user_id || track.artist)) {
-        openArtistProfile(track.user_id || track.artist);
+      const track = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex];
+      if (!track) return;
+      // On SoundCloud, user_id is the uploader's numeric account ID (often a random
+      // fan or repost account with no relation to the real artist). If the track has a known
+      // artist name, prioritize searching by artist so we land on the verified official artist profile.
+      if (track.artist && track.artist !== 'Unknown Artist' && track.artist !== 'SoundCloud') {
+        openArtistProfile(track.artist);
+      } else if (track.user_id) {
+        openArtistProfile(track.user_id);
       }
     }
 
@@ -36612,12 +36623,15 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       tracks.forEach((t, idx) => {
         const item = document.createElement('div');
-        const isCurrent = currentQueue[currentTrackIndex] && String(currentQueue[currentTrackIndex].id) === String(t.id);
+        const isCurrent = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex] && String(currentQueue[currentTrackIndex].id) === String(t.id);
         const isThisPlaying = isCurrent && isPlaying;
         const isLiked = t.liked === true || (Array.isArray(allTracks) && allTracks.some(x => String(x.id) === String(t.id) && x.liked !== false));
         const accent = currentAccent || '#ff5500';
 
-        item.className = `flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition cursor-pointer group ${isCurrent ? 'bg-white/[0.07] border border-white/10' : ''}`;
+        item.className = `artist-track-item flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition cursor-pointer group ${isCurrent ? 'bg-white/[0.07] border border-white/10' : ''}`;
+        item.dataset.trackId = String(t.id);
+        item.dataset.trackIndex = String(idx);
+
         item.onclick = (e) => {
           if (e.target.closest('.search-like-btn')) return;
           currentPlayingAlbumUrl = null;
@@ -36627,7 +36641,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
         item.innerHTML = `
           <div class="flex items-center gap-3.5 min-w-0 flex-1">
-            <div class="w-6 text-center text-xs text-neutral-500 font-medium shrink-0 flex items-center justify-center">
+            <div class="artist-track-num w-6 text-center text-xs text-neutral-500 font-medium shrink-0 flex items-center justify-center">
               ${isThisPlaying ? `
                 <div class="flex items-end justify-center gap-[2px] h-4">
                   <span class="artist-wave-bar"></span>
@@ -36641,7 +36655,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
             </div>
             <div class="min-w-0 flex-1 pr-2">
               <div class="flex items-center gap-1.5">
-                <span class="text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
+                <span class="artist-track-title text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
                 <span class="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">SC</span>
               </div>
               <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist || 'Unknown Artist'}</div>
@@ -36675,9 +36689,48 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     function syncArtistTracksState(playing = isPlaying) {
       const container = document.getElementById('artist-tracks-list');
       if (!container) return;
-      const waveBars = container.querySelectorAll('.artist-wave-bar');
-      waveBars.forEach(b => {
-        b.style.animationPlayState = playing ? 'running' : 'paused';
+      const currentTrack = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex];
+      const currentId = currentTrack ? String(currentTrack.id) : null;
+      const rows = container.querySelectorAll('.artist-track-item');
+      rows.forEach(row => {
+        const rowId = row.dataset.trackId;
+        const rowIdx = parseInt(row.dataset.trackIndex, 10);
+        const isCurrent = Boolean(currentId && rowId && currentId === rowId);
+        const isThisPlaying = isCurrent && playing;
+
+        if (isCurrent) {
+          row.classList.add('bg-white/[0.07]', 'border', 'border-white/10');
+        } else {
+          row.classList.remove('bg-white/[0.07]', 'border', 'border-white/10');
+        }
+
+        const titleEl = row.querySelector('.artist-track-title');
+        if (titleEl) {
+          if (isCurrent) {
+            titleEl.classList.add('text-rose-400');
+            titleEl.classList.remove('text-white', 'group-hover:text-white');
+            titleEl.style.color = 'var(--accent)';
+          } else {
+            titleEl.classList.remove('text-rose-400');
+            titleEl.classList.add('text-white', 'group-hover:text-white');
+            titleEl.style.color = '';
+          }
+        }
+
+        const numCol = row.querySelector('.artist-track-num');
+        if (numCol) {
+          if (isCurrent) {
+            numCol.innerHTML = `
+              <div class="flex items-end justify-center gap-[2px] h-4">
+                <span class="artist-wave-bar" style="animation-play-state: ${isThisPlaying ? 'running' : 'paused'};"></span>
+                <span class="artist-wave-bar" style="animation-play-state: ${isThisPlaying ? 'running' : 'paused'};"></span>
+                <span class="artist-wave-bar" style="animation-play-state: ${isThisPlaying ? 'running' : 'paused'};"></span>
+              </div>
+            `;
+          } else {
+            numCol.innerHTML = `<span>${rowIdx + 1}</span>`;
+          }
+        }
       });
     }
 
