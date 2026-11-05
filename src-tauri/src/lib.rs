@@ -167,6 +167,18 @@ async fn get_lyrics(title: String, artist: String, duration: Option<f64>, state:
 }
 
 #[tauri::command]
+async fn transcribe_track(track_id: Value, stream_url: String, state: State<'_, AppState>) -> Result<Value, String> {
+    let id_str = if let Some(n) = track_id.as_i64() {
+        n.to_string()
+    } else if let Some(s) = track_id.as_str() {
+        s.to_string()
+    } else {
+        track_id.to_string().trim_matches(&['"', '\''][..]).to_string()
+    };
+    state.sc.transcribe_audio_stream(&id_str, &stream_url).await
+}
+
+#[tauri::command]
 fn log_debug(msg: String) {
     use std::io::Write;
     let p = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("debug_play.log"))).unwrap_or_else(|| std::path::PathBuf::from("debug_play.log"));
@@ -840,6 +852,7 @@ pub fn run() {
             win_show,
             log_debug,
             get_lyrics,
+            transcribe_track,
             save_custom_wallpaper,
             load_custom_wallpaper,
             clear_custom_wallpaper

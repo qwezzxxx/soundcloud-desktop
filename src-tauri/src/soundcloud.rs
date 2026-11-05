@@ -187,6 +187,8 @@ pub struct AppConfig {
 
 
     pub last_tab: Option<String>,
+    #[serde(default)]
+    pub whisper_auto_transcribe: Option<bool>,
 
 
 
@@ -307,6 +309,7 @@ impl Default for AppConfig {
 
 
             last_tab: Some("tab-home".to_string()),
+            whisper_auto_transcribe: Some(false),
 
 
 
@@ -1314,6 +1317,242 @@ impl SoundCloudClient {
 
 
 
+    }
+
+
+    pub fn lyrics_cache_dir(&self) -> PathBuf {
+        let dir = self.config_path.parent().unwrap_or(Path::new(".")).join("lyrics_cache");
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    pub fn find_whisper() -> Option<PathBuf> {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                for name in &["whisper-cli.exe", "whisper.exe"] {
+                    let cand = dir.join(name);
+                    if cand.exists() { return Some(cand); }
+                    let cand_sub = dir.join("whisper").join(name);
+                    if cand_sub.exists() { return Some(cand_sub); }
+                }
+            }
+        }
+        for name in &["whisper-cli.exe", "whisper.exe"] {
+            let cand_f = PathBuf::from(r"F:\Soundcloud").join(name);
+            if cand_f.exists() { return Some(cand_f); }
+            let cand_f_sub = PathBuf::from(r"F:\Soundcloud\whisper").join(name);
+            if cand_f_sub.exists() { return Some(cand_f_sub); }
+        }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let base = PathBuf::from(appdata).join("com.onyx.player").join("whisper");
+            for name in &["whisper-cli.exe", "whisper.exe"] {
+                let cand = base.join(name);
+                if cand.exists() { return Some(cand); }
+            }
+        }
+        None
+    }
+
+    pub fn find_whisper_model() -> Option<PathBuf> {
+        let model_names = ["ggml-tiny.bin", "ggml-base.bin", "ggml-small.bin"];
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                for name in &model_names {
+                    let cand = dir.join(name);
+                    if cand.exists() { return Some(cand); }
+                    let cand_m = dir.join("models").join(name);
+                    if cand_m.exists() { return Some(cand_m); }
+                    let cand_w = dir.join("whisper").join(name);
+                    if cand_w.exists() { return Some(cand_w); }
+                }
+            }
+        }
+        for name in &model_names {
+            let cand_f = PathBuf::from(r"F:\Soundcloud\models").join(name);
+            if cand_f.exists() { return Some(cand_f); }
+            let cand_f_root = PathBuf::from(r"F:\Soundcloud").join(name);
+            if cand_f_root.exists() { return Some(cand_f_root); }
+        }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let base = PathBuf::from(appdata).join("com.onyx.player").join("models");
+            for name in &model_names {
+                let cand = base.join(name);
+                if cand.exists() { return Some(cand); }
+            }
+        }
+        None
+    }
+
+    pub fn find_ffmpeg() -> Option<PathBuf> {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let cand = dir.join("ffmpeg.exe");
+                if cand.exists() { return Some(cand); }
+                let cand_sub = dir.join("whisper").join("ffmpeg.exe");
+                if cand_sub.exists() { return Some(cand_sub); }
+            }
+        }
+        let cand_f = PathBuf::from(r"F:\Soundcloud\whisper\ffmpeg.exe");
+        if cand_f.exists() { return Some(cand_f); }
+        let cand_f2 = PathBuf::from(r"F:\Soundcloud\ffmpeg.exe");
+        if cand_f2.exists() { return Some(cand_f2); }
+
+        if let Ok(p) = std::env::var("LOCALAPPDATA") {
+            let win_get = PathBuf::from(p).join("Microsoft").join("WinGet").join("Packages");
+            if win_get.exists() {
+                if let Ok(entries) = std::fs::read_dir(&win_get) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            if fname.contains("FFmpeg") {
+                                let c1 = path.join("ffmpeg.exe");
+                                if c1.exists() { return Some(c1); }
+                                let c2 = path.join("bin").join("ffmpeg.exe");
+                                if c2.exists() { return Some(c2); }
+                                if let Ok(subs) = std::fs::read_dir(&path) {
+                                    for sub in subs.flatten() {
+                                        let c3 = sub.path().join("bin").join("ffmpeg.exe");
+                                        if c3.exists() { return Some(c3); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub async fn ensure_whisper_model(&self) -> Result<PathBuf, String> {
+        if let Some(m) = Self::find_whisper_model() {
+            return Ok(m);
+        }
+        let base_dir = if let Ok(exe) = std::env::current_exe() {
+            exe.parent().map(|d| d.join("models")).unwrap_or_else(|| PathBuf::from("models"))
+        } else {
+            PathBuf::from("models")
+        };
+        let _ = fs::create_dir_all(&base_dir);
+        let target = base_dir.join("ggml-tiny.bin");
+        let url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin";
+        let res = self.http.get(url).send().await.map_err(|e| format!("Failed to download Whisper model: {}", e))?;
+        if !res.status().is_success() {
+            return Err(format!("Whisper model download returned HTTP {}", res.status()));
+        }
+        let bytes = res.bytes().await.map_err(|e| format!("Failed to read Whisper model bytes: {}", e))?;
+        fs::write(&target, &bytes).map_err(|e| format!("Failed to write Whisper model: {}", e))?;
+        Ok(target)
+    }
+
+    pub async fn transcribe_audio_stream(&self, track_id: &str, stream_url: &str) -> Result<Value, String> {
+        let clean_id: String = track_id.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect();
+        if clean_id.is_empty() {
+            return Err("Invalid track id".to_string());
+        }
+
+        // 1. Instant Cache hit (0 ms)
+        let cache_file = self.lyrics_cache_dir().join(format!("{}.lrc", clean_id));
+        if cache_file.exists() {
+            if let Ok(content) = fs::read_to_string(&cache_file) {
+                if content.trim().len() > 10 {
+                    let plain = content.lines()
+                        .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
+                        .filter(|l| !l.is_empty() && !l.starts_with("[by:"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    return Ok(serde_json::json!({
+                        "syncedLyrics": content,
+                        "plainLyrics": plain,
+                        "isAi": true
+                    }));
+                }
+            }
+        }
+
+        let whisper_exe = Self::find_whisper().ok_or_else(|| "Движок Whisper не найден (положите whisper-cli.exe в папку whisper)".to_string())?;
+        let model_path = self.ensure_whisper_model().await?;
+        let ffmpeg_exe = Self::find_ffmpeg().ok_or_else(|| "FFmpeg не найден для аудио-конвертации".to_string())?;
+
+        let temp_dir = std::env::temp_dir();
+        let temp_wav = temp_dir.join(format!("onyx_whisper_{}.wav", clean_id));
+        let temp_out_base = temp_dir.join(format!("onyx_whisper_out_{}", clean_id));
+        let temp_lrc = temp_dir.join(format!("onyx_whisper_out_{}.lrc", clean_id));
+
+        // 2. Convert stream into 16kHz mono WAV using ffmpeg
+        let mut ff_cmd = tokio::process::Command::new(&ffmpeg_exe);
+        ff_cmd.args([
+            "-headers", "Origin: https://soundcloud.com\r\nReferer: https://soundcloud.com/\r\n",
+            "-i", stream_url,
+            "-t", "360",
+            "-ar", "16000",
+            "-ac", "1",
+            temp_wav.to_str().unwrap(),
+            "-y",
+        ]);
+        #[cfg(windows)]
+        ff_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        let ff_status = tokio::time::timeout(std::time::Duration::from_secs(35), ff_cmd.status()).await
+            .map_err(|_| "Таймаут скачивания аудио для распознавания (35 сек)".to_string())?
+            .map_err(|e| format!("Ошибка запуска ffmpeg: {}", e))?;
+
+        if !ff_status.success() || !temp_wav.exists() {
+            let _ = fs::remove_file(&temp_wav);
+            return Err("Не удалось подготовить аудиофайл для Whisper".to_string());
+        }
+
+        // 3. Run Whisper CLI with -olrc
+        let mut wh_cmd = tokio::process::Command::new(&whisper_exe);
+        wh_cmd.args([
+            "-m", model_path.to_str().unwrap(),
+            "-f", temp_wav.to_str().unwrap(),
+            "-olrc",
+            "-of", temp_out_base.to_str().unwrap(),
+            "-l", "auto",
+            "-t", "4",
+        ]);
+        #[cfg(windows)]
+        wh_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        let wh_status = tokio::time::timeout(std::time::Duration::from_secs(90), wh_cmd.status()).await
+            .map_err(|_| "Таймаут распознавания Whisper (90 сек)".to_string())?
+            .map_err(|e| format!("Ошибка запуска Whisper: {}", e))?;
+
+        let _ = fs::remove_file(&temp_wav);
+
+        if !wh_status.success() || !temp_lrc.exists() {
+            let _ = fs::remove_file(&temp_lrc);
+            return Err("Whisper не смог распознать текст в этом треке".to_string());
+        }
+
+        // 4. Read generated .lrc and cache
+        let raw_lrc = fs::read_to_string(&temp_lrc).map_err(|e| format!("Не удалось прочесть результат Whisper: {}", e))?;
+        let _ = fs::remove_file(&temp_lrc);
+
+        let clean_lrc = raw_lrc.lines()
+            .filter(|l| !l.starts_with("[by:whisper.cpp]"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if clean_lrc.trim().is_empty() {
+            return Err("В треке не обнаружено разборчивого текста".to_string());
+        }
+
+        let _ = fs::write(&cache_file, &clean_lrc);
+
+        let plain = clean_lrc.lines()
+            .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
+            .filter(|l| !l.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Ok(serde_json::json!({
+            "syncedLyrics": clean_lrc,
+            "plainLyrics": plain,
+            "isAi": true
+        }))
     }
 
     pub fn format_artist(u: &Value) -> FormattedArtist {
