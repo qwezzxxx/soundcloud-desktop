@@ -17664,9 +17664,10 @@
 
     // Visible feedback while a stream is resolved (YouTube fallback can take a few seconds).
     let playerLoadingTimer = null;
-    function setPlayerLoading(on) {
+    function setPlayerLoading(on, customText = null) {
       const el = document.getElementById('player-loading');
       if (el) {
+        el.textContent = customText || 'Загрузка потока…';
         el.classList.toggle('hidden', !on);
         el.classList.toggle('inline-flex', !!on);
       }
@@ -17706,7 +17707,7 @@
       } catch (_) {}
       // Pre-transcribe with Whisper in background before the song turns on!
       try {
-        let streamUrl = getCachedStreamUrl(track.id);
+        let streamUrl = explicitStreamUrl || getCachedStreamUrl(track.id);
         if (!streamUrl) {
           streamUrl = await requestStreamUrl(track.id);
         }
@@ -17863,6 +17864,60 @@
           setPlayerLoading(false);
           notify("⚠️ Поток трека недоступен на серверах SoundCloud", "❌");
           handleTrackPlaybackFailure(track, 'emptyStream', { noRetry: true });
+          return;
+        }
+
+        // PARSE LYRICS & TIMINGS BEFORE TURNING ON THE SONG ("до вкл песни"):
+        // If synced lyrics are not in cache, check cloud (200ms) or run local Whisper (3s)
+        // before audioEngine.play() starts, so the song turns on with karaoke already at 00:00!
+        const lyricsKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+        let hasReadyLyrics = lyricsCache.has(lyricsKey);
+        if (!hasReadyLyrics) {
+          try {
+            const storedL = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+            if (storedL) {
+              const parsedL = JSON.parse(storedL);
+              if (parsedL && (parsedL.syncedLyrics || parsedL.plainLyrics || parsedL.instrumental)) {
+                lyricsCache.set(lyricsKey, parsedL);
+                hasReadyLyrics = true;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!hasReadyLyrics) {
+          setPlayerLoading(true, '✨ Поиск текста...');
+          try {
+            const durSec = track.duration_ms ? (track.duration_ms / 1000) : null;
+            const cleanTitle = cleanTrackTitleForLyrics(track.title || '');
+            const cleanArtist = (track.artist || '').trim();
+            const cloudRes = await Promise.race([
+              api.getLyrics(cleanTitle, cleanArtist, durSec).catch(() => null),
+              new Promise(r => setTimeout(r, 1200))
+            ]);
+            if (cloudRes && (cloudRes.syncedLyrics || cloudRes.plainLyrics || cloudRes.instrumental)) {
+              lyricsCache.set(lyricsKey, cloudRes);
+              try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(cloudRes)); } catch (_) {}
+              hasReadyLyrics = true;
+            }
+          } catch (_) {}
+        }
+
+        const curLyricsData = lyricsCache.get(lyricsKey);
+        const needsWhisperAi = !curLyricsData || (!curLyricsData.syncedLyrics && !curLyricsData.instrumental);
+        if (needsWhisperAi) {
+          setPlayerLoading(true, '✨ Whisper AI готовит караоке...');
+          try {
+            // Await local Whisper before starting the music, so lines and timestamps are ready from 0:00!
+            await Promise.race([
+              startWhisperTranscription(track, streamUrl),
+              new Promise(r => setTimeout(r, 6500))
+            ]);
+          } catch (_) {}
+        }
+
+        if (requestId !== currentPlayRequestId) {
+          setPlayerLoading(false);
           return;
         }
 
@@ -33731,7 +33786,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
         const activeWhisperJobIds = new Set();
-    async function startWhisperTranscription(explicitTrack = null) {
+    async function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null) {
       const track = explicitTrack || (currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex]);
       if (!track || !track.id) return;
       if (activeWhisperJobIds.has(track.id)) return;
