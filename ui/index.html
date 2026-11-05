@@ -12910,6 +12910,9 @@
         if (typeof fastSyncLikes === 'function') {
           fastSyncLikes(false);
         }
+        if (typeof syncLikedTracksState === 'function') {
+          syncLikedTracksState(isPlaying);
+        }
       }
       if (tabId === 'tab-wave') {
         if (typeof syncWavePlayButton === 'function') {
@@ -17679,20 +17682,64 @@
       }
     }
 
+    async function prefetchLyricsForTrack(track) {
+      if (!track || !track.id) return;
+      const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+      if (lyricsCache.has(cacheKey)) return;
+      try {
+        const local = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+        if (local) {
+          lyricsCache.set(cacheKey, JSON.parse(local));
+          return;
+        }
+      } catch (_) {}
+      try {
+        const durSec = track.duration_ms ? (track.duration_ms / 1000) : null;
+        const cleanTitle = cleanTrackTitleForLyrics(track.title || '');
+        const cleanArtist = (track.artist || '').trim();
+        const res = await api.getLyrics(cleanTitle, cleanArtist, durSec);
+        if (res && res.syncedLyrics) {
+          lyricsCache.set(cacheKey, res);
+          try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res)); } catch (_) {}
+          return;
+        }
+      } catch (_) {}
+      // Pre-transcribe with Whisper in background before the song turns on!
+      try {
+        let streamUrl = getCachedStreamUrl(track.id);
+        if (!streamUrl) {
+          streamUrl = await requestStreamUrl(track.id);
+        }
+        if (streamUrl) {
+          const aiRes = await api.transcribeTrack(track.id, streamUrl);
+          if (aiRes && aiRes.syncedLyrics) {
+            lyricsCache.set(cacheKey, aiRes);
+            try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(aiRes)); } catch (_) {}
+            logD('Background pre-transcription ready before song starts: ' + track.title);
+          }
+        }
+      } catch (_) {}
+    }
+
     function prefetchNextTrack(index) {
       if (!currentQueue || index < 0 || index >= currentQueue.length) return;
       const nextT = currentQueue[index];
-      if (!nextT || !nextT.id || getCachedStreamUrl(nextT.id)) return;
-      // Prefetch a bit earlier: YouTube-fallback tracks need several seconds, so waiting
-      // until the user clicks would make the switch feel frozen.
-      setTimeout(async () => {
-        try {
-          if (api && api.getStreamUrl) {
-            const res = await requestStreamUrl(nextT.id);
-            if (res) cacheStreamUrl(nextT.id, res);
-          }
-        } catch (_) {}
-      }, 600);
+      if (!nextT || !nextT.id) return;
+      // 1. Prefetch stream URL in advance
+      if (!getCachedStreamUrl(nextT.id)) {
+        setTimeout(async () => {
+          try {
+            if (api && api.getStreamUrl) {
+              const res = await requestStreamUrl(nextT.id);
+              if (res) cacheStreamUrl(nextT.id, res);
+            }
+          } catch (_) {}
+        }, 400);
+      }
+      // 2. Prefetch and pre-transcribe lyrics in advance before the song plays!
+      setTimeout(() => {
+        prefetchLyricsForTrack(nextT);
+      }, 1200);
     }
 
     async function playTrack(index, newQueue = null, fromWave = false) {
@@ -17749,6 +17796,8 @@
 
         isPlaying = true;
         syncPlayPauseState(true);
+        if (typeof syncLikedTracksState === 'function') syncLikedTracksState(true);
+        if (typeof syncSearchResultsState === 'function') syncSearchResultsState(true);
         if (playIcon) playIcon.classList.add('hidden');
         if (pauseIcon) pauseIcon.classList.remove('hidden');
 
@@ -19537,6 +19586,8 @@
       if (typeof renderWaveTrackList === 'function' && isWaveActive) renderWaveTrackList();
       if (typeof syncArtistAlbumsState === 'function') syncArtistAlbumsState(playing);
       if (typeof syncArtistTracksState === 'function') syncArtistTracksState(playing);
+      if (typeof syncLikedTracksState === 'function') syncLikedTracksState(playing);
+      if (typeof syncSearchResultsState === 'function') syncSearchResultsState(playing);
       const pIcon = document.getElementById('play-icon');
       const sIcon = document.getElementById('pause-icon');
       const immPlay = document.getElementById('immersive-play-icon');
@@ -20207,7 +20258,9 @@
 
 
 
-        row.className = `grid grid-cols-[40px_1fr_90px_60px] gap-4 items-center px-4 py-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        row.className = `liked-track-row grid grid-cols-[40px_1fr_90px_60px] gap-4 items-center px-4 py-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        row.dataset.trackId = String(t.id);
+        row.dataset.index = String(i);
 
 
 
@@ -20383,7 +20436,7 @@
 
 
 
-              <div class="text-xs font-semibold truncate ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-300'}">${t.title}</div>
+              <div class="liked-row-title text-xs font-semibold truncate ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-300'}" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title}</div>
 
 
 
@@ -20487,38 +20540,11 @@
 
 
 
-          if (isCurrent) {
-
-
-
-
-
-
-
+          const isNowCurrent = Boolean(currentlyPlayingTrackId && String(currentlyPlayingTrackId) === String(t.id));
+          if (isNowCurrent) {
             togglePlay();
-
-
-
-
-
-
-
           } else {
-
-
-
-
-
-
-
             playTrack(i, likedTracks);
-
-
-
-
-
-
-
           }
 
 
@@ -20592,6 +20618,63 @@
 
 
     }
+
+    function syncLikedTracksState(playing = isPlaying) {
+      if (!likedTable) return;
+      const currentTrack = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex];
+      const currentId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : (currentTrack ? String(currentTrack.id) : null);
+      const rows = likedTable.querySelectorAll('.liked-track-row');
+      rows.forEach(row => {
+        const rowId = row.dataset.trackId;
+        const rowIdx = parseInt(row.dataset.index, 10);
+        const isCurrent = Boolean(currentId && rowId && currentId === rowId);
+        const isThisPlaying = isCurrent && playing;
+
+        if (isCurrent) {
+          row.classList.add('bg-white/[0.08]');
+        } else {
+          row.classList.remove('bg-white/[0.08]');
+        }
+
+        const titleEl = row.querySelector('.liked-row-title');
+        if (titleEl) {
+          if (isCurrent) {
+            titleEl.classList.add('text-rose-400');
+            titleEl.classList.remove('text-white', 'group-hover:text-rose-300');
+            titleEl.style.color = 'var(--accent)';
+          } else {
+            titleEl.classList.remove('text-rose-400');
+            titleEl.classList.add('text-white', 'group-hover:text-rose-300');
+            titleEl.style.color = '';
+          }
+        }
+
+        const numCol = row.querySelector('.liked-row-num');
+        if (numCol) {
+          if (isThisPlaying) {
+            numCol.innerHTML = `
+              <span class="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm" style="background-color: var(--accent-glow); color: var(--accent);">
+                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              </span>
+            `;
+          } else if (isCurrent) {
+            numCol.innerHTML = `
+              <span class="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm" style="background-color: var(--accent-glow); color: var(--accent);">
+                <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </span>
+            `;
+          } else {
+            numCol.innerHTML = `
+              <span class="row-num text-xs text-neutral-400 font-mono">${rowIdx + 1}</span>
+              <span class="row-play-icon hidden group-hover:flex items-center justify-center w-6 h-6 rounded-lg bg-white/10 text-white">
+                <svg class="w-3 h-3 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </span>
+            `;
+          }
+        }
+      });
+    }
+
 
 
 
@@ -21285,7 +21368,9 @@
 
 
 
-        item.className = `flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        item.className = `search-track-item flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        item.dataset.trackId = String(t.id);
+        item.dataset.index = String(idx);
 
 
 
@@ -21573,38 +21658,11 @@
 
 
 
-          if (isCurrent) {
-
-
-
-
-
-
-
+          const isNowCurrent = Boolean(currentlyPlayingTrackId && String(currentlyPlayingTrackId) === String(t.id));
+          if (isNowCurrent) {
             togglePlay();
-
-
-
-
-
-
-
             return;
-
-
-
-
-
-
-
           }
-
-
-
-
-
-
-
           playTrack(idx, currentSearchResults);
 
 
@@ -21638,6 +21696,23 @@
 
 
     }
+    function syncSearchResultsState(playing = isPlaying) {
+      const container = document.getElementById('search-results-list');
+      if (!container) return;
+      const currentTrack = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex];
+      const currentId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : (currentTrack ? String(currentTrack.id) : null);
+      const rows = container.querySelectorAll('.search-track-item');
+      rows.forEach(row => {
+        const rowId = row.dataset.trackId;
+        const isCurrent = Boolean(currentId && rowId && currentId === rowId);
+        if (isCurrent) {
+          row.classList.add('bg-white/[0.08]');
+        } else {
+          row.classList.remove('bg-white/[0.08]');
+        }
+      });
+    }
+
 
 
 
@@ -23048,8 +23123,17 @@
         `;
         card.addEventListener('click', () => {
           currentStationUrn = null;
+          const isNowCurrent = Boolean(currentlyPlayingTrackId && String(currentlyPlayingTrackId) === String(t.id));
+          if (isNowCurrent) {
+            togglePlay();
+            return;
+          }
           let idx = allTracks.findIndex(x => String(x.id) === String(t.id));
-          playTrack(idx !== -1 ? idx : 0, allTracks);
+          if (idx !== -1) {
+            playTrack(idx, allTracks);
+          } else {
+            playTrack(0, [t]);
+          }
         });
         quickContainer.appendChild(card);
       });
@@ -23144,13 +23228,18 @@
               </div>
             `;
             card.addEventListener('click', () => {
-              if (isCurrent) {
+              const isNowCurrent = Boolean(currentlyPlayingTrackId && String(currentlyPlayingTrackId) === String(t.id));
+              if (isNowCurrent) {
                 togglePlay();
               } else {
                 currentStationUrn = null;
                 const fullSource = (allTracks && allTracks.length > 0) ? allTracks : favTracks;
                 const trackIdx = fullSource.findIndex(x => String(x.id) === String(t.id));
-                playTrack(trackIdx !== -1 ? trackIdx : fIdx, fullSource);
+                if (trackIdx !== -1) {
+                  playTrack(trackIdx, fullSource);
+                } else {
+                  playTrack(0, [t]);
+                }
               }
             });
             favGrid.appendChild(card);
@@ -33579,15 +33668,14 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-          <div class="pt-2">
-
-
-
+          <div class="pt-2 flex flex-wrap items-center justify-center gap-2.5">
             <button id="btn-empty-add-lyrics" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-all cursor-pointer border border-white/10">Вставить текст (LRC)</button>
-
-
-
+            <button id="btn-whisper-transcribe" onclick="startWhisperTranscription()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-xs font-bold text-white shadow-lg shadow-rose-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"/></svg>
+              <span>✨ Распознать караоке (Whisper AI)</span>
+            </button>
           </div>
+          <div id="whisper-status-line" class="text-xs text-orange-400 font-medium animate-pulse pt-2 text-center">✨ Идёт автоматическое распознавание текста нейросетью...</div>
 
 
 
@@ -33608,6 +33696,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
       if (emptyBtn) emptyBtn.addEventListener('click', () => promptCustomLyrics(track));
+
+      // Auto-transcribe immediately: do it right away so the user does NOT have to click buttons!
+      if (!isBackground) {
+        startWhisperTranscription(track).catch(() => {});
+      }
 
 
 
@@ -33637,13 +33730,15 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
     }
 
-    let isTranscribingWhisper = false;
+        const activeWhisperJobIds = new Set();
     async function startWhisperTranscription(explicitTrack = null) {
-      if (isTranscribingWhisper) return;
       const track = explicitTrack || (currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex]);
       if (!track || !track.id) return;
+      if (activeWhisperJobIds.has(track.id)) return;
+      activeWhisperJobIds.add(track.id);
 
-      isTranscribingWhisper = true;
+      const requestFetchId = lyricsFetchCounter;
+      const targetTrackId = String(track.id);
       const statusLine = document.getElementById('whisper-status-line');
       const btn = document.getElementById('btn-whisper-transcribe');
       const plainBtn = document.getElementById('btn-plain-whisper-transcribe');
@@ -33684,6 +33779,16 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
             localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res));
           } catch (_) {}
 
+          // Strict guard: ONLY update DOM if this track is STILL the currently playing track!
+          const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
+          if (activeId && activeId !== targetTrackId) {
+            logD(`Whisper finished for track ${targetTrackId}, but active is ${activeId} — preserved in cache without overwriting UI`);
+            return;
+          }
+          if (requestFetchId !== lyricsFetchCounter) {
+            return;
+          }
+
           if (lyricsContainer) {
             currentParsedLyrics = parseLrc(res.syncedLyrics);
             renderSyncedLyrics(currentParsedLyrics, lyricsContainer);
@@ -33702,7 +33807,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           statusLine.textContent = `❌ ${msg}`;
         }
       } finally {
-        isTranscribingWhisper = false;
+        activeWhisperJobIds.delete(track.id);
         if (btn) {
           btn.disabled = false;
           btn.classList.remove('opacity-75');
