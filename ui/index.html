@@ -12744,9 +12744,15 @@
 
 
 
+    let currentActiveTab = localStorage.getItem('sc_desktop_active_tab') || 'tab-home';
+    function getActiveTabId() {
+      return currentActiveTab || localStorage.getItem('sc_desktop_active_tab') || 'tab-home';
+    }
+
     window.switchTab = switchTab;
 
     function switchTab(tabId) {
+      currentActiveTab = tabId;
 
 
 
@@ -26126,7 +26132,7 @@
 
 
 
-            if (activeTab === 'tab-library') currentQueue = [...allTracks];
+            if (getActiveTabId() === 'tab-library') currentQueue = [...allTracks];
 
 
 
@@ -26727,8 +26733,9 @@
           const oldFirstId = oldLen > 0 ? (allTracks[0].id || allTracks[0].urn) : null;
           const newFirstId = fresh.length > 0 ? (fresh[0].id || fresh[0].urn) : null;
 
+          fresh.forEach(t => { if (t) t.liked = true; });
           allTracks = fresh;
-          if (activeTab === 'tab-library') currentQueue = [...allTracks];
+          if (getActiveTabId() === 'tab-library') currentQueue = [...allTracks];
           saveLocalDatabase();
           renderLikedTable();
           applyUserProfile(currentUser, allTracks.length);
@@ -26737,8 +26744,9 @@
           }
 
           const diff = fresh.length - oldLen;
-          if (oldFirstId !== newFirstId || diff > 0) {
-            notify(`Медиатека обновлена! +${diff > 0 ? diff : 1} нов. трек`, '✓');
+          if (oldFirstId !== newFirstId || diff !== 0) {
+            const countText = diff > 0 ? `+${diff}` : `${diff}`;
+            notify(`Медиатека обновлена! (${countText} трек.)`, '✓');
           } else if (isManual) {
             notify('Медиатека синхронизирована (все треки актуальны)', '✓');
           }

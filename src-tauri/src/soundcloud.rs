@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 
 
-const DEFAULT_CLIENT_ID: &str = "3GKD969NJWD1eB6gvQJN0GnueYbcWszv";
+const DEFAULT_CLIENT_ID: &str = "QhVEWrrJKvW4uSU5u5EoI0FTXYUGzy5k";
 
 
 
@@ -441,17 +441,10 @@ impl SoundCloudClient {
 
 
         let http = reqwest::Client::builder()
-
-
-
             .user_agent(USER_AGENT)
-
-
-
+            .connect_timeout(std::time::Duration::from_secs(6))
+            .timeout(std::time::Duration::from_secs(12))
             .build()
-
-
-
             .unwrap_or_default();
 
 
@@ -925,7 +918,7 @@ impl SoundCloudClient {
 
 
 
-            if cid.len() > 10 && cid != "dbe62de186a100fbdf5bcab837fcfbc2" {
+            if cid.len() > 10 && cid != "dbe62de186a100fbdf5bcab837fcfbc2" && cid != "3GKD969NJWD1eB6gvQJN0GnueYbcWszv" {
 
 
 
@@ -1732,21 +1725,6 @@ impl SoundCloudClient {
                             }
                         }
                     }
-
-                    if pages == 1 && !existing_cached.is_empty() && !all_tracks.is_empty() {
-                        let has_known = all_tracks.iter().any(|t| existing_cached.iter().any(|c| c.id == t.id));
-                        if has_known {
-                            let mut merged = Vec::new();
-                            for t in &all_tracks {
-                                if !existing_cached.iter().any(|c| c.id == t.id) {
-                                    merged.push(t.clone());
-                                }
-                            }
-                            merged.extend(existing_cached.clone());
-                            all_tracks = merged;
-                            break;
-                        }
-                    }
                 } else {
                     break;
                 }
@@ -1767,35 +1745,6 @@ impl SoundCloudClient {
         }
 
         if !all_tracks.is_empty() {
-            // Preserve pending local likes that have not synced to SoundCloud yet
-            let local = self.load_local_likes();
-            let mut pending_local = Vec::new();
-            for loc in local {
-                let loc_id = if let Some(n) = loc.id.as_i64() {
-                    n.to_string()
-                } else if let Some(s) = loc.id.as_str() {
-                    s.to_string()
-                } else {
-                    loc.id.to_string()
-                };
-                let exists_in_remote = all_tracks.iter().any(|r| {
-                    let rid = if let Some(n) = r.id.as_i64() {
-                        n.to_string()
-                    } else if let Some(s) = r.id.as_str() {
-                        s.to_string()
-                    } else {
-                        r.id.to_string()
-                    };
-                    rid == loc_id
-                });
-                if !exists_in_remote && loc.liked {
-                    pending_local.push(loc);
-                }
-            }
-            if !pending_local.is_empty() {
-                pending_local.extend(all_tracks);
-                all_tracks = pending_local;
-            }
             let _ = self.save_local_likes(&all_tracks);
             Ok(all_tracks)
         } else if !existing_cached.is_empty() {
@@ -2522,17 +2471,12 @@ impl SoundCloudClient {
 
 
                 if !res.status().is_success() {
-
-
-
-                    last_err = format!("HTTP {}", res.status());
-
-
-
+                    let st = res.status().as_u16();
+                    last_err = format!("HTTP {}", st);
+                    if st == 401 || st == 403 {
+                        let _ = self.refresh_dynamic_client_id().await;
+                    }
                     continue;
-
-
-
                 }
 
 
