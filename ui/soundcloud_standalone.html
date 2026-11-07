@@ -17816,9 +17816,14 @@
 
         // Upstream Fisher-Yates shuffle algorithm
     function shuffleArray(arr) {
+      const originalOrder = arr.slice();
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      // Enabling shuffle should visibly change the order, even for short queues.
+      if (arr.length > 1 && arr.every((item, index) => item === originalOrder[index])) {
+        [arr[0], arr[1]] = [arr[1], arr[0]];
       }
       return arr;
     }
