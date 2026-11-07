@@ -9031,7 +9031,10 @@
 
 
 
-          <div class="text-[11px] font-semibold text-neutral-500 uppercase">Далее в очереди</div>
+          <div class="flex items-center justify-between text-[11px] font-semibold text-neutral-500 uppercase">
+            <span>Далее в очереди</span>
+            <span id="queue-next-count" class="text-[10px] font-medium normal-case"></span>
+          </div>
 
 
 
@@ -17830,11 +17833,6 @@
     function playNextTrack() {
       if (!currentQueue || currentQueue.length === 0) return;
       let nextIdx = currentTrackIndex + 1;
-      if (isShuffle && nextIdx < currentQueue.length) {
-        const remainingCount = currentQueue.length - nextIdx;
-        const selectedIdx = nextIdx + Math.floor(Math.random() * remainingCount);
-        [currentQueue[nextIdx], currentQueue[selectedIdx]] = [currentQueue[selectedIdx], currentQueue[nextIdx]];
-      }
       if (nextIdx >= currentQueue.length) {
         if (isWaveActive) {
           if (typeof checkWaveReplenish === 'function') {
@@ -19470,6 +19468,7 @@
       const currentArtist = document.getElementById('queue-current-artist');
       const currentCover = document.getElementById('queue-current-cover');
       const queueList = document.getElementById('queue-next-list');
+      const queueCount = document.getElementById('queue-next-count');
       if (!currentTitle || !currentArtist || !currentCover || !queueList) return;
 
       const current = currentQueue && currentTrackIndex >= 0
@@ -19490,8 +19489,10 @@
       currentCover.src = current.cover || current.artwork_url || 'logo.png';
 
       const upcomingCount = isWaveActive
-        ? Math.min(9, Math.max(0, currentQueue.length - 1))
-        : Math.min(9, Math.max(0, currentQueue.length - currentTrackIndex - 1));
+        ? Math.max(0, currentQueue.length - 1)
+        : Math.max(0, currentQueue.length - currentTrackIndex - 1);
+
+      if (queueCount) queueCount.textContent = upcomingCount ? `${upcomingCount}` : '';
 
       if (upcomingCount === 0) {
         queueList.innerHTML = '<div class="text-xs text-neutral-500 py-2">Нет следующих треков</div>';
