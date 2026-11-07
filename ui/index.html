@@ -17691,7 +17691,7 @@
       const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
       if (lyricsCache.has(cacheKey)) return;
       try {
-        const local = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+        const local = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
         if (local) {
           lyricsCache.set(cacheKey, JSON.parse(local));
           return;
@@ -17704,7 +17704,7 @@
         const res = await api.getLyrics(cleanTitle, cleanArtist, durSec);
         if (res && res.syncedLyrics) {
           lyricsCache.set(cacheKey, res);
-          try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res)); } catch (_) {}
+          try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res)); } catch (_) {}
           return;
         }
       } catch (_) {}
@@ -17718,7 +17718,7 @@
           const aiRes = await api.transcribeTrack(track.id, streamUrl);
           if (aiRes && aiRes.syncedLyrics) {
             lyricsCache.set(cacheKey, aiRes);
-            try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(aiRes)); } catch (_) {}
+            try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(aiRes)); } catch (_) {}
             logD('Background pre-transcription ready before song starts: ' + track.title);
           }
         }
@@ -17877,7 +17877,7 @@
         let hasReadyLyrics = lyricsCache.has(lyricsKey);
         if (!hasReadyLyrics) {
           try {
-            const storedL = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+            const storedL = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
             if (storedL) {
               const parsedL = JSON.parse(storedL);
               if (parsedL && (parsedL.syncedLyrics || parsedL.plainLyrics || parsedL.instrumental)) {
@@ -17900,7 +17900,7 @@
             ]);
             if (cloudRes && (cloudRes.syncedLyrics || cloudRes.plainLyrics || cloudRes.instrumental)) {
               lyricsCache.set(lyricsKey, cloudRes);
-              try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(cloudRes)); } catch (_) {}
+              try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(cloudRes)); } catch (_) {}
               hasReadyLyrics = true;
             }
           } catch (_) {}
@@ -33190,7 +33190,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        const stored = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+        const stored = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
 
 
 
@@ -33446,7 +33446,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-          localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(lyricsData));
+          localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(lyricsData));
 
 
 
@@ -33638,7 +33638,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        try { localStorage.removeItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title))); } catch (e) {}
+        try { localStorage.removeItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title))); } catch (e) {}
 
 
 
@@ -33698,7 +33698,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
           lyricsCache.set(cacheKey, res);
           try {
-            localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res));
+            localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res));
           } catch (_) {}
 
           // Strict guard: ONLY update DOM if this track is STILL the currently playing track!
