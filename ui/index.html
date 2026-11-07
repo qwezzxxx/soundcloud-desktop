@@ -33671,7 +33671,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         btn.classList.add('opacity-75');
         btn.innerHTML = `
           <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          <span>Нейросеть слушает трек... (~5–10 сек)</span>
+          <span>Whisper анализирует аудио...</span>
         `;
       }
       if (plainBtn) {
@@ -33681,7 +33681,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       }
       if (statusLine) {
         statusLine.classList.remove('hidden');
-        statusLine.textContent = '✨ Локальный Whisper обрабатывает аудиопоток (это займет ~5–10 сек)...';
+        statusLine.textContent = '✨ Whisper распознаёт аудио. Если текста будет мало или модель будет неуверена, ONYX повторит попытку на более точной модели; это может занять несколько минут.';
       }
 
       notify('Запущен локальный Whisper AI...', '✨');
