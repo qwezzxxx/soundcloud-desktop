@@ -12397,6 +12397,7 @@
     let isRepeat = false;
     let repeatMode = "off"; // "off" | "all" | "one" (from upstream donor)
     let originalQueue = null; // Preserves un-shuffled playlist order
+    const shufflePlayedTrackIds = new Set();
 
 
 
@@ -17452,6 +17453,7 @@
           activeTab: localStorage.getItem('sc_desktop_active_tab') || 'tab-home',
           volume: volumeSlider ? parseInt(volumeSlider.value) : (appConfig && appConfig.volume !== undefined ? appConfig.volume : 80),
           isShuffle: Boolean(isShuffle),
+          shufflePlayedTrackIds: isShuffle ? Array.from(shufflePlayedTrackIds).slice(-200) : [],
           isRepeat: Boolean(isRepeat),
           isWaveActive: Boolean(window.isWaveActive),
           waveCurrentMood: window.waveCurrentMood || 'all',
@@ -17523,6 +17525,10 @@
         // Restore Shuffle & Repeat
         if (session.isShuffle !== undefined) {
           isShuffle = Boolean(session.isShuffle);
+          shufflePlayedTrackIds.clear();
+          if (isShuffle && Array.isArray(session.shufflePlayedTrackIds)) {
+            session.shufflePlayedTrackIds.forEach(id => shufflePlayedTrackIds.add(String(id)));
+          }
           if (typeof syncShuffleRepeatStyles === 'function') syncShuffleRepeatStyles();
         }
         if (session.isRepeat !== undefined) {
@@ -17552,6 +17558,11 @@
             allTracks = [...session.queue];
           }
           currentTrackIndex = (session.trackIndex >= 0 && session.trackIndex < currentQueue.length) ? session.trackIndex : 0;
+          if (isShuffle && shufflePlayedTrackIds.size === 0) {
+            currentQueue.slice(0, currentTrackIndex + 1).forEach(track => {
+              if (track?.id != null) shufflePlayedTrackIds.add(String(track.id));
+            });
+          }
           updateQueueDrawer();
           if (typeof renderWaveTrackList === 'function' && session.isWaveActive) {
             renderWaveTrackList();
@@ -17691,7 +17702,7 @@
       const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
       if (lyricsCache.has(cacheKey)) return;
       try {
-        const local = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+        const local = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
         if (local) {
           lyricsCache.set(cacheKey, JSON.parse(local));
           return;
@@ -17704,7 +17715,7 @@
         const res = await api.getLyrics(cleanTitle, cleanArtist, durSec);
         if (res && res.syncedLyrics) {
           lyricsCache.set(cacheKey, res);
-          try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res)); } catch (_) {}
+          try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res)); } catch (_) {}
           return;
         }
       } catch (_) {}
@@ -17718,7 +17729,7 @@
           const aiRes = await api.transcribeTrack(track.id, streamUrl);
           if (aiRes && aiRes.syncedLyrics) {
             lyricsCache.set(cacheKey, aiRes);
-            try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(aiRes)); } catch (_) {}
+            try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(aiRes)); } catch (_) {}
             logD('Background pre-transcription ready before song starts: ' + track.title);
           }
         }
@@ -17755,14 +17766,15 @@
           }
           if (isShuffle) {
             originalQueue = [...newQueue];
-            const chosenTrack = newQueue[index];
-            const remaining = newQueue.filter((_, i) => i !== index);
-            shuffleArray(remaining);
-            currentQueue = [chosenTrack, ...remaining];
-            index = 0;
+            currentQueue = [...newQueue];
+            shufflePlayedTrackIds.clear();
+            for (let i = 0; i <= index && i < newQueue.length; i++) {
+              if (newQueue[i]?.id != null) shufflePlayedTrackIds.add(String(newQueue[i].id));
+            }
           } else {
             currentQueue = [...newQueue];
             originalQueue = null;
+            shufflePlayedTrackIds.clear();
           }
         }
 
@@ -17770,6 +17782,7 @@
         currentTrackIndex = index;
         const track = currentQueue[currentTrackIndex];
         if (!track) return;
+        if (isShuffle && track.id != null) shufflePlayedTrackIds.add(String(track.id));
         currentlyPlayingTrackId = track.id;
         const requestId = ++currentPlayRequestId;
 
@@ -17877,7 +17890,7 @@
         let hasReadyLyrics = lyricsCache.has(lyricsKey);
         if (!hasReadyLyrics) {
           try {
-            const storedL = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+            const storedL = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
             if (storedL) {
               const parsedL = JSON.parse(storedL);
               if (parsedL && (parsedL.syncedLyrics || parsedL.plainLyrics || parsedL.instrumental)) {
@@ -17900,7 +17913,7 @@
             ]);
             if (cloudRes && (cloudRes.syncedLyrics || cloudRes.plainLyrics || cloudRes.instrumental)) {
               lyricsCache.set(lyricsKey, cloudRes);
-              try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(cloudRes)); } catch (_) {}
+              try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(cloudRes)); } catch (_) {}
               hasReadyLyrics = true;
             }
           } catch (_) {}
@@ -18265,6 +18278,23 @@
     }
     function playNextTrack() {
       if (!currentQueue || currentQueue.length === 0) return;
+      if (isShuffle) {
+        const candidates = [];
+        currentQueue.forEach((track, index) => {
+          if (index !== currentTrackIndex && track?.id != null && !shufflePlayedTrackIds.has(String(track.id))) {
+            candidates.push(index);
+          }
+        });
+        if (candidates.length > 0) {
+          const nextIdx = candidates[Math.floor(Math.random() * candidates.length)];
+          playTrack(nextIdx);
+          return;
+        }
+        if (isWaveActive && typeof checkWaveReplenish === 'function') checkWaveReplenish();
+        isPlaying = false;
+        syncPlayPauseState(false);
+        return;
+      }
       let nextIdx = currentTrackIndex + 1;
       if (nextIdx >= currentQueue.length) {
         if (isWaveActive) {
@@ -19735,11 +19765,12 @@
       if (isShuffle) {
         if (currentQueue && currentQueue.length > 1) {
           originalQueue = [...currentQueue];
-          const curTrack = currentQueue[currentTrackIndex];
-          const remainingTracks = currentQueue.filter((_, idx) => idx !== currentTrackIndex);
-          shuffleArray(remainingTracks);
-          currentQueue = [curTrack, ...remainingTracks];
-          currentTrackIndex = 0;
+        }
+        shufflePlayedTrackIds.clear();
+        if (currentQueue) {
+          currentQueue.slice(0, currentTrackIndex + 1).forEach(track => {
+            if (track?.id != null) shufflePlayedTrackIds.add(String(track.id));
+          });
         }
         notify("Перемешивание включено", "🔀");
       } else {
@@ -19750,6 +19781,7 @@
           currentTrackIndex = origIdx >= 0 ? origIdx : 0;
           originalQueue = null;
         }
+        shufflePlayedTrackIds.clear();
         notify("Перемешивание выключено", "➡️");
       }
       syncShuffleRepeatStyles();
@@ -22650,12 +22682,16 @@
         notify("В потоке пока недостаточно треков для перемешивания", "ℹ️");
         return;
       }
-      const curTrack = currentQueue[currentTrackIndex];
-      const remainingTracks = currentQueue.filter((_, idx) => idx !== currentTrackIndex);
-      shuffleArray(remainingTracks);
-      currentQueue = [curTrack, ...remainingTracks];
-      currentTrackIndex = 0;
+      if (isShuffle) {
+        notify("Перемешивание Волны уже включено", "🔀");
+        return;
+      }
+      originalQueue = [...currentQueue];
       isShuffle = true;
+      shufflePlayedTrackIds.clear();
+      if (currentQueue[currentTrackIndex]?.id != null) {
+        shufflePlayedTrackIds.add(String(currentQueue[currentTrackIndex].id));
+      }
       syncShuffleRepeatStyles();
       renderWaveTrackList();
       if (typeof updateQueueDrawer === 'function') updateQueueDrawer();
@@ -22841,6 +22877,7 @@
         // Take 25-30 diverse tracks
         const finalWaveTracks = [seed, ...candidatePool.slice(0, 28)];
         currentQueue = finalWaveTracks;
+        if (isShuffle) originalQueue = [...finalWaveTracks];
         currentTrackIndex = 0;
 
         updateQueueDrawer();
@@ -22855,7 +22892,9 @@
     // Endless auto-replenish for My Wave with diverse recommendations
     async function checkWaveReplenish() {
       if (!isWaveActive || isWaveLoadingMore || !currentQueue || currentQueue.length === 0) return;
-      const remaining = currentQueue.length - currentTrackIndex;
+      const remaining = isShuffle
+        ? currentQueue.filter(track => track?.id != null && !shufflePlayedTrackIds.has(String(track.id))).length
+        : currentQueue.length - currentTrackIndex;
       if (remaining <= 4) {
         isWaveLoadingMore = true;
         try {
@@ -22907,7 +22946,9 @@
 
           if (newBatch.length > 0) {
             shuffleArray(newBatch);
-            currentQueue = [...currentQueue, ...newBatch.slice(0, 18)];
+            const replenishedTracks = newBatch.slice(0, 18);
+            currentQueue = [...currentQueue, ...replenishedTracks];
+            if (isShuffle && originalQueue) originalQueue = [...originalQueue, ...replenishedTracks];
             updateQueueDrawer();
             renderWaveTrackList();
             console.log(`[Моя Волна] Поток пополнен ${newBatch.length} новыми треками`);
@@ -33190,7 +33231,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        const stored = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+        const stored = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
 
 
 
@@ -33446,7 +33487,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-          localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(lyricsData));
+          localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(lyricsData));
 
 
 
@@ -33638,7 +33679,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        try { localStorage.removeItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title))); } catch (e) {}
+        try { localStorage.removeItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title))); } catch (e) {}
 
 
 
@@ -33671,7 +33712,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         btn.classList.add('opacity-75');
         btn.innerHTML = `
           <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          <span>Нейросеть слушает трек... (~5–10 сек)</span>
+          <span>Whisper анализирует аудио...</span>
         `;
       }
       if (plainBtn) {
@@ -33681,7 +33722,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       }
       if (statusLine) {
         statusLine.classList.remove('hidden');
-        statusLine.textContent = '✨ Локальный Whisper обрабатывает аудиопоток (это займет ~5–10 сек)...';
+        statusLine.textContent = '✨ Whisper распознаёт аудио. Если текста будет мало или модель будет неуверена, ONYX повторит попытку на более точной модели; это может занять несколько минут.';
       }
 
       notify('Запущен локальный Whisper AI...', '✨');
@@ -33698,7 +33739,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
           lyricsCache.set(cacheKey, res);
           try {
-            localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res));
+            localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res));
           } catch (_) {}
 
           // Strict guard: ONLY update DOM if this track is STILL the currently playing track!

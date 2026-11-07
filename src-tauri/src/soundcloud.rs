@@ -1446,6 +1446,75 @@ impl SoundCloudClient {
         Ok(target)
     }
 
+    async fn ensure_whisper_model_named(&self, model_name: &str) -> Result<PathBuf, String> {
+        let filename = format!("ggml-{}.bin", model_name);
+        let mut candidates = Vec::new();
+
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                candidates.push(dir.join(&filename));
+                candidates.push(dir.join("models").join(&filename));
+                candidates.push(dir.join("whisper").join(&filename));
+            }
+        }
+        candidates.push(PathBuf::from(r"F:\Soundcloud\models").join(&filename));
+        candidates.push(PathBuf::from(r"F:\Soundcloud").join(&filename));
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            candidates.push(PathBuf::from(appdata).join("com.onyx.player").join("models").join(&filename));
+        }
+
+        if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+            return Ok(path);
+        }
+
+        let base_dir = if let Ok(exe) = std::env::current_exe() {
+            exe.parent().map(|d| d.join("models")).unwrap_or_else(|| PathBuf::from("models"))
+        } else {
+            PathBuf::from("models")
+        };
+        fs::create_dir_all(&base_dir).map_err(|e| format!("Не удалось создать папку моделей Whisper: {}", e))?;
+        let target = base_dir.join(&filename);
+        let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}", filename);
+        let res = self.http.get(url).send().await.map_err(|e| format!("Не удалось скачать модель Whisper {}: {}", model_name, e))?;
+        if !res.status().is_success() {
+            return Err(format!("Загрузка модели Whisper {} вернула HTTP {}", model_name, res.status()));
+        }
+        let bytes = res.bytes().await.map_err(|e| format!("Не удалось прочитать модель Whisper {}: {}", model_name, e))?;
+        fs::write(&target, &bytes).map_err(|e| format!("Не удалось сохранить модель Whisper {}: {}", model_name, e))?;
+        Ok(target)
+    }
+
+    fn whisper_output_is_low_quality(lrc: &str, json_path: &Path) -> bool {
+        let words = lrc.lines()
+            .map(|line| line.split_once(']').map(|(_, text)| text).unwrap_or(line))
+            .flat_map(str::split_whitespace)
+            .filter(|word| word.chars().any(char::is_alphanumeric))
+            .count();
+        if words < 3 {
+            return true;
+        }
+
+        let Ok(json_text) = fs::read_to_string(json_path) else { return false; };
+        let Ok(data) = serde_json::from_str::<Value>(&json_text) else { return false; };
+        let Some(segments) = data.get("transcription").and_then(Value::as_array) else { return false; };
+        let mut scored = 0usize;
+        let mut weak = 0usize;
+        for segment in segments {
+            let Some(text) = segment.get("text").and_then(Value::as_str) else { continue; };
+            if !text.chars().any(char::is_alphanumeric) { continue; }
+            let token_probs = segment.get("tokens").and_then(Value::as_array)
+                .into_iter().flatten()
+                .filter_map(|token| token.get("p").and_then(Value::as_f64))
+                .collect::<Vec<_>>();
+            if !token_probs.is_empty() {
+                scored += 1;
+                let mean_probability = token_probs.iter().sum::<f64>() / token_probs.len() as f64;
+                if mean_probability < 0.12 { weak += 1; }
+            }
+        }
+        scored > 0 && weak * 2 >= scored
+    }
+
     pub async fn transcribe_audio_stream(&self, track_id: &str, stream_url: &str) -> Result<Value, String> {
         let clean_id: String = track_id.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect();
         if clean_id.is_empty() {
@@ -1453,7 +1522,8 @@ impl SoundCloudClient {
         }
 
         // 1. Instant Cache hit (0 ms)
-        let cache_file = self.lyrics_cache_dir().join(format!("{}.lrc", clean_id));
+        // v2 avoids reusing transcripts made with the old tiny-only path.
+        let cache_file = self.lyrics_cache_dir().join(format!("{}.v2.lrc", clean_id));
         if cache_file.exists() {
             if let Ok(content) = fs::read_to_string(&cache_file) {
                 if content.trim().len() > 10 {
@@ -1503,40 +1573,83 @@ impl SoundCloudClient {
             return Err("Не удалось подготовить аудиофайл для Whisper".to_string());
         }
 
-        // 3. Run Whisper CLI with -olrc
-        let mut wh_cmd = tokio::process::Command::new(&whisper_exe);
-        wh_cmd.args([
-            "-m", model_path.to_str().unwrap(),
-            "-f", temp_wav.to_str().unwrap(),
-            "-olrc",
-            "-of", temp_out_base.to_str().unwrap(),
-            "-l", "auto",
-            "-t", "4",
-        ]);
-        #[cfg(windows)]
-        wh_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        // 3. Run the installed model first and emit JSON confidence data too.
+        let temp_json = temp_out_base.with_extension("json");
+        let run_whisper = |model: &Path, output_base: &Path| {
+            let mut cmd = tokio::process::Command::new(&whisper_exe);
+            cmd.args([
+                "-m", model.to_str().unwrap(),
+                "-f", temp_wav.to_str().unwrap(),
+                "-olrc", "-ojf",
+                "-of", output_base.to_str().unwrap(),
+                "-l", "auto",
+                "-t", "4",
+            ]);
+            #[cfg(windows)]
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            cmd
+        };
 
-        let wh_status = tokio::time::timeout(std::time::Duration::from_secs(90), wh_cmd.status()).await
-            .map_err(|_| "Таймаут распознавания Whisper (90 сек)".to_string())?
+        let first_status = tokio::time::timeout(std::time::Duration::from_secs(120), run_whisper(&model_path, &temp_out_base).status()).await
+            .map_err(|_| "Таймаут распознавания Whisper (120 сек)".to_string())?
             .map_err(|e| format!("Ошибка запуска Whisper: {}", e))?;
 
-        let _ = fs::remove_file(&temp_wav);
-
-        if !wh_status.success() || !temp_lrc.exists() {
+        let first_has_output = first_status.success() && temp_lrc.exists();
+        if !first_has_output {
             let _ = fs::remove_file(&temp_lrc);
-            return Err("Whisper не смог распознать текст в этом треке".to_string());
+            let _ = fs::remove_file(&temp_json);
         }
 
-        // 4. Read generated .lrc and cache
-        let raw_lrc = fs::read_to_string(&temp_lrc).map_err(|e| format!("Не удалось прочесть результат Whisper: {}", e))?;
+        let first_lrc = if first_has_output {
+            fs::read_to_string(&temp_lrc).map_err(|e| format!("Не удалось прочесть результат Whisper: {}", e))?
+        } else {
+            String::new()
+        };
+        let first_is_weak = !first_has_output || Self::whisper_output_is_low_quality(&first_lrc, &temp_json);
+        let mut raw_lrc = first_lrc;
+
+        // If the fast model produced little or low-confidence text, retry once with small.
+        if first_is_weak && !model_path.file_name().and_then(|name| name.to_str()).unwrap_or_default().contains("small") {
+            let _ = fs::remove_file(&temp_lrc);
+            let _ = fs::remove_file(&temp_json);
+            let small_model = self.ensure_whisper_model_named("small").await?;
+            let small_base = temp_out_base.with_file_name(format!("onyx_whisper_out_{}_small", clean_id));
+            let small_lrc = small_base.with_extension("lrc");
+            let small_json = small_base.with_extension("json");
+            let small_status = tokio::time::timeout(std::time::Duration::from_secs(300), run_whisper(&small_model, &small_base).status()).await
+                .map_err(|_| "Таймаут повторного распознавания Whisper на модели small (300 сек)".to_string())?
+                .map_err(|e| format!("Ошибка запуска Whisper small: {}", e))?;
+            if !small_status.success() || !small_lrc.exists() {
+                let _ = fs::remove_file(&temp_wav);
+                let _ = fs::remove_file(&small_lrc);
+                let _ = fs::remove_file(&small_json);
+                return Err("Whisper не смог распознать текст даже на более точной модели small".to_string());
+            }
+            raw_lrc = fs::read_to_string(&small_lrc).map_err(|e| format!("Не удалось прочесть повторный результат Whisper: {}", e))?;
+            let still_weak = Self::whisper_output_is_low_quality(&raw_lrc, &small_json);
+            let _ = fs::remove_file(&small_lrc);
+            let _ = fs::remove_file(&small_json);
+            if still_weak {
+                let _ = fs::remove_file(&temp_wav);
+                return Err("Whisper распознал слишком мало разборчивого текста. Результат не сохранён; попробуйте найти готовый текст или другой аудиомикс.".to_string());
+            }
+        } else if first_is_weak {
+            let _ = fs::remove_file(&temp_wav);
+            let _ = fs::remove_file(&temp_lrc);
+            let _ = fs::remove_file(&temp_json);
+            return Err("Whisper распознал слишком мало разборчивого текста. Результат не сохранён.".to_string());
+        }
+
+        let _ = fs::remove_file(&temp_wav);
         let _ = fs::remove_file(&temp_lrc);
+        let _ = fs::remove_file(&temp_json);
 
         let clean_lrc = raw_lrc.lines()
             .filter(|l| !l.starts_with("[by:whisper.cpp]"))
             .collect::<Vec<_>>()
             .join("\n");
 
-        if clean_lrc.trim().is_empty() {
+        if Self::whisper_output_is_low_quality(&clean_lrc, Path::new("")) {
             return Err("В треке не обнаружено разборчивого текста".to_string());
         }
 
