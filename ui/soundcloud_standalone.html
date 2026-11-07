@@ -19446,7 +19446,10 @@
 
 
 
-    toggleQueueBtn.addEventListener('click', () => queueDrawer.classList.toggle('translate-x-full'));
+    toggleQueueBtn.addEventListener('click', () => {
+      if (queueDrawer.classList.contains('translate-x-full')) updateQueueDrawer();
+      queueDrawer.classList.toggle('translate-x-full');
+    });
 
 
 
@@ -19463,205 +19466,58 @@
 
 
     function updateQueueDrawer() {
-
-
-
-
-
-
-
-      const current = currentQueue[currentTrackIndex];
-
-
-
-
-
-
-
-      if (!current) return;
-
-
-
-
-
-
-
-      document.getElementById('queue-current-title').textContent = current.title;
-
-
-
-
-
-
-
-      document.getElementById('queue-current-artist').textContent = current.artist;
-
-
-
-
-
-
-
-      document.getElementById('queue-current-cover').src = current.cover;
-
-
-
-
-
-
-
+      const currentTitle = document.getElementById('queue-current-title');
+      const currentArtist = document.getElementById('queue-current-artist');
+      const currentCover = document.getElementById('queue-current-cover');
       const queueList = document.getElementById('queue-next-list');
+      if (!currentTitle || !currentArtist || !currentCover || !queueList) return;
 
-
-
-
-
-
-
+      const current = currentQueue && currentTrackIndex >= 0
+        ? currentQueue[currentTrackIndex]
+        : null;
       queueList.innerHTML = '';
 
-
-
-
-
-
-
-      const total = Math.min(10, currentQueue.length);
-
-
-
-
-
-
-
-      for (let i = 1; i < total; i++) {
-
-
-
-
-
-
-
-        const idx = (currentTrackIndex + i) % currentQueue.length;
-
-
-
-
-
-
-
-        const t = currentQueue[idx];
-
-
-
-
-
-
-
-        const el = document.createElement('div');
-
-
-
-
-
-
-
-        el.className = "flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors";
-
-
-
-
-
-
-
-        el.innerHTML = `
-
-
-
-
-
-
-
-          <img src="${t.cover}" class="w-8 h-8 rounded-md object-cover shrink-0">
-
-
-
-
-
-
-
-          <div class="truncate flex-1">
-
-
-
-
-
-
-
-            <div class="text-white font-medium truncate">${t.title}</div>
-
-
-
-
-
-
-
-            <div class="text-[10px] text-neutral-400 truncate">${t.artist}</div>
-
-
-
-
-
-
-
-          </div>
-
-
-
-
-
-
-
-        `;
-
-
-
-
-
-
-
-        el.addEventListener('click', () => playTrack(idx));
-
-
-
-
-
-
-
-        queueList.appendChild(el);
-
-
-
-
-
-
-
+      if (!current) {
+        currentTitle.textContent = 'Нет текущего трека';
+        currentArtist.textContent = 'Очередь пуста';
+        currentCover.src = 'logo.png';
+        queueList.innerHTML = '<div class="text-xs text-neutral-500 py-2">Нет треков в очереди</div>';
+        return;
       }
 
+      currentTitle.textContent = current.title || 'Без названия';
+      currentArtist.textContent = current.artist || 'Неизвестный исполнитель';
+      currentCover.src = current.cover || current.artwork_url || 'logo.png';
 
+      const upcomingCount = isWaveActive
+        ? Math.min(9, Math.max(0, currentQueue.length - 1))
+        : Math.min(9, Math.max(0, currentQueue.length - currentTrackIndex - 1));
 
+      if (upcomingCount === 0) {
+        queueList.innerHTML = '<div class="text-xs text-neutral-500 py-2">Нет следующих треков</div>';
+        return;
+      }
 
+      for (let offset = 1; offset <= upcomingCount; offset++) {
+        const idx = isWaveActive
+          ? (currentTrackIndex + offset) % currentQueue.length
+          : currentTrackIndex + offset;
+        const track = currentQueue[idx];
+        if (!track) continue;
 
-
-
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors';
+        row.innerHTML = `
+          <img src="${track.cover || track.artwork_url || 'logo.png'}" class="w-8 h-8 rounded-md object-cover shrink-0">
+          <div class="truncate flex-1">
+            <div class="text-white font-medium truncate">${track.title || 'Без названия'}</div>
+            <div class="text-[10px] text-neutral-400 truncate">${track.artist || 'Неизвестный исполнитель'}</div>
+          </div>
+        `;
+        row.addEventListener('click', () => playTrack(idx));
+        queueList.appendChild(row);
+      }
     }
-
-
-
-
-
-
-
     // -------------------------------------------------------------
 
 
