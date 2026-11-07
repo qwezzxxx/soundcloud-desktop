@@ -7288,6 +7288,30 @@
 
 
 
+        <!-- Section: Локальный Whisper AI (Караоке) -->
+        <div class="card-glass p-5 rounded-2xl space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500/20 to-orange-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0 shadow-md">
+                <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"/></svg>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-white flex items-center gap-2">
+                  <span>Локальный Whisper AI (Караоке)</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">AI</span>
+                </div>
+                <div class="text-[11px] text-neutral-400 mt-0.5">Автоматически генерировать синхронный текст караоке, если его нет в сети</div>
+              </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input id="whisper-auto-toggle" type="checkbox" class="accent-rose-500 w-4 h-4 cursor-pointer">
+            </label>
+          </div>
+          <p class="text-[11px] text-neutral-400 leading-relaxed border-t border-white/5 pt-2.5">
+            Нейросеть Whisper распознает слова песни прямо на вашем компьютере и расставляет посекундные тайминги караоке. Всё работает локально «из коробки».
+          </p>
+        </div>
+
         <!-- Section 3: Глубокая кастомизация интерфейса -->
 
 
@@ -9165,7 +9189,10 @@
 
 
 
-          <div class="text-[11px] font-semibold text-neutral-500 uppercase">Далее в очереди</div>
+          <div class="flex items-center justify-between text-[11px] font-semibold text-neutral-500 uppercase">
+            <span>Далее в очереди</span>
+            <span id="queue-next-count" class="text-[10px] font-medium normal-case"></span>
+          </div>
 
 
 
@@ -9390,6 +9417,7 @@
 
 
             <span id="player-artist" class="truncate hover:text-white hover:underline cursor-pointer transition-colors select-none" title="Открыть страницу исполнителя">SoundCloud</span>
+            <span id="player-loading" class="hidden items-center gap-1 shrink-0 text-[10px] font-medium text-orange-400/90 animate-pulse select-none">Загрузка потока…</span>
 
 
 
@@ -12036,6 +12064,7 @@
 
 
       getLyrics: (title, artist, duration) => api.invoke('get_lyrics', { title, artist, duration }),
+      transcribeTrack: (trackId, streamUrl) => api.invoke('transcribe_track', { trackId, streamUrl }),
 
 
 
@@ -12743,9 +12772,15 @@
 
 
 
+    let currentActiveTab = localStorage.getItem('sc_desktop_active_tab') || 'tab-home';
+    function getActiveTabId() {
+      return currentActiveTab || localStorage.getItem('sc_desktop_active_tab') || 'tab-home';
+    }
+
     window.switchTab = switchTab;
 
     function switchTab(tabId) {
+      currentActiveTab = tabId;
 
 
 
@@ -12878,6 +12913,9 @@
         if (typeof fastSyncLikes === 'function') {
           fastSyncLikes(false);
         }
+        if (typeof syncLikedTracksState === 'function') {
+          syncLikedTracksState(isPlaying);
+        }
       }
       if (tabId === 'tab-wave') {
         if (typeof syncWavePlayButton === 'function') {
@@ -12885,6 +12923,11 @@
         }
         if (typeof renderWaveTrackList === 'function') {
           renderWaveTrackList();
+        }
+      }
+      if (tabId === 'tab-artist') {
+        if (typeof syncArtistTracksState === 'function') {
+          syncArtistTracksState(isPlaying);
         }
       }
 
@@ -17580,17 +17623,126 @@
 
     // Fast audio stream cache & idle prefetcher
     const streamUrlCache = new Map();
+    const streamUrlCacheAt = new Map();
+    // SoundCloud CDN links carry an `expires` signature (valid for ~1-2 hours).
+    // Serving a stale link makes HLS fail with a 403, so never trust the cache for long.
+    const STREAM_URL_TTL_MS = 30 * 60 * 1000;
+
+    function cacheStreamUrl(trackId, url) {
+      if (!trackId || !url) return;
+      streamUrlCache.set(trackId, url);
+      streamUrlCacheAt.set(trackId, Date.now());
+    }
+
+    function invalidateStreamUrl(trackId) {
+      if (!trackId) return;
+      streamUrlCache.delete(trackId);
+      streamUrlCacheAt.delete(trackId);
+    }
+
+    function getCachedStreamUrl(trackId) {
+      if (!trackId || !streamUrlCache.has(trackId)) return null;
+      const cachedAt = streamUrlCacheAt.get(trackId) || 0;
+      if (Date.now() - cachedAt > STREAM_URL_TTL_MS) {
+        invalidateStreamUrl(trackId);
+        return null;
+      }
+      return streamUrlCache.get(trackId);
+    }
+
+    // Tracks without a SoundCloud stream are resolved through YouTube, which spawns
+    // yt-dlp (a few seconds). Prefetch and playback used to ask for the same track at
+    // the same time and run yt-dlp twice; share a single in-flight promise instead.
+    const streamRequests = new Map();
+    function requestStreamUrl(trackId) {
+      if (!trackId) return Promise.reject(new Error('empty track id'));
+      const existing = streamRequests.get(trackId);
+      if (existing) return existing;
+      const pending = api.getStreamUrl(trackId).finally(() => {
+        if (streamRequests.get(trackId) === pending) streamRequests.delete(trackId);
+      });
+      streamRequests.set(trackId, pending);
+      return pending;
+    }
+
+    // Visible feedback while a stream is resolved (YouTube fallback can take a few seconds).
+    let playerLoadingTimer = null;
+    function setPlayerLoading(on, customText = null) {
+      const el = document.getElementById('player-loading');
+      if (el) {
+        el.textContent = customText || 'Загрузка потока…';
+        el.classList.toggle('hidden', !on);
+        el.classList.toggle('inline-flex', !!on);
+      }
+      if (playerLoadingTimer) {
+        clearTimeout(playerLoadingTimer);
+        playerLoadingTimer = null;
+      }
+      if (on) {
+        playerLoadingTimer = setTimeout(() => {
+          const node = document.getElementById('player-loading');
+          if (node) { node.classList.add('hidden'); node.classList.remove('inline-flex'); }
+        }, 20000);
+      }
+    }
+
+    async function prefetchLyricsForTrack(track) {
+      if (!track || !track.id) return;
+      const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+      if (lyricsCache.has(cacheKey)) return;
+      try {
+        const local = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+        if (local) {
+          lyricsCache.set(cacheKey, JSON.parse(local));
+          return;
+        }
+      } catch (_) {}
+      try {
+        const durSec = track.duration_ms ? (track.duration_ms / 1000) : null;
+        const cleanTitle = cleanTrackTitleForLyrics(track.title || '');
+        const cleanArtist = (track.artist || '').trim();
+        const res = await api.getLyrics(cleanTitle, cleanArtist, durSec);
+        if (res && res.syncedLyrics) {
+          lyricsCache.set(cacheKey, res);
+          try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res)); } catch (_) {}
+          return;
+        }
+      } catch (_) {}
+      // Pre-transcribe with Whisper in background before the song turns on!
+      try {
+        let streamUrl = explicitStreamUrl || getCachedStreamUrl(track.id);
+        if (!streamUrl) {
+          streamUrl = await requestStreamUrl(track.id);
+        }
+        if (streamUrl) {
+          const aiRes = await api.transcribeTrack(track.id, streamUrl);
+          if (aiRes && aiRes.syncedLyrics) {
+            lyricsCache.set(cacheKey, aiRes);
+            try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(aiRes)); } catch (_) {}
+            logD('Background pre-transcription ready before song starts: ' + track.title);
+          }
+        }
+      } catch (_) {}
+    }
+
     function prefetchNextTrack(index) {
       if (!currentQueue || index < 0 || index >= currentQueue.length) return;
       const nextT = currentQueue[index];
-      if (!nextT || !nextT.id || streamUrlCache.has(nextT.id)) return;
-      setTimeout(async () => {
-        try {
-          if (api && api.getStreamUrl) {
-            const res = await api.getStreamUrl(nextT.id);
-            if (res) streamUrlCache.set(nextT.id, res);
-          }
-        } catch (_) {}
+      if (!nextT || !nextT.id) return;
+      // 1. Prefetch stream URL in advance
+      if (!getCachedStreamUrl(nextT.id)) {
+        setTimeout(async () => {
+          try {
+            if (api && api.getStreamUrl) {
+              const res = await requestStreamUrl(nextT.id);
+              if (res) cacheStreamUrl(nextT.id, res);
+            }
+          } catch (_) {}
+        }, 400);
+      }
+      // 2. Prefetch and pre-transcribe lyrics in advance before the song plays!
+      setTimeout(() => {
+        prefetchLyricsForTrack(nextT);
       }, 1200);
     }
 
@@ -17648,6 +17800,8 @@
 
         isPlaying = true;
         syncPlayPauseState(true);
+        if (typeof syncLikedTracksState === 'function') syncLikedTracksState(true);
+        if (typeof syncSearchResultsState === 'function') syncSearchResultsState(true);
         if (playIcon) playIcon.classList.add('hidden');
         if (pauseIcon) pauseIcon.classList.remove('hidden');
 
@@ -17686,10 +17840,22 @@
 
         if (!track.id) return;
 
-        let streamInfo = streamUrlCache.get(track.id);
+        let streamInfo = getCachedStreamUrl(track.id);
         if (!streamInfo) {
-          streamInfo = await api.getStreamUrl(track.id);
-          if (streamInfo) streamUrlCache.set(track.id, streamInfo);
+          setPlayerLoading(true);
+          try {
+            streamInfo = await requestStreamUrl(track.id);
+            if (streamInfo) cacheStreamUrl(track.id, streamInfo);
+          } catch (resolveErr) {
+            setPlayerLoading(false);
+            const msg = resolveErr && resolveErr.message ? resolveErr.message : String(resolveErr || '');
+            logD(`getStreamUrl failed for ${track.id}: ${msg}`);
+            if (requestId === currentPlayRequestId) {
+              notify(`⚠️ ${msg || 'Не удалось получить поток трека'}`, '❌');
+              handleTrackPlaybackFailure(track, 'resolveError', { noRetry: true });
+            }
+            return;
+          }
         }
         if (requestId !== currentPlayRequestId) return;
         prefetchNextTrack(currentTrackIndex + 1);
@@ -17698,7 +17864,63 @@
         const isHls = ((typeof streamInfo === 'object' && streamInfo !== null && streamInfo.protocol === 'hls') || (streamUrl && streamUrl.includes('m3u8'))) && !streamUrl.includes('127.0.0.1:49221');
 
         if (!streamUrl) {
+          setPlayerLoading(false);
           notify("⚠️ Поток трека недоступен на серверах SoundCloud", "❌");
+          handleTrackPlaybackFailure(track, 'emptyStream', { noRetry: true });
+          return;
+        }
+
+        // PARSE LYRICS & TIMINGS BEFORE TURNING ON THE SONG ("до вкл песни"):
+        // If synced lyrics are not in cache, check cloud (200ms) or run local Whisper (3s)
+        // before audioEngine.play() starts, so the song turns on with karaoke already at 00:00!
+        const lyricsKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+        let hasReadyLyrics = lyricsCache.has(lyricsKey);
+        if (!hasReadyLyrics) {
+          try {
+            const storedL = localStorage.getItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)));
+            if (storedL) {
+              const parsedL = JSON.parse(storedL);
+              if (parsedL && (parsedL.syncedLyrics || parsedL.plainLyrics || parsedL.instrumental)) {
+                lyricsCache.set(lyricsKey, parsedL);
+                hasReadyLyrics = true;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!hasReadyLyrics) {
+          setPlayerLoading(true, '✨ Поиск текста...');
+          try {
+            const durSec = track.duration_ms ? (track.duration_ms / 1000) : null;
+            const cleanTitle = cleanTrackTitleForLyrics(track.title || '');
+            const cleanArtist = (track.artist || '').trim();
+            const cloudRes = await Promise.race([
+              api.getLyrics(cleanTitle, cleanArtist, durSec).catch(() => null),
+              new Promise(r => setTimeout(r, 1200))
+            ]);
+            if (cloudRes && (cloudRes.syncedLyrics || cloudRes.plainLyrics || cloudRes.instrumental)) {
+              lyricsCache.set(lyricsKey, cloudRes);
+              try { localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(cloudRes)); } catch (_) {}
+              hasReadyLyrics = true;
+            }
+          } catch (_) {}
+        }
+
+        const curLyricsData = lyricsCache.get(lyricsKey);
+        const needsWhisperAi = !curLyricsData || (!curLyricsData.syncedLyrics && !curLyricsData.instrumental);
+        if (needsWhisperAi) {
+          setPlayerLoading(true, '✨ Whisper AI готовит караоке...');
+          try {
+            // Await local Whisper before starting the music, so lines and timestamps are ready from 0:00!
+            await Promise.race([
+              startWhisperTranscription(track, streamUrl),
+              new Promise(r => setTimeout(r, 6500))
+            ]);
+          } catch (_) {}
+        }
+
+        if (requestId !== currentPlayRequestId) {
+          setPlayerLoading(false);
           return;
         }
 
@@ -17729,9 +17951,15 @@
         } else if (isHls && window.Hls && Hls.isSupported()) {
           const hls = new Hls({
             enableWorker: true,
-            lowLatencyMode: true,
-            maxBufferLength: 15,
-            maxMaxBufferLength: 30
+            lowLatencyMode: false,
+            backBufferLength: 30,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 120,
+            manifestLoadingMaxRetry: 3,
+            manifestLoadingRetryDelay: 500,
+            fragLoadingMaxRetry: 6,
+            fragLoadingRetryDelay: 500,
+            levelLoadingMaxRetry: 3
           });
           window.currentHls = hls;
           hls.loadSource(streamUrl);
@@ -17741,27 +17969,100 @@
             audioEngine.play().then(handlePlaybackStart).catch(e => console.log('HLS play error:', e.message));
           });
           hls.on(Hls.Events.ERROR, (event, data) => {
-            if (data.fatal && requestId === currentPlayRequestId) {
-              console.log('HLS fatal, switching to native fallback:', data.type);
-              try {
-                hls.destroy();
-              } catch (_) {}
-              window.currentHls = null;
-              audioEngine.src = streamUrl;
-              audioEngine.play().then(handlePlaybackStart).catch(err => console.log('Native fallback error:', err.message));
-            }
+            const httpCode = data && data.response ? data.response.code : '';
+            logD(`HLS ${data && data.fatal ? 'FATAL' : 'error'}: type=${data ? data.type : ''} details=${data ? data.details : ''}${httpCode ? ' http=' + httpCode : ''}`);
+            if (!data || !data.fatal || requestId !== currentPlayRequestId) return;
+            // Never feed the raw m3u8 URL to <audio>: Chromium cannot demux HLS on its own
+            // (that produced MEDIA_ERR_SRC_NOT_SUPPORTED / DEMUXER_ERROR_COULD_NOT_PARSE).
+            // Instead drop the (possibly stale) link and resolve the track again.
+            try {
+              hls.destroy();
+            } catch (_) {}
+            if (window.currentHls === hls) window.currentHls = null;
+            handleTrackPlaybackFailure(track, 'hlsFatal:' + (data.type || 'unknown'));
           });
+        } else if (isHls) {
+          // HLS stream but MSE/Hls.js is unavailable - a raw playlist can never be demuxed
+          // by <audio>, so surface the problem instead of silently freezing.
+          logD('HLS stream but Hls.js is not supported in this webview');
+          notify('⚠️ HLS-поток не поддерживается этим движком', '❌');
+          handleTrackPlaybackFailure(track, 'hlsUnsupported', { noRetry: true });
         } else {
           audioEngine.src = streamUrl;
           audioEngine.play().then(handlePlaybackStart).catch(err => {
-            console.log('Native audio play error:', err.message);
+            logD('Native audio play error: ' + err.message);
             if (requestId === currentPlayRequestId && err.name !== 'AbortError') {
               notify("⚠️ Ошибка воспроизведения");
+              handleTrackPlaybackFailure(track, 'nativePlayError');
             }
           });
         }
       } catch (e) {
         console.error("Error in playTrack:", e);
+        logD('Error in playTrack: ' + (e && e.message ? e.message : e));
+      }
+    }
+
+    // Per-track playback failure bookkeeping. Without this the player simply froze on the
+    // failing track: no retry, no skip, no message (the old code called a function that
+    // was never defined, so nothing happened at all).
+    const playbackFailures = new Map();
+    const playbackRetryTimers = new Map();
+    let recentPlaybackFailureTimes = [];
+
+    function handleTrackPlaybackFailure(track, source, opts) {
+      try {
+        if (!track || !track.id) return;
+        if (currentlyPlayingTrackId && currentlyPlayingTrackId !== track.id) return;
+
+        const noRetry = !!(opts && opts.noRetry);
+        const attempts = playbackFailures.get(track.id) || 0;
+        logD(`playback failure #${attempts + 1} for track ${track.id} (${source})`);
+
+        if (!noRetry && attempts < 2) {
+          playbackFailures.set(track.id, attempts + 1);
+          // A cached CDN link may be stale or the HLS session may be broken - start over
+          // with a freshly resolved URL instead of dying on the same one.
+          invalidateStreamUrl(track.id);
+          if (window.currentHls) {
+            try {
+              window.currentHls.destroy();
+            } catch (_) {}
+            window.currentHls = null;
+          }
+          if (!playbackRetryTimers.has(track.id)) {
+            const retryId = setTimeout(() => {
+              playbackRetryTimers.delete(track.id);
+              if (currentlyPlayingTrackId !== track.id) return;
+              playTrack(currentTrackIndex).catch(() => {});
+            }, 400 + attempts * 500);
+            playbackRetryTimers.set(track.id, retryId);
+          }
+          return;
+        }
+
+        // Out of retries: report it and keep the queue moving instead of going silent.
+        playbackFailures.delete(track.id);
+        invalidateStreamUrl(track.id);
+        setPlayerLoading(false);
+        notify(`⚠️ Не удалось воспроизвести: ${track.title || 'трек'}`, '❌');
+
+        const now = Date.now();
+        recentPlaybackFailureTimes = recentPlaybackFailureTimes.filter(t => now - t < 20000);
+        recentPlaybackFailureTimes.push(now);
+        if (recentPlaybackFailureTimes.length >= 5) {
+          logD('too many playback failures in a row - stopping auto-skip');
+          isPlaying = false;
+          syncPlayPauseState(false);
+          notify('⚠️ Много треков не воспроизводится подряд. Проверьте подключение к сети.', '❌');
+          try {
+            audioEngine.pause();
+          } catch (_) {}
+          return;
+        }
+        playNextTrack();
+      } catch (e) {
+        logD('handleTrackPlaybackFailure crashed: ' + (e && e.message ? e.message : e));
       }
     }
 
@@ -17951,9 +18252,14 @@
 
         // Upstream Fisher-Yates shuffle algorithm
     function shuffleArray(arr) {
+      const originalOrder = arr.slice();
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      // Enabling shuffle should visibly change the order, even for short queues.
+      if (arr.length > 1 && arr.every((item, index) => item === originalOrder[index])) {
+        [arr[0], arr[1]] = [arr[1], arr[0]];
       }
       return arr;
     }
@@ -19343,6 +19649,8 @@
       if (typeof renderWaveTrackList === 'function' && isWaveActive) renderWaveTrackList();
       if (typeof syncArtistAlbumsState === 'function') syncArtistAlbumsState(playing);
       if (typeof syncArtistTracksState === 'function') syncArtistTracksState(playing);
+      if (typeof syncLikedTracksState === 'function') syncLikedTracksState(playing);
+      if (typeof syncSearchResultsState === 'function') syncSearchResultsState(playing);
       const pIcon = document.getElementById('play-icon');
       const sIcon = document.getElementById('pause-icon');
       const immPlay = document.getElementById('immersive-play-icon');
@@ -19573,7 +19881,10 @@
 
 
 
-    toggleQueueBtn.addEventListener('click', () => queueDrawer.classList.toggle('translate-x-full'));
+    toggleQueueBtn.addEventListener('click', () => {
+      if (queueDrawer.classList.contains('translate-x-full')) updateQueueDrawer();
+      queueDrawer.classList.toggle('translate-x-full');
+    });
 
 
 
@@ -19590,205 +19901,61 @@
 
 
     function updateQueueDrawer() {
-
-
-
-
-
-
-
-      const current = currentQueue[currentTrackIndex];
-
-
-
-
-
-
-
-      if (!current) return;
-
-
-
-
-
-
-
-      document.getElementById('queue-current-title').textContent = current.title;
-
-
-
-
-
-
-
-      document.getElementById('queue-current-artist').textContent = current.artist;
-
-
-
-
-
-
-
-      document.getElementById('queue-current-cover').src = current.cover;
-
-
-
-
-
-
-
+      const currentTitle = document.getElementById('queue-current-title');
+      const currentArtist = document.getElementById('queue-current-artist');
+      const currentCover = document.getElementById('queue-current-cover');
       const queueList = document.getElementById('queue-next-list');
+      const queueCount = document.getElementById('queue-next-count');
+      if (!currentTitle || !currentArtist || !currentCover || !queueList) return;
 
-
-
-
-
-
-
+      const current = currentQueue && currentTrackIndex >= 0
+        ? currentQueue[currentTrackIndex]
+        : null;
       queueList.innerHTML = '';
 
-
-
-
-
-
-
-      const total = Math.min(10, currentQueue.length);
-
-
-
-
-
-
-
-      for (let i = 1; i < total; i++) {
-
-
-
-
-
-
-
-        const idx = (currentTrackIndex + i) % currentQueue.length;
-
-
-
-
-
-
-
-        const t = currentQueue[idx];
-
-
-
-
-
-
-
-        const el = document.createElement('div');
-
-
-
-
-
-
-
-        el.className = "flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors";
-
-
-
-
-
-
-
-        el.innerHTML = `
-
-
-
-
-
-
-
-          <img src="${t.cover}" class="w-8 h-8 rounded-md object-cover shrink-0">
-
-
-
-
-
-
-
-          <div class="truncate flex-1">
-
-
-
-
-
-
-
-            <div class="text-white font-medium truncate">${t.title}</div>
-
-
-
-
-
-
-
-            <div class="text-[10px] text-neutral-400 truncate">${t.artist}</div>
-
-
-
-
-
-
-
-          </div>
-
-
-
-
-
-
-
-        `;
-
-
-
-
-
-
-
-        el.addEventListener('click', () => playTrack(idx));
-
-
-
-
-
-
-
-        queueList.appendChild(el);
-
-
-
-
-
-
-
+      if (!current) {
+        currentTitle.textContent = 'Нет текущего трека';
+        currentArtist.textContent = 'Очередь пуста';
+        currentCover.src = 'logo.png';
+        queueList.innerHTML = '<div class="text-xs text-neutral-500 py-2">Нет треков в очереди</div>';
+        return;
       }
 
+      currentTitle.textContent = current.title || 'Без названия';
+      currentArtist.textContent = current.artist || 'Неизвестный исполнитель';
+      currentCover.src = current.cover || current.artwork_url || 'logo.png';
 
+      const upcomingCount = isWaveActive
+        ? Math.max(0, currentQueue.length - 1)
+        : Math.max(0, currentQueue.length - currentTrackIndex - 1);
 
+      if (queueCount) queueCount.textContent = upcomingCount ? `${upcomingCount}` : '';
 
+      if (upcomingCount === 0) {
+        queueList.innerHTML = '<div class="text-xs text-neutral-500 py-2">Нет следующих треков</div>';
+        return;
+      }
 
+      for (let offset = 1; offset <= upcomingCount; offset++) {
+        const idx = isWaveActive
+          ? (currentTrackIndex + offset) % currentQueue.length
+          : currentTrackIndex + offset;
+        const track = currentQueue[idx];
+        if (!track) continue;
 
-
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors';
+        row.innerHTML = `
+          <img src="${track.cover || track.artwork_url || 'logo.png'}" class="w-8 h-8 rounded-md object-cover shrink-0">
+          <div class="truncate flex-1">
+            <div class="text-white font-medium truncate">${track.title || 'Без названия'}</div>
+            <div class="text-[10px] text-neutral-400 truncate">${track.artist || 'Неизвестный исполнитель'}</div>
+          </div>
+        `;
+        row.addEventListener('click', () => playTrack(idx));
+        queueList.appendChild(row);
+      }
     }
-
-
-
-
-
-
-
     // -------------------------------------------------------------
 
 
@@ -20013,7 +20180,9 @@
 
 
 
-        row.className = `grid grid-cols-[40px_1fr_90px_60px] gap-4 items-center px-4 py-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        row.className = `liked-track-row grid grid-cols-[40px_1fr_90px_60px] gap-4 items-center px-4 py-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        row.dataset.trackId = String(t.id);
+        row.dataset.index = String(i);
 
 
 
@@ -20189,7 +20358,7 @@
 
 
 
-              <div class="text-xs font-semibold truncate ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-300'}">${t.title}</div>
+              <div class="liked-row-title text-xs font-semibold truncate ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-300'}" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title}</div>
 
 
 
@@ -20293,38 +20462,11 @@
 
 
 
-          if (isCurrent) {
-
-
-
-
-
-
-
+          const isNowCurrent = Boolean(currentlyPlayingTrackId && String(currentlyPlayingTrackId) === String(t.id));
+          if (isNowCurrent) {
             togglePlay();
-
-
-
-
-
-
-
           } else {
-
-
-
-
-
-
-
             playTrack(i, likedTracks);
-
-
-
-
-
-
-
           }
 
 
@@ -20398,6 +20540,63 @@
 
 
     }
+
+    function syncLikedTracksState(playing = isPlaying) {
+      if (!likedTable) return;
+      const currentTrack = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex];
+      const currentId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : (currentTrack ? String(currentTrack.id) : null);
+      const rows = likedTable.querySelectorAll('.liked-track-row');
+      rows.forEach(row => {
+        const rowId = row.dataset.trackId;
+        const rowIdx = parseInt(row.dataset.index, 10);
+        const isCurrent = Boolean(currentId && rowId && currentId === rowId);
+        const isThisPlaying = isCurrent && playing;
+
+        if (isCurrent) {
+          row.classList.add('bg-white/[0.08]');
+        } else {
+          row.classList.remove('bg-white/[0.08]');
+        }
+
+        const titleEl = row.querySelector('.liked-row-title');
+        if (titleEl) {
+          if (isCurrent) {
+            titleEl.classList.add('text-rose-400');
+            titleEl.classList.remove('text-white', 'group-hover:text-rose-300');
+            titleEl.style.color = 'var(--accent)';
+          } else {
+            titleEl.classList.remove('text-rose-400');
+            titleEl.classList.add('text-white', 'group-hover:text-rose-300');
+            titleEl.style.color = '';
+          }
+        }
+
+        const numCol = row.querySelector('.liked-row-num');
+        if (numCol) {
+          if (isThisPlaying) {
+            numCol.innerHTML = `
+              <span class="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm" style="background-color: var(--accent-glow); color: var(--accent);">
+                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+              </span>
+            `;
+          } else if (isCurrent) {
+            numCol.innerHTML = `
+              <span class="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm" style="background-color: var(--accent-glow); color: var(--accent);">
+                <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </span>
+            `;
+          } else {
+            numCol.innerHTML = `
+              <span class="row-num text-xs text-neutral-400 font-mono">${rowIdx + 1}</span>
+              <span class="row-play-icon hidden group-hover:flex items-center justify-center w-6 h-6 rounded-lg bg-white/10 text-white">
+                <svg class="w-3 h-3 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </span>
+            `;
+          }
+        }
+      });
+    }
+
 
 
 
@@ -21091,7 +21290,9 @@
 
 
 
-        item.className = `flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        item.className = `search-track-item flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group ${isCurrent ? 'bg-white/[0.08]' : ''}`;
+        item.dataset.trackId = String(t.id);
+        item.dataset.index = String(idx);
 
 
 
@@ -21379,38 +21580,11 @@
 
 
 
-          if (isCurrent) {
-
-
-
-
-
-
-
+          const isNowCurrent = Boolean(currentlyPlayingTrackId && String(currentlyPlayingTrackId) === String(t.id));
+          if (isNowCurrent) {
             togglePlay();
-
-
-
-
-
-
-
             return;
-
-
-
-
-
-
-
           }
-
-
-
-
-
-
-
           playTrack(idx, currentSearchResults);
 
 
@@ -21444,6 +21618,23 @@
 
 
     }
+    function syncSearchResultsState(playing = isPlaying) {
+      const container = document.getElementById('search-results-list');
+      if (!container) return;
+      const currentTrack = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex];
+      const currentId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : (currentTrack ? String(currentTrack.id) : null);
+      const rows = container.querySelectorAll('.search-track-item');
+      rows.forEach(row => {
+        const rowId = row.dataset.trackId;
+        const isCurrent = Boolean(currentId && rowId && currentId === rowId);
+        if (isCurrent) {
+          row.classList.add('bg-white/[0.08]');
+        } else {
+          row.classList.remove('bg-white/[0.08]');
+        }
+      });
+    }
+
 
 
 
@@ -22854,8 +23045,17 @@
         `;
         card.addEventListener('click', () => {
           currentStationUrn = null;
+          const isNowCurrent = Boolean(currentlyPlayingTrackId && String(currentlyPlayingTrackId) === String(t.id));
+          if (isNowCurrent) {
+            togglePlay();
+            return;
+          }
           let idx = allTracks.findIndex(x => String(x.id) === String(t.id));
-          playTrack(idx !== -1 ? idx : 0, allTracks);
+          if (idx !== -1) {
+            playTrack(idx, allTracks);
+          } else {
+            playTrack(0, [t]);
+          }
         });
         quickContainer.appendChild(card);
       });
@@ -22950,13 +23150,18 @@
               </div>
             `;
             card.addEventListener('click', () => {
-              if (isCurrent) {
+              const isNowCurrent = Boolean(currentlyPlayingTrackId && String(currentlyPlayingTrackId) === String(t.id));
+              if (isNowCurrent) {
                 togglePlay();
               } else {
                 currentStationUrn = null;
                 const fullSource = (allTracks && allTracks.length > 0) ? allTracks : favTracks;
                 const trackIdx = fullSource.findIndex(x => String(x.id) === String(t.id));
-                playTrack(trackIdx !== -1 ? trackIdx : fIdx, fullSource);
+                if (trackIdx !== -1) {
+                  playTrack(trackIdx, fullSource);
+                } else {
+                  playTrack(0, [t]);
+                }
               }
             });
             favGrid.appendChild(card);
@@ -25963,7 +26168,7 @@
 
 
 
-            if (activeTab === 'tab-library') currentQueue = [...allTracks];
+            if (getActiveTabId() === 'tab-library') currentQueue = [...allTracks];
 
 
 
@@ -26564,8 +26769,9 @@
           const oldFirstId = oldLen > 0 ? (allTracks[0].id || allTracks[0].urn) : null;
           const newFirstId = fresh.length > 0 ? (fresh[0].id || fresh[0].urn) : null;
 
+          fresh.forEach(t => { if (t) t.liked = true; });
           allTracks = fresh;
-          if (activeTab === 'tab-library') currentQueue = [...allTracks];
+          if (getActiveTabId() === 'tab-library') currentQueue = [...allTracks];
           saveLocalDatabase();
           renderLikedTable();
           applyUserProfile(currentUser, allTracks.length);
@@ -26574,8 +26780,9 @@
           }
 
           const diff = fresh.length - oldLen;
-          if (oldFirstId !== newFirstId || diff > 0) {
-            notify(`Медиатека обновлена! +${diff > 0 ? diff : 1} нов. трек`, '✓');
+          if (oldFirstId !== newFirstId || diff !== 0) {
+            const countText = diff > 0 ? `+${diff}` : `${diff}`;
+            notify(`Медиатека обновлена! (${countText} трек.)`, '✓');
           } else if (isManual) {
             notify('Медиатека синхронизирована (все треки актуальны)', '✓');
           }
@@ -27025,6 +27232,16 @@
 
 
 
+        const whisperToggle = document.getElementById('whisper-auto-toggle');
+        if (whisperToggle && appConfig && appConfig.whisper_auto_transcribe !== undefined) {
+          whisperToggle.checked = Boolean(appConfig.whisper_auto_transcribe);
+        }
+        whisperToggle?.addEventListener('change', () => {
+          if (appConfig) {
+            appConfig.whisper_auto_transcribe = whisperToggle.checked;
+            api.saveConfig(appConfig).catch(() => {});
+          }
+        });
         const discordToggle = document.getElementById('discord-rpc-toggle');
 
 
@@ -32424,7 +32641,12 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('playing', () => logD('audioEngine: playing event fired (sound active!)'));
+    audioEngine.addEventListener('playing', () => {
+      logD('audioEngine: playing event fired (sound active!)');
+      setPlayerLoading(false);
+      // A track that really started playing is healthy again: forget its failure budget.
+      if (currentlyPlayingTrackId) playbackFailures.delete(currentlyPlayingTrackId);
+    });
 
 
 
@@ -32766,15 +32988,14 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <div class="pt-2">
-
-
-
-              <button id="btn-empty-add-lyrics" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-all cursor-pointer border border-white/10">Вставить текст (LRC)</button>
-
-
-
-            </div>
+            <div class="pt-2 flex flex-wrap items-center justify-center gap-2.5">
+            <button id="btn-empty-add-lyrics" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-all cursor-pointer border border-white/10">Вставить текст (LRC)</button>
+            <button id="btn-whisper-transcribe" onclick="startWhisperTranscription()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-xs font-bold text-white shadow-lg shadow-rose-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"/></svg>
+              <span>✨ Распознать караоке (Whisper AI)</span>
+            </button>
+          </div>
+          <div id="whisper-status-line" class="hidden text-xs text-orange-400 font-medium animate-pulse pt-2 text-center"></div>
 
 
 
@@ -33369,15 +33590,14 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-          <div class="pt-2">
-
-
-
+          <div class="pt-2 flex flex-wrap items-center justify-center gap-2.5">
             <button id="btn-empty-add-lyrics" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-all cursor-pointer border border-white/10">Вставить текст (LRC)</button>
-
-
-
+            <button id="btn-whisper-transcribe" onclick="startWhisperTranscription()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-xs font-bold text-white shadow-lg shadow-rose-500/20 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"/></svg>
+              <span>✨ Распознать караоке (Whisper AI)</span>
+            </button>
           </div>
+          <div id="whisper-status-line" class="text-xs text-orange-400 font-medium animate-pulse pt-2 text-center">✨ Идёт автоматическое распознавание текста нейросетью...</div>
 
 
 
@@ -33398,6 +33618,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
       if (emptyBtn) emptyBtn.addEventListener('click', () => promptCustomLyrics(track));
+
+      // Auto-transcribe immediately: do it right away so the user does NOT have to click buttons!
+      if (!isBackground) {
+        startWhisperTranscription(track).catch(() => {});
+      }
 
 
 
@@ -33426,6 +33651,102 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     }
+
+        const activeWhisperJobIds = new Set();
+    async function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null) {
+      const track = explicitTrack || (currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex]);
+      if (!track || !track.id) return;
+      if (activeWhisperJobIds.has(track.id)) return;
+      activeWhisperJobIds.add(track.id);
+
+      const requestFetchId = lyricsFetchCounter;
+      const targetTrackId = String(track.id);
+      const statusLine = document.getElementById('whisper-status-line');
+      const btn = document.getElementById('btn-whisper-transcribe');
+      const plainBtn = document.getElementById('btn-plain-whisper-transcribe');
+      const lyricsContainer = document.getElementById('immersive-lyrics-content');
+
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-75');
+        btn.innerHTML = `
+          <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          <span>Нейросеть слушает трек... (~5–10 сек)</span>
+        `;
+      }
+      if (plainBtn) {
+        plainBtn.disabled = true;
+        plainBtn.classList.add('opacity-75');
+        plainBtn.innerHTML = `<span>⏳ Распознавание караоке...</span>`;
+      }
+      if (statusLine) {
+        statusLine.classList.remove('hidden');
+        statusLine.textContent = '✨ Локальный Whisper обрабатывает аудиопоток (это займет ~5–10 сек)...';
+      }
+
+      notify('Запущен локальный Whisper AI...', '✨');
+
+      try {
+        let streamUrl = getCachedStreamUrl(track.id);
+        if (!streamUrl) {
+          streamUrl = await requestStreamUrl(track.id);
+        }
+        if (!streamUrl) throw new Error('Не удалось получить аудиопоток трека');
+
+        const res = await api.transcribeTrack(track.id, streamUrl);
+        if (res && res.syncedLyrics) {
+          const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+          lyricsCache.set(cacheKey, res);
+          try {
+            localStorage.setItem('sc_lyrics_cache_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res));
+          } catch (_) {}
+
+          // Strict guard: ONLY update DOM if this track is STILL the currently playing track!
+          const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
+          if (activeId && activeId !== targetTrackId) {
+            logD(`Whisper finished for track ${targetTrackId}, but active is ${activeId} — preserved in cache without overwriting UI`);
+            return;
+          }
+          if (requestFetchId !== lyricsFetchCounter) {
+            return;
+          }
+
+          if (lyricsContainer) {
+            currentParsedLyrics = parseLrc(res.syncedLyrics);
+            renderSyncedLyrics(currentParsedLyrics, lyricsContainer);
+            const syncBadge = document.getElementById('lyrics-synced-badge');
+            if (syncBadge) syncBadge.classList.remove('hidden');
+          }
+          notify('Караоке сгенерировано нейросетью! ✨', '🎤');
+        } else {
+          throw new Error('Текст не распознан');
+        }
+      } catch (err) {
+        console.error('Whisper transcribe error:', err);
+        const msg = err && err.message ? err.message : String(err || '');
+        notify(`Whisper: ${msg}`, '❌');
+        if (statusLine) {
+          statusLine.textContent = `❌ ${msg}`;
+        }
+      } finally {
+        activeWhisperJobIds.delete(track.id);
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-75');
+          btn.innerHTML = `
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"/></svg>
+            <span>✨ Распознать караоке (Whisper AI)</span>
+          `;
+        }
+        if (plainBtn) {
+          plainBtn.disabled = false;
+          plainBtn.classList.remove('opacity-75');
+          plainBtn.innerHTML = `<span>✨ Создать караоке-тайминги (AI)</span>`;
+        }
+      }
+    }
+    window.startWhisperTranscription = startWhisperTranscription;
+
 
 
 
@@ -34314,6 +34635,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
         <div class="space-y-4 px-4 py-8 select-text max-w-2xl mx-auto">
+          <div class="flex items-center justify-between pb-3 border-b border-white/10 select-none">
+            <span class="text-xs text-neutral-400 font-medium">Текст без таймингов</span>
+            <button id="btn-plain-whisper-transcribe" onclick="startWhisperTranscription()" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-500/30 to-orange-500/30 hover:from-rose-500/50 hover:to-orange-500/50 text-rose-300 border border-rose-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-md">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zm5 9a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21H9v2h6v-2h-2v-2.08A7 7 0 0 0 19 11h-2z"/></svg>
+              <span>✨ Создать караоке-тайминги (AI)</span>
+            </button>
+          </div>
 
 
 
@@ -35977,6 +36305,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+      appConfig.whisper_auto_transcribe = document.getElementById('whisper-auto-toggle')?.checked ?? false;
       appConfig.discord_rpc = document.getElementById('discord-rpc-toggle')?.checked ?? true;
 
 
@@ -36344,9 +36673,15 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
     function openArtistProfileFromCurrentTrack() {
-      const track = currentQueue[currentTrackIndex];
-      if (track && (track.user_id || track.artist)) {
-        openArtistProfile(track.user_id || track.artist);
+      const track = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex];
+      if (!track) return;
+      // On SoundCloud, user_id is the uploader's numeric account ID (often a random
+      // fan or repost account with no relation to the real artist). If the track has a known
+      // artist name, prioritize searching by artist so we land on the verified official artist profile.
+      if (track.artist && track.artist !== 'Unknown Artist' && track.artist !== 'SoundCloud') {
+        openArtistProfile(track.artist);
+      } else if (track.user_id) {
+        openArtistProfile(track.user_id);
       }
     }
 
@@ -36449,12 +36784,15 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       tracks.forEach((t, idx) => {
         const item = document.createElement('div');
-        const isCurrent = currentQueue[currentTrackIndex] && String(currentQueue[currentTrackIndex].id) === String(t.id);
+        const isCurrent = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex] && String(currentQueue[currentTrackIndex].id) === String(t.id);
         const isThisPlaying = isCurrent && isPlaying;
         const isLiked = t.liked === true || (Array.isArray(allTracks) && allTracks.some(x => String(x.id) === String(t.id) && x.liked !== false));
         const accent = currentAccent || '#ff5500';
 
-        item.className = `flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition cursor-pointer group ${isCurrent ? 'bg-white/[0.07] border border-white/10' : ''}`;
+        item.className = `artist-track-item flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition cursor-pointer group ${isCurrent ? 'bg-white/[0.07] border border-white/10' : ''}`;
+        item.dataset.trackId = String(t.id);
+        item.dataset.trackIndex = String(idx);
+
         item.onclick = (e) => {
           if (e.target.closest('.search-like-btn')) return;
           currentPlayingAlbumUrl = null;
@@ -36464,7 +36802,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
         item.innerHTML = `
           <div class="flex items-center gap-3.5 min-w-0 flex-1">
-            <div class="w-6 text-center text-xs text-neutral-500 font-medium shrink-0 flex items-center justify-center">
+            <div class="artist-track-num w-6 text-center text-xs text-neutral-500 font-medium shrink-0 flex items-center justify-center">
               ${isThisPlaying ? `
                 <div class="flex items-end justify-center gap-[2px] h-4">
                   <span class="artist-wave-bar"></span>
@@ -36478,7 +36816,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
             </div>
             <div class="min-w-0 flex-1 pr-2">
               <div class="flex items-center gap-1.5">
-                <span class="text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
+                <span class="artist-track-title text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
                 <span class="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">SC</span>
               </div>
               <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist || 'Unknown Artist'}</div>
@@ -36512,9 +36850,48 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     function syncArtistTracksState(playing = isPlaying) {
       const container = document.getElementById('artist-tracks-list');
       if (!container) return;
-      const waveBars = container.querySelectorAll('.artist-wave-bar');
-      waveBars.forEach(b => {
-        b.style.animationPlayState = playing ? 'running' : 'paused';
+      const currentTrack = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex];
+      const currentId = currentTrack ? String(currentTrack.id) : null;
+      const rows = container.querySelectorAll('.artist-track-item');
+      rows.forEach(row => {
+        const rowId = row.dataset.trackId;
+        const rowIdx = parseInt(row.dataset.trackIndex, 10);
+        const isCurrent = Boolean(currentId && rowId && currentId === rowId);
+        const isThisPlaying = isCurrent && playing;
+
+        if (isCurrent) {
+          row.classList.add('bg-white/[0.07]', 'border', 'border-white/10');
+        } else {
+          row.classList.remove('bg-white/[0.07]', 'border', 'border-white/10');
+        }
+
+        const titleEl = row.querySelector('.artist-track-title');
+        if (titleEl) {
+          if (isCurrent) {
+            titleEl.classList.add('text-rose-400');
+            titleEl.classList.remove('text-white', 'group-hover:text-white');
+            titleEl.style.color = 'var(--accent)';
+          } else {
+            titleEl.classList.remove('text-rose-400');
+            titleEl.classList.add('text-white', 'group-hover:text-white');
+            titleEl.style.color = '';
+          }
+        }
+
+        const numCol = row.querySelector('.artist-track-num');
+        if (numCol) {
+          if (isCurrent) {
+            numCol.innerHTML = `
+              <div class="flex items-end justify-center gap-[2px] h-4">
+                <span class="artist-wave-bar" style="animation-play-state: ${isThisPlaying ? 'running' : 'paused'};"></span>
+                <span class="artist-wave-bar" style="animation-play-state: ${isThisPlaying ? 'running' : 'paused'};"></span>
+                <span class="artist-wave-bar" style="animation-play-state: ${isThisPlaying ? 'running' : 'paused'};"></span>
+              </div>
+            `;
+          } else {
+            numCol.innerHTML = `<span>${rowIdx + 1}</span>`;
+          }
+        }
       });
     }
 

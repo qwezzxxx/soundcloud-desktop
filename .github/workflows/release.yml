@@ -92,8 +92,22 @@ jobs:
           # Download yt-dlp if available
           curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe -o dist_portable/yt-dlp.exe || true
 
+          # Download whisper engine and DLLs
+          mkdir -p dist_portable/whisper dist_portable/models
+          curl -sL https://github.com/ggerganov/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip -o whisper.zip || true
+          if [ -f whisper.zip ]; then
+            7z x whisper.zip -o"whisper_tmp" -y || true
+            cp whisper_tmp/Release/whisper-cli.exe dist_portable/whisper/ || true
+            cp whisper_tmp/Release/whisper.dll dist_portable/whisper/ || true
+            cp whisper_tmp/Release/ggml*.dll dist_portable/whisper/ || true
+            rm -rf whisper.zip whisper_tmp
+          fi
+
+          # Download ggml-tiny model for out-of-the-box local karaoke
+          curl -sL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin -o dist_portable/models/ggml-tiny.bin || true
+
           # Create clean portable ZIP
-          (cd dist_portable && 7z a "../ONYX-${TAG}-windows-x64.zip" ONYX.exe yt-dlp.exe)
+          (cd dist_portable && 7z a -r "../ONYX-${TAG}-windows-x64.zip" .)
 
           # Upload portable standalone exe and zip to the release
           gh release upload "$TAG" ONYX.exe onyx-portable.exe "ONYX-${TAG}-windows-x64.zip" --clobber

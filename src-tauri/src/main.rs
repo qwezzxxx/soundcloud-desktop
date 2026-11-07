@@ -21,6 +21,7 @@ fn main() {
     }
 
     std::panic::set_hook(Box::new(|info| {
+        use std::io::Write;
         let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
             s.to_string()
         } else if let Some(s) = info.payload().downcast_ref::<String>() {
@@ -28,8 +29,16 @@ fn main() {
         } else {
             "Unknown panic payload".to_string()
         };
-        let msg = format!("{}: location {:?}", payload, info.location());
-        let _ = std::fs::write("panic.log", &msg);
+        let bt = std::backtrace::Backtrace::force_capture();
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let msg = format!("[{}] PANIC: {} | location {:?}\n{}\n", ts, payload, info.location(), bt);
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("panic.log") {
+            let _ = f.write_all(msg.as_bytes());
+            let _ = f.flush();
+        }
     }));
     app_lib::run();
 }

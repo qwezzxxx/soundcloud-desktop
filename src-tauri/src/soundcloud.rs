@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 
 
-const DEFAULT_CLIENT_ID: &str = "3GKD969NJWD1eB6gvQJN0GnueYbcWszv";
+const DEFAULT_CLIENT_ID: &str = "QhVEWrrJKvW4uSU5u5EoI0FTXYUGzy5k";
 
 
 
@@ -187,6 +187,8 @@ pub struct AppConfig {
 
 
     pub last_tab: Option<String>,
+    #[serde(default)]
+    pub whisper_auto_transcribe: Option<bool>,
 
 
 
@@ -307,6 +309,7 @@ impl Default for AppConfig {
 
 
             last_tab: Some("tab-home".to_string()),
+            whisper_auto_transcribe: Some(false),
 
 
 
@@ -387,6 +390,12 @@ pub struct FormattedAlbum {
 
 
 
+// Cache of YouTube search results: "artist|title|duration_ms" -> (video_id, timestamp).
+// The search step alone costs ~3s (yt-dlp process + network), so remember it per session.
+static YT_SEARCH_CACHE: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, (String, std::time::Instant)>>,
+> = std::sync::OnceLock::new();
+
 pub struct SoundCloudClient {
     http: reqwest::Client,
     config_path: PathBuf,
@@ -435,17 +444,10 @@ impl SoundCloudClient {
 
 
         let http = reqwest::Client::builder()
-
-
-
             .user_agent(USER_AGENT)
-
-
-
+            .connect_timeout(std::time::Duration::from_secs(6))
+            .timeout(std::time::Duration::from_secs(12))
             .build()
-
-
-
             .unwrap_or_default();
 
 
@@ -919,7 +921,7 @@ impl SoundCloudClient {
 
 
 
-            if cid.len() > 10 && cid != "dbe62de186a100fbdf5bcab837fcfbc2" {
+            if cid.len() > 10 && cid != "dbe62de186a100fbdf5bcab837fcfbc2" && cid != "3GKD969NJWD1eB6gvQJN0GnueYbcWszv" {
 
 
 
@@ -1179,23 +1181,20 @@ impl SoundCloudClient {
 
 
 
-        let artist = t.get("user")
-
-
-
+        let uploader = t.get("user")
             .and_then(|u| u.get("username"))
-
-
-
             .and_then(|v| v.as_str())
-
-
-
             .unwrap_or("Unknown Artist")
-
-
-
             .to_string();
+
+        let pub_artist = t.get("publisher_metadata")
+            .and_then(|p| p.get("artist"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        let artist = pub_artist.unwrap_or(uploader);
 
 
 
@@ -1320,6 +1319,242 @@ impl SoundCloudClient {
 
     }
 
+
+    pub fn lyrics_cache_dir(&self) -> PathBuf {
+        let dir = self.config_path.parent().unwrap_or(Path::new(".")).join("lyrics_cache");
+        let _ = fs::create_dir_all(&dir);
+        dir
+    }
+
+    pub fn find_whisper() -> Option<PathBuf> {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                for name in &["whisper-cli.exe", "whisper.exe"] {
+                    let cand = dir.join(name);
+                    if cand.exists() { return Some(cand); }
+                    let cand_sub = dir.join("whisper").join(name);
+                    if cand_sub.exists() { return Some(cand_sub); }
+                }
+            }
+        }
+        for name in &["whisper-cli.exe", "whisper.exe"] {
+            let cand_f = PathBuf::from(r"F:\Soundcloud").join(name);
+            if cand_f.exists() { return Some(cand_f); }
+            let cand_f_sub = PathBuf::from(r"F:\Soundcloud\whisper").join(name);
+            if cand_f_sub.exists() { return Some(cand_f_sub); }
+        }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let base = PathBuf::from(appdata).join("com.onyx.player").join("whisper");
+            for name in &["whisper-cli.exe", "whisper.exe"] {
+                let cand = base.join(name);
+                if cand.exists() { return Some(cand); }
+            }
+        }
+        None
+    }
+
+    pub fn find_whisper_model() -> Option<PathBuf> {
+        let model_names = ["ggml-tiny.bin", "ggml-base.bin", "ggml-small.bin"];
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                for name in &model_names {
+                    let cand = dir.join(name);
+                    if cand.exists() { return Some(cand); }
+                    let cand_m = dir.join("models").join(name);
+                    if cand_m.exists() { return Some(cand_m); }
+                    let cand_w = dir.join("whisper").join(name);
+                    if cand_w.exists() { return Some(cand_w); }
+                }
+            }
+        }
+        for name in &model_names {
+            let cand_f = PathBuf::from(r"F:\Soundcloud\models").join(name);
+            if cand_f.exists() { return Some(cand_f); }
+            let cand_f_root = PathBuf::from(r"F:\Soundcloud").join(name);
+            if cand_f_root.exists() { return Some(cand_f_root); }
+        }
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let base = PathBuf::from(appdata).join("com.onyx.player").join("models");
+            for name in &model_names {
+                let cand = base.join(name);
+                if cand.exists() { return Some(cand); }
+            }
+        }
+        None
+    }
+
+    pub fn find_ffmpeg() -> Option<PathBuf> {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let cand = dir.join("ffmpeg.exe");
+                if cand.exists() { return Some(cand); }
+                let cand_sub = dir.join("whisper").join("ffmpeg.exe");
+                if cand_sub.exists() { return Some(cand_sub); }
+            }
+        }
+        let cand_f = PathBuf::from(r"F:\Soundcloud\whisper\ffmpeg.exe");
+        if cand_f.exists() { return Some(cand_f); }
+        let cand_f2 = PathBuf::from(r"F:\Soundcloud\ffmpeg.exe");
+        if cand_f2.exists() { return Some(cand_f2); }
+
+        if let Ok(p) = std::env::var("LOCALAPPDATA") {
+            let win_get = PathBuf::from(p).join("Microsoft").join("WinGet").join("Packages");
+            if win_get.exists() {
+                if let Ok(entries) = std::fs::read_dir(&win_get) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            let fname = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            if fname.contains("FFmpeg") {
+                                let c1 = path.join("ffmpeg.exe");
+                                if c1.exists() { return Some(c1); }
+                                let c2 = path.join("bin").join("ffmpeg.exe");
+                                if c2.exists() { return Some(c2); }
+                                if let Ok(subs) = std::fs::read_dir(&path) {
+                                    for sub in subs.flatten() {
+                                        let c3 = sub.path().join("bin").join("ffmpeg.exe");
+                                        if c3.exists() { return Some(c3); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub async fn ensure_whisper_model(&self) -> Result<PathBuf, String> {
+        if let Some(m) = Self::find_whisper_model() {
+            return Ok(m);
+        }
+        let base_dir = if let Ok(exe) = std::env::current_exe() {
+            exe.parent().map(|d| d.join("models")).unwrap_or_else(|| PathBuf::from("models"))
+        } else {
+            PathBuf::from("models")
+        };
+        let _ = fs::create_dir_all(&base_dir);
+        let target = base_dir.join("ggml-tiny.bin");
+        let url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin";
+        let res = self.http.get(url).send().await.map_err(|e| format!("Failed to download Whisper model: {}", e))?;
+        if !res.status().is_success() {
+            return Err(format!("Whisper model download returned HTTP {}", res.status()));
+        }
+        let bytes = res.bytes().await.map_err(|e| format!("Failed to read Whisper model bytes: {}", e))?;
+        fs::write(&target, &bytes).map_err(|e| format!("Failed to write Whisper model: {}", e))?;
+        Ok(target)
+    }
+
+    pub async fn transcribe_audio_stream(&self, track_id: &str, stream_url: &str) -> Result<Value, String> {
+        let clean_id: String = track_id.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect();
+        if clean_id.is_empty() {
+            return Err("Invalid track id".to_string());
+        }
+
+        // 1. Instant Cache hit (0 ms)
+        let cache_file = self.lyrics_cache_dir().join(format!("{}.lrc", clean_id));
+        if cache_file.exists() {
+            if let Ok(content) = fs::read_to_string(&cache_file) {
+                if content.trim().len() > 10 {
+                    let plain = content.lines()
+                        .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
+                        .filter(|l| !l.is_empty() && !l.starts_with("[by:"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    return Ok(serde_json::json!({
+                        "syncedLyrics": content,
+                        "plainLyrics": plain,
+                        "isAi": true
+                    }));
+                }
+            }
+        }
+
+        let whisper_exe = Self::find_whisper().ok_or_else(|| "Движок Whisper не найден (положите whisper-cli.exe в папку whisper)".to_string())?;
+        let model_path = self.ensure_whisper_model().await?;
+        let ffmpeg_exe = Self::find_ffmpeg().ok_or_else(|| "FFmpeg не найден для аудио-конвертации".to_string())?;
+
+        let temp_dir = std::env::temp_dir();
+        let temp_wav = temp_dir.join(format!("onyx_whisper_{}.wav", clean_id));
+        let temp_out_base = temp_dir.join(format!("onyx_whisper_out_{}", clean_id));
+        let temp_lrc = temp_dir.join(format!("onyx_whisper_out_{}.lrc", clean_id));
+
+        // 2. Convert stream into 16kHz mono WAV using ffmpeg
+        let mut ff_cmd = tokio::process::Command::new(&ffmpeg_exe);
+        ff_cmd.args([
+            "-headers", "Origin: https://soundcloud.com\r\nReferer: https://soundcloud.com/\r\n",
+            "-i", stream_url,
+            "-t", "360",
+            "-ar", "16000",
+            "-ac", "1",
+            temp_wav.to_str().unwrap(),
+            "-y",
+        ]);
+        #[cfg(windows)]
+        ff_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        let ff_status = tokio::time::timeout(std::time::Duration::from_secs(35), ff_cmd.status()).await
+            .map_err(|_| "Таймаут скачивания аудио для распознавания (35 сек)".to_string())?
+            .map_err(|e| format!("Ошибка запуска ffmpeg: {}", e))?;
+
+        if !ff_status.success() || !temp_wav.exists() {
+            let _ = fs::remove_file(&temp_wav);
+            return Err("Не удалось подготовить аудиофайл для Whisper".to_string());
+        }
+
+        // 3. Run Whisper CLI with -olrc
+        let mut wh_cmd = tokio::process::Command::new(&whisper_exe);
+        wh_cmd.args([
+            "-m", model_path.to_str().unwrap(),
+            "-f", temp_wav.to_str().unwrap(),
+            "-olrc",
+            "-of", temp_out_base.to_str().unwrap(),
+            "-l", "auto",
+            "-t", "4",
+        ]);
+        #[cfg(windows)]
+        wh_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        let wh_status = tokio::time::timeout(std::time::Duration::from_secs(90), wh_cmd.status()).await
+            .map_err(|_| "Таймаут распознавания Whisper (90 сек)".to_string())?
+            .map_err(|e| format!("Ошибка запуска Whisper: {}", e))?;
+
+        let _ = fs::remove_file(&temp_wav);
+
+        if !wh_status.success() || !temp_lrc.exists() {
+            let _ = fs::remove_file(&temp_lrc);
+            return Err("Whisper не смог распознать текст в этом треке".to_string());
+        }
+
+        // 4. Read generated .lrc and cache
+        let raw_lrc = fs::read_to_string(&temp_lrc).map_err(|e| format!("Не удалось прочесть результат Whisper: {}", e))?;
+        let _ = fs::remove_file(&temp_lrc);
+
+        let clean_lrc = raw_lrc.lines()
+            .filter(|l| !l.starts_with("[by:whisper.cpp]"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if clean_lrc.trim().is_empty() {
+            return Err("В треке не обнаружено разборчивого текста".to_string());
+        }
+
+        let _ = fs::write(&cache_file, &clean_lrc);
+
+        let plain = clean_lrc.lines()
+            .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
+            .filter(|l| !l.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Ok(serde_json::json!({
+            "syncedLyrics": clean_lrc,
+            "plainLyrics": plain,
+            "isAi": true
+        }))
+    }
+
     pub fn format_artist(u: &Value) -> FormattedArtist {
         let id = u.get("id").cloned().unwrap_or(Value::Null);
         let username = u.get("username").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
@@ -1442,7 +1677,7 @@ impl SoundCloudClient {
             format!("https://api-v2.soundcloud.com/users/{}?client_id={}", clean, client_id)
         } else {
             format!(
-                "https://api-v2.soundcloud.com/search/users?q={}&limit=1&client_id={}",
+                "https://api-v2.soundcloud.com/search/users?q={}&limit=5&client_id={}",
                 urlencoding_simple(clean),
                 client_id
             )
@@ -1460,8 +1695,32 @@ impl SoundCloudClient {
             } else {
                 let collection = data.get("collection").and_then(|v| v.as_array());
                 if let Some(arr) = collection {
-                    if let Some(first) = arr.first() {
-                        return Ok(Self::format_artist(first));
+                    if !arr.is_empty() {
+                        let clean_lower = clean.to_lowercase();
+                        // 1. Exact verified match (e.g. "The Smiths", "Alex G", "MF Doom")
+                        let best = arr.iter().find(|u| {
+                            let un = u.get("username").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            let pl = u.get("permalink").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            let ver = u.get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
+                            ver && (un == clean_lower || pl == clean_lower)
+                        })
+                        // 2. Exact username / permalink match
+                        .or_else(|| arr.iter().find(|u| {
+                            let un = u.get("username").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            let pl = u.get("permalink").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                            un == clean_lower || pl == clean_lower
+                        }))
+                        // 3. Any verified artist
+                        .or_else(|| arr.iter().find(|u| {
+                            u.get("verified").and_then(|v| v.as_bool()).unwrap_or(false)
+                        }))
+                        // 4. Fall back to user with the highest follower count
+                        .or_else(|| arr.iter().max_by_key(|u| {
+                            u.get("followers_count").and_then(|v| v.as_u64()).unwrap_or(0)
+                        }))
+                        .unwrap_or(&arr[0]);
+
+                        return Ok(Self::format_artist(best));
                     }
                 }
                 Err(format!("Artist '{}' not found", clean))
@@ -1482,6 +1741,35 @@ impl SoundCloudClient {
             user_id.to_string().trim_matches('"').to_string()
         };
         let lim = limit.unwrap_or(50);
+
+        // 1. Try /toptracks first so "Популярные треки" actually shows the artist's real top hits
+        let toptracks_url = format!(
+            "https://api-v2.soundcloud.com/users/{}/toptracks?limit={}&client_id={}",
+            id_str,
+            lim,
+            client_id
+        );
+        let mut req = self.http.get(&toptracks_url);
+        if let Some(auth) = self.auth_header(&cfg) {
+            req = req.header("Authorization", auth);
+        }
+        if let Ok(res) = req.send().await {
+            if res.status().is_success() {
+                if let Ok(data) = res.json::<Value>().await {
+                    let mut tracks = Vec::new();
+                    if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                        for t in arr {
+                            tracks.push(Self::format_track(t, false));
+                        }
+                    }
+                    if !tracks.is_empty() {
+                        return Ok(tracks);
+                    }
+                }
+            }
+        }
+
+        // 2. Fall back to /tracks if /toptracks is empty or unsupported
         let url = format!(
             "https://api-v2.soundcloud.com/users/{}/tracks?limit={}&client_id={}",
             id_str,
@@ -1676,21 +1964,6 @@ impl SoundCloudClient {
                             }
                         }
                     }
-
-                    if pages == 1 && !existing_cached.is_empty() && !all_tracks.is_empty() {
-                        let has_known = all_tracks.iter().any(|t| existing_cached.iter().any(|c| c.id == t.id));
-                        if has_known {
-                            let mut merged = Vec::new();
-                            for t in &all_tracks {
-                                if !existing_cached.iter().any(|c| c.id == t.id) {
-                                    merged.push(t.clone());
-                                }
-                            }
-                            merged.extend(existing_cached.clone());
-                            all_tracks = merged;
-                            break;
-                        }
-                    }
                 } else {
                     break;
                 }
@@ -1711,35 +1984,6 @@ impl SoundCloudClient {
         }
 
         if !all_tracks.is_empty() {
-            // Preserve pending local likes that have not synced to SoundCloud yet
-            let local = self.load_local_likes();
-            let mut pending_local = Vec::new();
-            for loc in local {
-                let loc_id = if let Some(n) = loc.id.as_i64() {
-                    n.to_string()
-                } else if let Some(s) = loc.id.as_str() {
-                    s.to_string()
-                } else {
-                    loc.id.to_string()
-                };
-                let exists_in_remote = all_tracks.iter().any(|r| {
-                    let rid = if let Some(n) = r.id.as_i64() {
-                        n.to_string()
-                    } else if let Some(s) = r.id.as_str() {
-                        s.to_string()
-                    } else {
-                        r.id.to_string()
-                    };
-                    rid == loc_id
-                });
-                if !exists_in_remote && loc.liked {
-                    pending_local.push(loc);
-                }
-            }
-            if !pending_local.is_empty() {
-                pending_local.extend(all_tracks);
-                all_tracks = pending_local;
-            }
             let _ = self.save_local_likes(&all_tracks);
             Ok(all_tracks)
         } else if !existing_cached.is_empty() {
@@ -1975,6 +2219,29 @@ impl SoundCloudClient {
             format!("ytsearch8:{}", clean_title)
         };
 
+        let cache_key = format!(
+            "{}|{}|{}",
+            clean_artist.to_lowercase(),
+            clean_title.to_lowercase(),
+            duration_ms
+        );
+        let yt_cache = YT_SEARCH_CACHE
+            .get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+        if let Some((cached_id, cached_at)) = yt_cache
+            .lock()
+            .ok()
+            .and_then(|c| c.get(&cache_key).cloned())
+        {
+            if cached_at.elapsed() < std::time::Duration::from_secs(6 * 3600) {
+                if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&cached_id).await {
+                    return Some(format!(
+                        "http://127.0.0.1:49221/stream?url={}",
+                        urlencoding_simple(&raw_url)
+                    ));
+                }
+            }
+        }
+
         let yt_bin = Self::find_yt_dlp();
         let mut search_cmd = tokio::process::Command::new(&yt_bin);
         search_cmd.args([
@@ -2071,6 +2338,11 @@ impl SoundCloudClient {
                     }
                 }
 
+                if let Some(id_ref) = best_id.as_ref() {
+                    if let Ok(mut c) = yt_cache.lock() {
+                        c.insert(cache_key.clone(), (id_ref.clone(), std::time::Instant::now()));
+                    }
+                }
                 if let Some(id) = best_id {
                     if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&id).await {
                         let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&raw_url));
@@ -2261,11 +2533,11 @@ impl SoundCloudClient {
 
 
 
-                    let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&audio_url));
+                    // resolve_official_youtube_stream already returns a 127.0.0.1 proxy URL:
 
 
 
-                    return Ok(proxied);
+                    return Ok(audio_url);
 
 
 
@@ -2313,11 +2585,11 @@ impl SoundCloudClient {
 
 
 
-                    let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&audio_url));
+                    // resolve_official_youtube_stream already returns a 127.0.0.1 proxy URL:
 
 
 
-                    return Ok(proxied);
+                    return Ok(audio_url);
 
 
 
@@ -2438,17 +2710,12 @@ impl SoundCloudClient {
 
 
                 if !res.status().is_success() {
-
-
-
-                    last_err = format!("HTTP {}", res.status());
-
-
-
+                    let st = res.status().as_u16();
+                    last_err = format!("HTTP {}", st);
+                    if st == 401 || st == 403 {
+                        let _ = self.refresh_dynamic_client_id().await;
+                    }
                     continue;
-
-
-
                 }
 
 

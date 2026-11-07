@@ -43,3 +43,8 @@ Thumbs.db
 .idea/
 
 custom_wallpaper.dat
+
+# Local Whisper Engine, Models & Lyrics Cache
+whisper/
+models/
+lyrics_cache/
