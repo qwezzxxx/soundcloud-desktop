@@ -12236,6 +12236,7 @@
     let isRepeat = false;
     let repeatMode = "off"; // "off" | "all" | "one" (from upstream donor)
     let originalQueue = null; // Preserves un-shuffled playlist order
+    const shufflePlayedTrackIds = new Set();
 
 
 
@@ -17277,6 +17278,7 @@
           activeTab: localStorage.getItem('sc_desktop_active_tab') || 'tab-home',
           volume: volumeSlider ? parseInt(volumeSlider.value) : (appConfig && appConfig.volume !== undefined ? appConfig.volume : 80),
           isShuffle: Boolean(isShuffle),
+          shufflePlayedTrackIds: isShuffle ? Array.from(shufflePlayedTrackIds).slice(-200) : [],
           isRepeat: Boolean(isRepeat),
           isWaveActive: Boolean(window.isWaveActive),
           waveCurrentMood: window.waveCurrentMood || 'all',
@@ -17348,6 +17350,10 @@
         // Restore Shuffle & Repeat
         if (session.isShuffle !== undefined) {
           isShuffle = Boolean(session.isShuffle);
+          shufflePlayedTrackIds.clear();
+          if (isShuffle && Array.isArray(session.shufflePlayedTrackIds)) {
+            session.shufflePlayedTrackIds.forEach(id => shufflePlayedTrackIds.add(String(id)));
+          }
           if (typeof syncShuffleRepeatStyles === 'function') syncShuffleRepeatStyles();
         }
         if (session.isRepeat !== undefined) {
@@ -17377,6 +17383,11 @@
             allTracks = [...session.queue];
           }
           currentTrackIndex = (session.trackIndex >= 0 && session.trackIndex < currentQueue.length) ? session.trackIndex : 0;
+          if (isShuffle && shufflePlayedTrackIds.size === 0) {
+            currentQueue.slice(0, currentTrackIndex + 1).forEach(track => {
+              if (track?.id != null) shufflePlayedTrackIds.add(String(track.id));
+            });
+          }
           updateQueueDrawer();
           if (typeof renderWaveTrackList === 'function' && session.isWaveActive) {
             renderWaveTrackList();
@@ -17471,14 +17482,15 @@
           }
           if (isShuffle) {
             originalQueue = [...newQueue];
-            const chosenTrack = newQueue[index];
-            const remaining = newQueue.filter((_, i) => i !== index);
-            shuffleArray(remaining);
-            currentQueue = [chosenTrack, ...remaining];
-            index = 0;
+            currentQueue = [...newQueue];
+            shufflePlayedTrackIds.clear();
+            for (let i = 0; i <= index && i < newQueue.length; i++) {
+              if (newQueue[i]?.id != null) shufflePlayedTrackIds.add(String(newQueue[i].id));
+            }
           } else {
             currentQueue = [...newQueue];
             originalQueue = null;
+            shufflePlayedTrackIds.clear();
           }
         }
 
@@ -17486,6 +17498,7 @@
         currentTrackIndex = index;
         const track = currentQueue[currentTrackIndex];
         if (!track) return;
+        if (isShuffle && track.id != null) shufflePlayedTrackIds.add(String(track.id));
         currentlyPlayingTrackId = track.id;
         const requestId = ++currentPlayRequestId;
 
@@ -17832,6 +17845,23 @@
     }
     function playNextTrack() {
       if (!currentQueue || currentQueue.length === 0) return;
+      if (isShuffle) {
+        const candidates = [];
+        currentQueue.forEach((track, index) => {
+          if (index !== currentTrackIndex && track?.id != null && !shufflePlayedTrackIds.has(String(track.id))) {
+            candidates.push(index);
+          }
+        });
+        if (candidates.length > 0) {
+          const nextIdx = candidates[Math.floor(Math.random() * candidates.length)];
+          playTrack(nextIdx);
+          return;
+        }
+        if (isWaveActive && typeof checkWaveReplenish === 'function') checkWaveReplenish();
+        isPlaying = false;
+        syncPlayPauseState(false);
+        return;
+      }
       let nextIdx = currentTrackIndex + 1;
       if (nextIdx >= currentQueue.length) {
         if (isWaveActive) {
@@ -19298,11 +19328,12 @@
       if (isShuffle) {
         if (currentQueue && currentQueue.length > 1) {
           originalQueue = [...currentQueue];
-          const playedCount = Math.max(0, Math.min(currentQueue.length, currentTrackIndex + 1));
-          const playedAndCurrent = currentQueue.slice(0, playedCount);
-          const upcomingTracks = currentQueue.slice(playedCount);
-          shuffleArray(upcomingTracks);
-          currentQueue = [...playedAndCurrent, ...upcomingTracks];
+        }
+        shufflePlayedTrackIds.clear();
+        if (currentQueue) {
+          currentQueue.slice(0, currentTrackIndex + 1).forEach(track => {
+            if (track?.id != null) shufflePlayedTrackIds.add(String(track.id));
+          });
         }
         notify("Перемешивание включено", "🔀");
       } else {
@@ -19313,6 +19344,7 @@
           currentTrackIndex = origIdx >= 0 ? origIdx : 0;
           originalQueue = null;
         }
+        shufflePlayedTrackIds.clear();
         notify("Перемешивание выключено", "➡️");
       }
       syncShuffleRepeatStyles();
@@ -22183,12 +22215,16 @@
         notify("В потоке пока недостаточно треков для перемешивания", "ℹ️");
         return;
       }
-      const curTrack = currentQueue[currentTrackIndex];
-      const remainingTracks = currentQueue.filter((_, idx) => idx !== currentTrackIndex);
-      shuffleArray(remainingTracks);
-      currentQueue = [curTrack, ...remainingTracks];
-      currentTrackIndex = 0;
+      if (isShuffle) {
+        notify("Перемешивание Волны уже включено", "🔀");
+        return;
+      }
+      originalQueue = [...currentQueue];
       isShuffle = true;
+      shufflePlayedTrackIds.clear();
+      if (currentQueue[currentTrackIndex]?.id != null) {
+        shufflePlayedTrackIds.add(String(currentQueue[currentTrackIndex].id));
+      }
       syncShuffleRepeatStyles();
       renderWaveTrackList();
       if (typeof updateQueueDrawer === 'function') updateQueueDrawer();
@@ -22374,6 +22410,7 @@
         // Take 25-30 diverse tracks
         const finalWaveTracks = [seed, ...candidatePool.slice(0, 28)];
         currentQueue = finalWaveTracks;
+        if (isShuffle) originalQueue = [...finalWaveTracks];
         currentTrackIndex = 0;
 
         updateQueueDrawer();
@@ -22388,7 +22425,9 @@
     // Endless auto-replenish for My Wave with diverse recommendations
     async function checkWaveReplenish() {
       if (!isWaveActive || isWaveLoadingMore || !currentQueue || currentQueue.length === 0) return;
-      const remaining = currentQueue.length - currentTrackIndex;
+      const remaining = isShuffle
+        ? currentQueue.filter(track => track?.id != null && !shufflePlayedTrackIds.has(String(track.id))).length
+        : currentQueue.length - currentTrackIndex;
       if (remaining <= 4) {
         isWaveLoadingMore = true;
         try {
@@ -22440,7 +22479,9 @@
 
           if (newBatch.length > 0) {
             shuffleArray(newBatch);
-            currentQueue = [...currentQueue, ...newBatch.slice(0, 18)];
+            const replenishedTracks = newBatch.slice(0, 18);
+            currentQueue = [...currentQueue, ...replenishedTracks];
+            if (isShuffle && originalQueue) originalQueue = [...originalQueue, ...replenishedTracks];
             updateQueueDrawer();
             renderWaveTrackList();
             console.log(`[Моя Волна] Поток пополнен ${newBatch.length} новыми треками`);
