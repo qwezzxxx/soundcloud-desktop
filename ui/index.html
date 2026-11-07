@@ -18263,6 +18263,11 @@
     function playNextTrack() {
       if (!currentQueue || currentQueue.length === 0) return;
       let nextIdx = currentTrackIndex + 1;
+      if (isShuffle && nextIdx < currentQueue.length) {
+        const remainingCount = currentQueue.length - nextIdx;
+        const selectedIdx = nextIdx + Math.floor(Math.random() * remainingCount);
+        [currentQueue[nextIdx], currentQueue[selectedIdx]] = [currentQueue[selectedIdx], currentQueue[nextIdx]];
+      }
       if (nextIdx >= currentQueue.length) {
         if (isWaveActive) {
           if (typeof checkWaveReplenish === 'function') {
