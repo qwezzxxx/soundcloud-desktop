@@ -12000,7 +12000,12 @@
 
 
 
-      updateDiscord: (title, artist, cover, isPlaying) => api.invoke('update_discord_activity', { title, artist, cover, isPlaying }),
+      updateDiscord: (title, artist, cover, isPlaying) => api.invoke('update_discord_activity', {
+        title: String(title || ''),
+        artist: String(artist || ''),
+        cover: String(cover || ''),
+        isPlaying: Boolean(isPlaying)
+      }),
 
 
 
