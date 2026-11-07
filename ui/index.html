@@ -19735,11 +19735,11 @@
       if (isShuffle) {
         if (currentQueue && currentQueue.length > 1) {
           originalQueue = [...currentQueue];
-          const curTrack = currentQueue[currentTrackIndex];
-          const remainingTracks = currentQueue.filter((_, idx) => idx !== currentTrackIndex);
-          shuffleArray(remainingTracks);
-          currentQueue = [curTrack, ...remainingTracks];
-          currentTrackIndex = 0;
+          const playedCount = Math.max(0, Math.min(currentQueue.length, currentTrackIndex + 1));
+          const playedAndCurrent = currentQueue.slice(0, playedCount);
+          const upcomingTracks = currentQueue.slice(playedCount);
+          shuffleArray(upcomingTracks);
+          currentQueue = [...playedAndCurrent, ...upcomingTracks];
         }
         notify("Перемешивание включено", "🔀");
       } else {
