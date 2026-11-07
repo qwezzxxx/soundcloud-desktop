@@ -2,6 +2,8 @@ mod auth_server;
 mod discord;
 mod soundcloud;
 mod multi_providers;
+#[cfg(all(windows, target_arch = "x86_64"))]
+mod updater;
 use multi_providers::MultiProviders;
 
 use discord::DiscordManager;
@@ -743,6 +745,9 @@ pub fn run() {
     tauri::Builder::default()
         .manage(state)
         .setup(move |app| {
+            #[cfg(all(windows, target_arch = "x86_64"))]
+            updater::start(app.handle())?;
+
             use tauri::Manager;
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_background_color(Some(bg_color));
