@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 
 
 
@@ -357,6 +358,101 @@ pub struct FormattedTrack {
     pub user_avatar: Option<String>,
 }
 
+#[derive(Default, Serialize, Deserialize)]
+struct LikesCache {
+    account: Option<String>,
+    tracks: Vec<FormattedTrack>,
+    #[serde(default)]
+    changes: HashMap<String, Vec<FormattedTrack>>,
+}
+
+impl LikesCache {
+    fn track_id(id: &Value) -> String {
+        id.as_str().map(str::to_owned).unwrap_or_else(|| id.to_string())
+    }
+
+    fn visible_tracks(&self, account: &str) -> Vec<FormattedTrack> {
+        let tracks = if self.account.as_deref().is_none_or(|owner| owner == account) {
+            self.tracks.as_slice()
+        } else {
+            &[]
+        };
+        let Some(changes) = self.changes.get(account) else {
+            return tracks.to_vec();
+        };
+        let changed_ids: HashSet<_> = changes.iter().map(|track| Self::track_id(&track.id)).collect();
+        changes.iter().filter(|track| track.liked).cloned().chain(
+            tracks.iter().filter(|track| !changed_ids.contains(&Self::track_id(&track.id))).cloned()
+        ).collect()
+    }
+
+    fn update_remote(&mut self, tracks: Vec<FormattedTrack>, account: &str, complete: bool, reconcile: bool) {
+        if reconcile {
+            if let Some(changes) = self.changes.get_mut(account) {
+                let remote_ids: HashSet<_> = tracks.iter().map(|track| Self::track_id(&track.id)).collect();
+                changes.retain(|track| {
+                    let remote_liked = remote_ids.contains(&Self::track_id(&track.id));
+                    if track.liked { !remote_liked } else { remote_liked || !complete }
+                });
+            }
+        }
+        self.account = Some(account.to_owned());
+        self.tracks = tracks;
+    }
+}
+
+#[cfg(test)]
+mod likes_tests {
+    use super::*;
+
+    fn track(id: Value, liked: bool) -> FormattedTrack {
+        serde_json::from_value(serde_json::json!({ "id": id, "title": "Track", "liked": liked })).unwrap()
+    }
+
+    #[test]
+    fn remote_refresh_preserves_unconfirmed_changes() {
+        let mut cache = LikesCache::default();
+        cache.changes.insert("account".to_string(), vec![
+            track(Value::from(1), true),
+            track(Value::from("2"), false),
+        ]);
+        cache.update_remote(vec![track(Value::from(2), true)], "account", true, true);
+        let visible = cache.visible_tracks("account");
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].id, 1);
+        assert!(cache.visible_tracks("other-account").is_empty());
+
+        cache.update_remote(vec![track(Value::from("1"), true)], "account", false, true);
+        assert_eq!(cache.changes["account"].len(), 1);
+        cache.update_remote(vec![], "account", true, false);
+        assert_eq!(cache.changes["account"].len(), 1);
+        cache.update_remote(vec![], "account", true, true);
+        assert!(cache.changes["account"].is_empty());
+    }
+
+    #[tokio::test]
+    async fn guest_like_and_unlike_survive_reload_with_a_legacy_cache() {
+        let folder = std::env::temp_dir().join(format!("onyx-likes-test-{}", std::process::id()));
+        fs::create_dir(&folder).unwrap();
+        let config_path = folder.join("config.json");
+        let legacy_path = folder.join("likes.json");
+        let track = track(Value::from(1), true);
+        fs::write(&legacy_path, serde_json::to_vec(&[&track]).unwrap()).unwrap();
+
+        let client = SoundCloudClient::new(&config_path);
+        assert_eq!(client.load_local_likes().len(), 1);
+        assert_eq!(client.toggle_like(track.clone(), false).await.unwrap(), None);
+        let restarted = SoundCloudClient::new(&config_path);
+        assert!(restarted.load_local_likes().is_empty());
+        assert_eq!(restarted.toggle_like(track, true).await.unwrap(), None);
+        assert_eq!(SoundCloudClient::new(&config_path).load_local_likes().len(), 1);
+
+        fs::remove_file(legacy_path).unwrap();
+        fs::remove_file(folder.join("likes-state.json")).unwrap();
+        fs::remove_dir(folder).unwrap();
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FormattedArtist {
     pub id: Value,
@@ -400,6 +496,9 @@ pub struct SoundCloudClient {
     http: reqwest::Client,
     config_path: PathBuf,
     like_rate_limited_until: std::sync::Mutex<Option<std::time::Instant>>,
+    likes_revision: std::sync::Mutex<u64>,
+    like_requests: tokio::sync::Mutex<()>,
+    likes_refresh: tokio::sync::Mutex<()>,
 }
 
 
@@ -456,6 +555,9 @@ impl SoundCloudClient {
             http,
             config_path: config_path.as_ref().to_path_buf(),
             like_rate_limited_until: std::sync::Mutex::new(None),
+            likes_revision: std::sync::Mutex::new(0),
+            like_requests: tokio::sync::Mutex::new(()),
+            likes_refresh: tokio::sync::Mutex::new(()),
         }
 
 
@@ -477,31 +579,37 @@ impl SoundCloudClient {
     }
 
     pub fn load_local_likes(&self) -> Vec<FormattedTrack> {
-        let l_path = self.likes_path();
-        if let Ok(content) = fs::read_to_string(&l_path) {
-            if let Ok(tracks) = serde_json::from_str::<Vec<FormattedTrack>>(&content) {
-                if !tracks.is_empty() {
-                    return tracks;
-                }
-            }
-        }
+        let _guard = self.likes_revision.lock().unwrap();
         let cfg = self.load_config();
-        cfg.cached_likes.unwrap_or_default()
+        self.load_likes_cache(&cfg).visible_tracks(&Self::likes_account(&cfg))
     }
 
-    pub fn save_local_likes(&self, likes: &[FormattedTrack]) -> Result<(), String> {
-        let l_path = self.likes_path();
-        if let Some(parent) = l_path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let json = serde_json::to_string_pretty(likes).map_err(|e| e.to_string())?;
-        let _ = fs::write(&l_path, json);
+    fn likes_account(cfg: &AppConfig) -> String {
+        cfg.user_id.as_ref().filter(|id| !id.is_null())
+            .or_else(|| cfg.user_profile.as_ref().and_then(|profile| profile.get("id")))
+            .map(LikesCache::track_id).unwrap_or_default()
+    }
 
-        // Also update cached_likes in config
-        let mut cfg = self.load_config();
-        cfg.cached_likes = Some(likes.to_vec());
-        let _ = self.save_config(&cfg);
-        Ok(())
+    fn load_likes_cache(&self, cfg: &AppConfig) -> LikesCache {
+        if let Ok(content) = fs::read_to_string(self.likes_path().with_file_name("likes-state.json")) {
+            if let Ok(cache) = serde_json::from_str::<LikesCache>(&content) {
+                return cache;
+            }
+        }
+        if let Ok(content) = fs::read_to_string(self.likes_path()) {
+            if let Ok(tracks) = serde_json::from_str::<Vec<FormattedTrack>>(&content) {
+                return LikesCache { tracks, ..LikesCache::default() };
+            }
+        }
+        LikesCache { tracks: cfg.cached_likes.clone().unwrap_or_default(), ..LikesCache::default() }
+    }
+
+    fn save_likes_cache(&self, cache: &LikesCache) -> Result<(), String> {
+        let l_path = self.likes_path().with_file_name("likes-state.json");
+        let temp_path = l_path.with_extension("json.tmp");
+        let json = serde_json::to_vec(cache).map_err(|e| e.to_string())?;
+        fs::write(&temp_path, json).and_then(|_| fs::rename(&temp_path, &l_path))
+            .map_err(|e| format!("Не удалось сохранить лайки в ONYX: {e}"))
     }
 
     pub fn load_config(&self) -> AppConfig {
@@ -1973,10 +2081,13 @@ impl SoundCloudClient {
 
 
     pub async fn get_liked_tracks(&self, limit: usize) -> Result<Vec<FormattedTrack>, String> {
-        let cfg = self.load_config();
+        let _refresh_guard = self.likes_refresh.lock().await;
+        let (cfg, revision_at_start) = {
+            let revision = self.likes_revision.lock().unwrap();
+            (self.load_config(), *revision)
+        };
         let client_id = self.get_client_id().await;
         let token_opt = self.auth_header(&cfg);
-        let existing_cached = cfg.cached_likes.clone().unwrap_or_default();
 
         // 1. Determine or auto-resolve numeric user ID
         let mut active_user_id = if let Some(ref uid) = cfg.user_id {
@@ -2022,8 +2133,10 @@ impl SoundCloudClient {
 
         let mut all_tracks: Vec<FormattedTrack> = Vec::new();
         let target_limit = if limit == 0 { 500 } else { limit };
+        let mut fetched = false;
+        let mut complete = false;
 
-        for start_url in candidate_endpoints {
+        'endpoints: for start_url in candidate_endpoints {
             all_tracks.clear();
             let mut next_url = Some(start_url);
             let mut pages = 0;
@@ -2046,23 +2159,20 @@ impl SoundCloudClient {
 
                 let res = match req.send().await {
                     Ok(r) => r,
-                    Err(_) => break,
+                    Err(_) => continue 'endpoints,
                 };
 
                 if !res.status().is_success() {
-                    break;
+                    continue 'endpoints;
                 }
 
                 let body: Value = match res.json().await {
                     Ok(j) => j,
-                    Err(_) => break,
+                    Err(_) => continue 'endpoints,
                 };
 
                 let collection = body.get("collection").and_then(|v| v.as_array());
                 if let Some(items) = collection {
-                    if items.is_empty() {
-                        break;
-                    }
                     for item in items {
                         let track_obj = if item.get("track").is_some() {
                             item.get("track").unwrap()
@@ -2078,7 +2188,7 @@ impl SoundCloudClient {
                         }
                     }
                 } else {
-                    break;
+                    continue 'endpoints;
                 }
 
                 next_url = body.get("next_href").and_then(|v| v.as_str()).map(|s| {
@@ -2089,22 +2199,25 @@ impl SoundCloudClient {
                         s.to_string()
                     }
                 });
+                if next_url.is_none() {
+                    complete = true;
+                    break;
+                }
             }
 
-            if !all_tracks.is_empty() {
-                break;
-            }
+            fetched = true;
+            break;
         }
 
-        if !all_tracks.is_empty() {
-            let _ = self.save_local_likes(&all_tracks);
-            Ok(all_tracks)
-        } else if !existing_cached.is_empty() {
-            Ok(existing_cached)
-        } else {
-            let local = self.load_local_likes();
-            Ok(local)
+        let revision = self.likes_revision.lock().unwrap();
+        let current_cfg = self.load_config();
+        let account = Self::likes_account(&current_cfg);
+        let mut cache = self.load_likes_cache(&current_cfg);
+        if fetched && active_user_id == account && current_cfg.oauth_token == cfg.oauth_token {
+            cache.update_remote(all_tracks, &account, complete, *revision == revision_at_start);
+            self.save_likes_cache(&cache)?;
         }
+        Ok(cache.visible_tracks(&account))
     }
 
     pub fn find_yt_dlp() -> std::path::PathBuf {
@@ -3700,19 +3813,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
-        let likes = match self.get_liked_tracks(500).await {
-
-
-
-            Ok(l) if !l.is_empty() => l,
-
-
-
-            _ => updated_cfg.cached_likes.clone().unwrap_or_default(),
-
-
-
-        };
+        let likes = self.get_liked_tracks(500).await.unwrap_or_else(|_| self.load_local_likes());
 
 
 
@@ -3790,138 +3891,87 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         }
     }
 
-    pub async fn toggle_like(&self, track_id: Value, should_like: bool) -> Result<bool, String> {
+    pub async fn toggle_like(&self, mut track: FormattedTrack, should_like: bool) -> Result<Option<String>, String> {
+        let id = LikesCache::track_id(&track.id);
+        if track.id.is_null() || id.is_empty() {
+            return Err("У трека нет идентификатора".to_string());
+        }
+
+        // Preserve the order of consecutive likes and unlikes on SoundCloud.
+        let _request_guard = self.like_requests.lock().await;
+        let cfg = {
+            let mut revision = self.likes_revision.lock().unwrap();
+            let cfg = self.load_config();
+            let mut cache = self.load_likes_cache(&cfg);
+            let account = Self::likes_account(&cfg);
+            cache.account.get_or_insert_with(|| account.clone());
+            let changes = cache.changes.entry(account).or_default();
+            changes.retain(|change| LikesCache::track_id(&change.id) != id);
+            track.liked = should_like;
+            changes.insert(0, track);
+            self.save_likes_cache(&cache)?;
+            *revision += 1;
+            cfg
+        };
+
+        if !id.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Ok(None);
+        }
+        let account = Self::likes_account(&cfg);
+        let Some(saved_token) = self.auth_header(&cfg) else {
+            return Ok((!account.is_empty()).then(|| "Для синхронизации войдите в SoundCloud".to_string()));
+        };
+        if self.is_like_rate_limited() {
+            return Ok(Some("SoundCloud временно ограничил лайки (429)".to_string()));
+        }
+
+        let (user_id, token) = match self.ensure_active_user().await {
+            Ok(session) => session,
+            Err(err) => return Ok(Some(err)),
+        };
+        if saved_token != token || (!account.is_empty() && account != user_id.to_string()) {
+            return Ok(Some("Сессия SoundCloud изменилась".to_string()));
+        }
+
         let client_id = self.get_client_id().await;
-
-        let id_str = if let Some(n) = track_id.as_i64() {
-            n.to_string()
-        } else if let Some(s) = track_id.as_str() {
-            s.to_string()
+        let url = format!(
+            "https://api-v2.soundcloud.com/users/{user_id}/track_likes/{id}?client_id={client_id}"
+        );
+        let request = if should_like {
+            self.http.put(&url).body("")
         } else {
-            track_id.to_string().trim_matches(&['"', '\''][..]).to_string()
+            self.http.delete(&url)
         };
+        let response = request
+            .header("Authorization", &token)
+            .header("Origin", "https://soundcloud.com")
+            .header("Referer", "https://soundcloud.com/")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .send()
+            .await;
 
-        let mut success = false;
-        let mut last_status = 0u16;
-        let mut last_err = String::new();
-
-        use std::io::Write;
-        let log_path = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("debug_like.log")))
-            .unwrap_or_else(|| std::path::PathBuf::from("debug_like.log"));
-
-        let log_msg = |msg: &str| {
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
-                let _ = writeln!(f, "[DEBUG] {}", msg);
-            }
+        let Ok(response) = response else {
+            return Ok(Some("SoundCloud недоступен".to_string()));
         };
-
-        log_msg(&format!("toggle_like called: track_id={}, should_like={}", id_str, should_like));
-
-        // 1. Send to SoundCloud API v2 if logged in
-        if should_like && self.is_like_rate_limited() {
-            log_msg("Rate limit cooldown 429 active; skipping network PUT to protect SoundCloud account");
-            last_status = 429;
-        } else {
-            match self.ensure_active_user().await {
-                Ok((user_id, token)) => {
-                    log_msg(&format!("ensure_active_user OK: user_id={}, token_len={}", user_id, token.len()));
-
-                    let candidate_urls = if should_like {
-                        vec![
-                            ("PUT", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                        ]
-                    } else {
-                        vec![
-                            ("DELETE", format!("https://api-v2.soundcloud.com/users/{}/track_likes/{}?client_id={}", user_id, id_str, client_id)),
-                        ]
-                    };
-
-                    for (method, url) in candidate_urls {
-                        log_msg(&format!("Trying {} {}", method, url));
-                        let mut req = match method {
-                            "PUT" => self.http.put(&url).header("Content-Length", "0").body(""),
-                            "DELETE" => self.http.delete(&url),
-                            _ => continue,
-                        };
-
-                        req = req
-                            .header("Authorization", &token)
-                            .header("Origin", "https://soundcloud.com")
-                            .header("Referer", "https://soundcloud.com/")
-                            .header("User-Agent", USER_AGENT)
-                            .header("Accept", "application/json, text/javascript, */*; q=0.01");
-
-                        match req.send().await {
-                            Ok(res) => {
-                                let st = res.status().as_u16();
-                                last_status = st;
-                                log_msg(&format!("Response {} st={}", method, st));
-                                if st == 200 || st == 201 || st == 204 {
-                                    success = true;
-                                    break;
-                                } else if st == 404 && !should_like {
-                                    success = true;
-                                    break;
-                                } else if st == 429 {
-                                    self.set_like_rate_limited(std::time::Duration::from_secs(1800));
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                last_err = e.to_string();
-                                log_msg(&format!("Request error: {}", e));
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    last_err = e.clone();
-                    log_msg(&format!("ensure_active_user FAILED: {}", e));
+        let status = response.status().as_u16();
+        let reason = match status {
+            200..=299 => return Ok(None),
+            404 if !should_like => return Ok(None),
+            401 => "Войдите в SoundCloud заново".to_string(),
+            403 => {
+                if response.text().await.unwrap_or_default().to_ascii_lowercase().contains("captcha") {
+                    "SoundCloud запрашивает CAPTCHA. Подтвердите действие на сайте SoundCloud".to_string()
+                } else {
+                    "SoundCloud отклонил изменение (403)".to_string()
                 }
             }
-        }
-
-        // 2. Always persist like state locally to likes.json and cached_likes
-        let mut local_likes = self.load_local_likes();
-        let id_val = if let Ok(num) = id_str.parse::<i64>() {
-            serde_json::json!(num)
-        } else {
-            serde_json::json!(id_str)
-        };
-
-        let to_str_id = |val: &Value| -> String {
-            if let Some(n) = val.as_i64() {
-                n.to_string()
-            } else if let Some(s) = val.as_str() {
-                s.to_string()
-            } else {
-                val.to_string().trim_matches(&['\"', '\''][..]).to_string()
+            429 => {
+                self.set_like_rate_limited(std::time::Duration::from_secs(1800));
+                "SoundCloud временно ограничил лайки (429)".to_string()
             }
+            _ => format!("SoundCloud отклонил изменение ({status})"),
         };
-
-        if !should_like {
-            local_likes.retain(|t| to_str_id(&t.id) != id_str);
-        } else {
-            if !local_likes.iter().any(|t| to_str_id(&t.id) == id_str) {
-                if let Ok(mut resolved) = self.resolve_tracks(vec![id_val.clone()]).await {
-                    if let Some(mut ft) = resolved.pop() {
-                        ft.liked = true;
-                        local_likes.insert(0, ft);
-                    }
-                }
-            }
-        }
-        let _ = self.save_local_likes(&local_likes);
-
-        log_msg(&format!("toggle_like finished: success={}, last_status={}, last_err={}", success, last_status, last_err));
-
-        if last_status == 429 {
-            return Err("SoundCloud временно ограничил добавление лайков (429 Too Many Requests). Лайк сохранён локально в ONYX.".to_string());
-        }
-
-        Ok(success)
+        Ok(Some(reason))
     }
 
     pub async fn resolve_url(&self, target_url: &str) -> Result<Value, String> {
