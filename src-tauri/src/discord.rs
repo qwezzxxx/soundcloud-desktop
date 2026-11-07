@@ -286,6 +286,9 @@ impl DiscordManager {
         if !state.enabled {
             return Ok(());
         }
+        if state.current_activity.as_ref() != Some(&activity) {
+            return Ok(());
+        }
 
         if !state.connected || state.pipe.is_none() {
             drop(state);
@@ -293,6 +296,9 @@ impl DiscordManager {
                 return Ok(());
             }
             state = self.inner.lock().unwrap();
+            if state.current_activity.as_ref() != Some(&activity) {
+                return Ok(());
+            }
         }
 
         let pid = std::process::id();
