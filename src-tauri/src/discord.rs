@@ -265,14 +265,15 @@ impl DiscordManager {
             activity["details"] = serde_json::json!(title);
         }
         let mut status = Vec::new();
+        if !is_playing && !playback.is_buffering {
+            let seconds = position.max(0.0) as u64;
+            status.push(format!("На паузе · {}:{:02}", seconds / 60, seconds % 60));
+        }
         if state.show_artist && !artist.trim().is_empty() {
             status.push(format!("by {artist}"));
         }
         if state.show_status && playback.is_buffering {
             status.push("Буферизация".to_string());
-        } else if state.show_status && !is_playing {
-            let seconds = position.max(0.0) as u64;
-            status.push(format!("Пауза · {}:{:02}", seconds / 60, seconds % 60));
         }
         if !status.is_empty() {
             activity["state"] = serde_json::json!(status.join(" • "));
@@ -298,7 +299,7 @@ impl DiscordManager {
                 } else if playback.is_buffering {
                     "Буферизация"
                 } else {
-                    "Пауза"
+                    "На паузе"
                 }),
             );
         }
@@ -383,6 +384,47 @@ impl DiscordManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shows_pause_in_the_card_with_the_status_badge_disabled() {
+        let state = DiscordState {
+            pipe: None,
+            connected: false,
+            enabled: true,
+            client_id: DISCORD_CLIENT_ID.to_string(),
+            show_track: true,
+            show_artist: true,
+            show_cover: true,
+            show_status: false,
+            current_activity: None,
+            last_playback: None,
+        };
+        let mut playback = DiscordPlayback {
+            title: "Track".to_string(),
+            artist: "Artist".to_string(),
+            cover: String::new(),
+            is_playing: false,
+            is_buffering: false,
+            position: 3.75,
+            duration: 120.0,
+            rate: 1.0,
+        };
+
+        let paused = DiscordManager::render_activity(&state, &playback, 1000.0);
+        assert_eq!(paused["details"], "Track");
+        assert_eq!(paused["state"], "На паузе · 0:03 • by Artist");
+        assert!(paused.get("timestamps").is_none());
+
+        playback.is_buffering = true;
+        let buffering = DiscordManager::render_activity(&state, &playback, 1000.0);
+        assert_eq!(buffering["state"], "by Artist");
+
+        playback.is_buffering = false;
+        playback.is_playing = true;
+        let resumed = DiscordManager::render_activity(&state, &playback, 1000.0);
+        assert_eq!(resumed["state"], "by Artist");
+        assert!(resumed.get("timestamps").is_some());
+    }
 
     #[test]
     fn timestamps_follow_position_and_stop_while_paused() {
