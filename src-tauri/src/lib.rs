@@ -247,15 +247,15 @@ async fn get_related_tracks(track_id: Value, state: State<'_, AppState>) -> Resu
 
 #[tauri::command]
 fn open_browser_login() -> Result<(), String> {
-    const SIGN_IN_URL: &str = "https://soundcloud.com/signin";
+    let login_url = auth_server::begin_browser_login()?;
 
     #[cfg(target_os = "windows")]
     let browser = std::process::Command::new("cmd")
-        .args(["/c", "start", "", SIGN_IN_URL])
+        .args(["/c", "start", "", login_url])
         .spawn();
 
     #[cfg(not(target_os = "windows"))]
-    let browser = std::process::Command::new("xdg-open").arg(SIGN_IN_URL).spawn();
+    let browser = std::process::Command::new("xdg-open").arg(login_url).spawn();
 
     browser.map(|_| ()).map_err(|error| error.to_string())
 }
@@ -305,15 +305,6 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999999;background:#ff5500;color:#fff;text-align:center;padding:12px;font-family:sans-serif;font-size:13px;font-weight:bold;box-shadow:0 4px 16px rgba(0,0,0,0.5);';
                     banner.innerText = '✨ Авторизация успешна! Подключаем аккаунт к ONYX...';
                     document.body.appendChild(banner);
-                } catch(e) {}
-
-                try {
-                    var img = new Image();
-                    img.src = 'http://127.0.0.1:49221/auth?token=' + encodeURIComponent(tok);
-                } catch(e) {}
-
-                try {
-                    fetch('http://127.0.0.1:49221/auth?token=' + encodeURIComponent(tok), { mode: 'no-cors' }).catch(function(){});
                 } catch(e) {}
 
                 setTimeout(function() {
@@ -698,9 +689,6 @@ pub fn run() {
     let sc = Arc::new(SoundCloudClient::new(config_path));
     let discord = DiscordManager::new();
 
-    // Start background local auth server on 127.0.0.1:49221
-    auth_server::start_auth_server(sc.clone());
-
     let cfg = sc.load_config();
     let theme_name = cfg.theme.as_deref().unwrap_or("wine");
     let bg_color = match theme_name {
@@ -724,6 +712,7 @@ pub fn run() {
             updater::start(app.handle())?;
 
             use tauri::Manager;
+            auth_server::start_auth_server(app.state::<AppState>().sc.clone(), app.handle().clone());
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_background_color(Some(bg_color));
                 if let Some(icon) = app.default_window_icon() {

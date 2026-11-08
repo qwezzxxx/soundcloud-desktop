@@ -1,9 +1,28 @@
-use std::sync::{Arc, OnceLock};
+use std::fmt::Write as _;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncSeekExt};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use crate::soundcloud::SoundCloudClient;
 
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+const AUTH_ADDRESS: &str = "127.0.0.1:49221";
+const LOGIN_TTL: Duration = Duration::from_secs(600);
+static BROWSER_LOGIN: Mutex<Option<(String, Instant)>> = Mutex::new(None);
+static BROWSER_AUTH_REQUEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+pub fn begin_browser_login() -> Result<&'static str, String> {
+    let mut random = [0u8; 32];
+    getrandom::fill(&mut random).map_err(|error| error.to_string())?;
+    let mut nonce = String::with_capacity(random.len() * 2);
+    for byte in random {
+        let _ = write!(nonce, "{byte:02x}");
+    }
+    let mut login = BROWSER_LOGIN.lock().map_err(|error| error.to_string())?;
+    *login = Some((nonce, Instant::now()));
+    Ok("http://127.0.0.1:49221/login")
+}
 
 fn get_http_client() -> &'static reqwest::Client {
     HTTP_CLIENT.get_or_init(|| {
@@ -15,7 +34,7 @@ fn get_http_client() -> &'static reqwest::Client {
     })
 }
 
-pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
+pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
     std::thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
             Ok(rt) => rt,
@@ -26,7 +45,7 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
         };
 
         rt.block_on(async move {
-            let listener = match TcpListener::bind("127.0.0.1:49221").await {
+            let listener = match TcpListener::bind(AUTH_ADDRESS).await {
                 Ok(l) => l,
                 Err(e) => {
                     eprintln!("Auth server bind failed: {}", e);
@@ -37,13 +56,13 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
             loop {
                 if let Ok((mut stream, _)) = listener.accept().await {
                     let sc_ref = sc.clone();
+                    let app = app.clone();
                     tokio::spawn(async move {
-                    let mut buffer = [0u8; 4096];
-                    if let Ok(bytes_read) = stream.read(&mut buffer).await {
-                        if bytes_read == 0 {
-                            return;
-                        }
-                        let request_str = String::from_utf8_lossy(&buffer[..bytes_read]);
+                        let mut buffer = [0u8; 16384];
+                    if let Ok(Some((bytes_read, headers_end))) =
+                        tokio::time::timeout(Duration::from_secs(5), read_headers(&mut stream, &mut buffer)).await
+                    {
+                        let request_str = String::from_utf8_lossy(&buffer[..headers_end]);
                         let first_line = request_str.lines().next().unwrap_or("");
                         let parts: Vec<&str> = first_line.split_whitespace().collect();
                         if parts.len() < 2 {
@@ -218,147 +237,71 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
                             return;
                         }
 
-                        if path.starts_with("/auth") {
-                            // Extract token parameter
-                            let token_val = if let Some(idx) = path.find("token=") {
-                                let query = &path[idx + 6..];
-                                let raw_token = query.split('&').next().unwrap_or("");
-                                urldecode(raw_token)
-                            } else {
-                                String::new()
-                            };
+                        let host = request_header(&request_str, "Host");
+                        if host != Some(AUTH_ADDRESS) {
+                            return;
+                        }
 
-                            let trimmed = token_val.trim();
-                            if !trimmed.is_empty() {
-                                let mut cfg = sc_ref.load_config();
-                                cfg.oauth_token = Some(trimmed.to_string());
-                                let _ = sc_ref.save_config(&cfg);
-
-                                // Refresh profile
-                                let profile = sc_ref.get_profile().await.ok();
-                                let username = profile
-                                    .as_ref()
-                                    .and_then(|p| p.get("username"))
-                                    .and_then(|u| u.as_str())
-                                    .unwrap_or("SoundCloud User");
-
-                                let body = format!(
-                                    r#"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>SoundCloud Player Connected</title>
-    <style>
-        body {{ background: #0c0a10; color: #fff; font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }}
-        .card {{ background: #161420; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; text-align: center; max-width: 440px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }}
-        h1 {{ font-size: 20px; margin-bottom: 8px; color: #ff5500; }}
-        p {{ font-size: 13px; color: #aaa; line-height: 1.5; }}
-        .user {{ display: inline-block; background: rgba(255,85,0,0.15); border: 1px solid rgba(255,85,0,0.3); padding: 6px 14px; border-radius: 9999px; font-weight: bold; color: #ff7700; margin: 15px 0; }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h1>✅ Успешно подключено!</h1>
-        <div class="user">👤 {}</div>
-        <p>Аккаунт успешно привязан к десктопному плееру. Все лайки и миксы уже синхронизированы в приложении.</p>
-        <p style="font-size:11px; color:#666; margin-top:20px;">Можете закрыть эту вкладку и вернуться в плеер.</p>
-    </div>
-</body>
-</html>"#,
-                                    username
-                                );
-
-                                let response = format!(
-                                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                                    body.len(),
-                                    body
-                                );
-                                let _ = stream.write_all(response.as_bytes()).await;
-                            } else {
-                                let body = "Missing token";
-                                let response = format!(
-                                    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                                    body.len(),
-                                    body
-                                );
-                                let _ = stream.write_all(response.as_bytes()).await;
+                        match (method, path) {
+                            ("GET", "/login") => {
+                                let nonce = BROWSER_LOGIN.lock().ok().and_then(|login| {
+                                    login.as_ref()
+                                        .filter(|(_, started)| started.elapsed() < LOGIN_TTL)
+                                        .map(|(nonce, _)| nonce.clone())
+                                });
+                                if let Some(nonce) = nonce {
+                                    write_login_page(&mut stream, "200 OK", &LOGIN_PAGE.replace("__NONCE__", &nonce)).await;
+                                } else {
+                                    write_login_page(&mut stream, "403 Forbidden", "Откройте страницу входа из ONYX.").await;
+                                }
                             }
-                        } else {
-                            // Serve login helper page
-                            let body = r#"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Вход в SoundCloud Player</title>
-    <style>
-        body { background: #0c0a10; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .card { background: #15131e; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 36px; max-width: 520px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
-        .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,85,0,0.12); color: #ff5500; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; border: 1px solid rgba(255,85,0,0.25); }
-        h1 { font-size: 22px; font-weight: 800; margin: 0 0 10px 0; color: #fff; }
-        p { font-size: 13px; color: #9ca3af; line-height: 1.6; margin: 0 0 20px 0; }
-        .steps { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
-        .step { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 14px 16px; }
-        .step-num { font-size: 11px; font-weight: bold; color: #ff5500; margin-bottom: 4px; }
-        .step-title { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 4px; }
-        .step-desc { font-size: 12px; color: #888; }
-        .btn-orange { display: block; text-align: center; text-decoration: none; background: #ff5500; color: #fff; font-weight: bold; font-size: 13px; padding: 12px 20px; border-radius: 12px; transition: background 0.2s; margin-top: 8px; }
-        .btn-orange:hover { background: #e04b00; }
-        .bookmarklet-btn { display: inline-block; cursor: grab; background: #262335; border: 1px dashed rgba(255,85,0,0.5); color: #ff7722; font-size: 12px; font-weight: 600; padding: 10px 16px; border-radius: 10px; text-decoration: none; margin-top: 8px; }
-        .bookmarklet-btn:hover { background: #322e47; }
-        .input-row { display: flex; gap: 8px; margin-top: 10px; }
-        input[type="text"] { flex: 1; background: #0c0a10; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 12px; color: #fff; font-size: 12px; font-family: monospace; outline: none; }
-        input[type="text"]:focus { border-color: #ff5500; }
-        button.submit-btn { background: #fff; color: #000; border: none; font-weight: bold; font-size: 12px; padding: 0 16px; border-radius: 10px; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="badge">🌐 Браузерный вход</div>
-        <h1>Подключение SoundCloud</h1>
-        <p>Войдите в ваш аккаунт SoundCloud через ваш привычный браузер. Все пароли и Google-аккаунт сохраняются в вашем браузере.</p>
+                            ("POST", "/auth") => {
+                                let length = request_header(&request_str, "Content-Length")
+                                    .and_then(|length| length.parse::<usize>().ok())
+                                    .filter(|&length| length <= 4096);
+                                let Some(end) = length.and_then(|length| headers_end.checked_add(length))
+                                    .filter(|&end| end > headers_end && end <= buffer.len())
+                                else {
+                                    write_login_page(&mut stream, "400 Bad Request", "Неверный запрос подключения.").await;
+                                    return;
+                                };
+                                if bytes_read < end
+                                    && !matches!(
+                                        tokio::time::timeout(Duration::from_secs(5), stream.read_exact(&mut buffer[bytes_read..end])).await,
+                                        Ok(Ok(_))
+                                    )
+                                {
+                                    return;
+                                }
+                                let form = String::from_utf8_lossy(&buffer[headers_end..end]);
+                                let field = |key| {
+                                    form.split('&')
+                                        .filter_map(|field| field.split_once('='))
+                                        .find_map(|(name, value)| (name == key).then(|| urldecode(value)))
+                                };
+                                let Some(token) = field("token").filter(|value| value.len() >= 10) else {
+                                    write_login_page(&mut stream, "400 Bad Request", "Войдите в SoundCloud и повторите подключение.").await;
+                                    return;
+                                };
+                                let _request = BROWSER_AUTH_REQUEST.lock().await;
+                                if !field("nonce").is_some_and(|nonce| consume_browser_login(&nonce)) {
+                                    write_login_page(&mut stream, "403 Forbidden", "Срок подключения истёк. Начните вход заново из ONYX.").await;
+                                    return;
+                                }
 
-        <div class="steps">
-            <div class="step">
-                <div class="step-num">ШАГ 1</div>
-                <div class="step-title">Откройте soundcloud.com</div>
-                <div class="step-desc">Убедитесь, что вы авторизованы в вашем профиле на сайте.</div>
-                <a href="https://soundcloud.com/signin" target="_blank" class="btn-orange">Открыть SoundCloud в новой вкладке ↗</a>
-            </div>
-
-            <div class="step">
-                <div class="step-num">ШАГ 2 (МГНОВЕННО)</div>
-                <div class="step-title">Закладка быстрого подключения</div>
-                <div class="step-desc">Перетащите кнопку ниже на панель закладок браузера, затем нажмите её, находясь на странице soundcloud.com:</div>
-                <a class="bookmarklet-btn" href="javascript:(function(){const m=document.cookie.match(/oauth_token=([^;]+)/);if(!m){alert('Сначала войдите в SoundCloud на этой вкладке!');return;}fetch('http://127.0.0.1:49221/auth?token='+encodeURIComponent(m[1])).then(r=>r.text()).then(()=>{alert('✅ Успешно! Аккаунт подключен к SoundCloud Player.');window.location.reload();}).catch(()=>alert('Запустите десктопный плеер SoundCloud!'));})();">🔗 Подключить к SoundCloud Player</a>
-            </div>
-
-            <div class="step">
-                <div class="step-num">ИЛИ ВРУЧНУЮ</div>
-                <div class="step-title">Вставьте oauth_token из Cookies</div>
-                <div class="input-row">
-                    <input id="tok" type="text" placeholder="2-29... или OAuth ...">
-                    <button class="submit-btn" onclick="save()">Войти</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function save() {
-            const v = document.getElementById('tok').value.trim();
-            if (!v) return;
-            window.location.href = '/auth?token=' + encodeURIComponent(v);
-        }
-    </script>
-</body>
-</html>"#;
-
-                            let response = format!(
-                                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                                body.len(),
-                                body
-                            );
-                            let _ = stream.write_all(response.as_bytes()).await;
+                                match sc_ref.set_oauth_token(&token).await {
+                                    Ok(data) => {
+                                        let _ = app.emit("sc_auth_success", data);
+                                        write_login_page(&mut stream, "200 OK", "Аккаунт подключён. Можно вернуться в ONYX.").await;
+                                    }
+                                    Err(_) => {
+                                        let message = "SoundCloud отклонил подключение. Начните вход заново из ONYX.";
+                                        let _ = app.emit("sc_auth_error", message);
+                                        write_login_page(&mut stream, "401 Unauthorized", message).await;
+                                    }
+                                }
+                            }
+                            _ => write_login_page(&mut stream, "404 Not Found", "Страница не найдена.").await,
                         }
                     }
                 });
@@ -367,6 +310,71 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
         });
     });
 }
+
+fn consume_browser_login(nonce: &str) -> bool {
+    let Ok(mut login) = BROWSER_LOGIN.lock() else {
+        return false;
+    };
+    if login.as_ref().is_some_and(|(expected, started)| expected == nonce && started.elapsed() < LOGIN_TTL) {
+        *login = None;
+        return true;
+    }
+    false
+}
+
+async fn read_headers(stream: &mut TcpStream, buffer: &mut [u8]) -> Option<(usize, usize)> {
+    let mut bytes_read = 0;
+    loop {
+        let count = stream.read(&mut buffer[bytes_read..]).await.ok()?;
+        if count == 0 {
+            return None;
+        }
+        bytes_read += count;
+        if let Some(end) = buffer[..bytes_read].windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+            return Some((bytes_read, end + 4));
+        }
+    }
+}
+
+fn request_header<'a>(headers: &'a str, key: &str) -> Option<&'a str> {
+    headers.lines()
+        .filter_map(|line| line.split_once(':'))
+        .find_map(|(name, value)| name.eq_ignore_ascii_case(key).then(|| value.trim()))
+}
+
+async fn write_login_page(stream: &mut TcpStream, status: &str, body: &str) {
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    let _ = stream.write_all(response.as_bytes()).await;
+}
+
+const LOGIN_PAGE: &str = r#"<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Подключение SoundCloud к ONYX</title>
+    <style>
+        body { background:#111114; color:#eee; font:16px/1.5 system-ui,sans-serif; margin:0; }
+        main { max-width:520px; margin:10vh auto; padding:28px; }
+        li { margin-bottom:16px; }
+        a { color:#ff9b65; }
+        .bookmark { display:inline-block; padding:6px 10px; border:1px dashed currentColor; border-radius:6px; cursor:grab; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Подключение SoundCloud к ONYX</h1>
+        <ol>
+            <li>Перетащите кнопку <a class="bookmark" onclick="event.preventDefault(); alert('Перетащите эту кнопку на панель закладок.');" href="javascript:(function(){if(location.origin!=='https://soundcloud.com'){alert('Откройте soundcloud.com и войдите в аккаунт.');return;}const match=document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);if(!match){alert('Сессия SoundCloud недоступна. Войдите и попробуйте ещё раз.');return;}const form=document.createElement('form');form.method='POST';form.action='http://127.0.0.1:49221/auth';for(const [name,value] of Object.entries({nonce:'__NONCE__',token:decodeURIComponent(match[1])})){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.append(input);}document.body.append(form);form.submit();})();">Подключить к ONYX</a> на панель закладок. В Chrome и Edge панель открывается через <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>.</li>
+            <li><a href="https://soundcloud.com/signin" target="_blank" rel="noopener noreferrer">Войдите в SoundCloud</a> через Google, Apple или Facebook.</li>
+            <li>На вкладке SoundCloud нажмите закладку <strong>Подключить к ONYX</strong> и вернитесь в плеер.</li>
+        </ol>
+    </main>
+</body>
+</html>"#;
 
 fn parse_range_header(header: &str, file_size: u64) -> (u64, u64) {
     if file_size == 0 {

@@ -10250,11 +10250,11 @@
       <div class="space-y-2">
         <button id="btn-browser-login" type="button" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-neutral-200 active:scale-[0.98] text-black font-semibold text-xs flex items-center justify-center gap-2.5 shadow-lg shadow-white/5 transition-all cursor-pointer">
           <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M1.175 12.225c-.053 0-.097.042-.1.096l-.37 3.333c-.01.07.039.13.107.13h.363c.058 0 .106-.046.109-.104l.182-3.359c.003-.054-.04-.096-.091-.096zm1.312-.76c-.056 0-.102.044-.105.1l-.348 4.195c-.007.067.043.124.11.124h.347c.057 0 .104-.045.108-.102l.18-4.22c.002-.054-.04-.097-.092-.097zm1.309-.345c-.058 0-.105.045-.108.102l-.317 4.542c-.006.066.044.122.11.122h.34c.058 0 .106-.046.108-.103l.161-4.565c.002-.054-.041-.098-.094-.098zm1.308-.073c-.058 0-.106.046-.109.103l-.288 4.615c-.005.066.045.121.111.121h.334c.058 0 .106-.046.108-.104l.145-4.636c.002-.054-.041-.099-.094-.099zm1.308-.225c-.058 0-.106.046-.109.104l-.261 4.84c-.005.066.046.121.112.121h.328c.058 0 .106-.046.108-.104l.13-4.862c.002-.054-.041-.099-.094-.099zm1.307-.468c-.058 0-.106.046-.109.104l-.234 5.308c-.004.066.047.121.113.121h.323c.058 0 .106-.046.108-.104l.115-5.33c.002-.054-.041-.099-.094-.099zm1.307-.638c-.058 0-.106.046-.109.104l-.208 5.946c-.004.066.048.121.114.121h.317c.058 0 .106-.046.108-.105l.102-5.967c.001-.054-.042-.099-.094-.099zm1.307-.655c-.058 0-.106.046-.109.104l-.181 6.601c-.003.066.049.121.115.121h.312c.059 0 .107-.046.108-.105l.088-6.622c.001-.054-.042-.099-.095-.099zm2.463-2.613c-.33 0-.649.049-.95.138-.052.015-.084.066-.075.12l.143 9.008c.001.063.053.112.116.112h3.407c1.884 0 3.415-1.503 3.415-3.352 0-1.745-1.353-3.176-3.092-3.332-.303-1.528-1.673-2.694-3.314-2.694zm-1.156 1.761c-.058 0-.106.046-.108.104l-.154 7.37c-.002.066.05.121.116.121h.236c.058 0 .105-.046.107-.104l.104-7.391c0-.054-.043-.1-.095-.1h-.206z"/></svg>
-          <span class="text-black font-bold">Войти или зарегистрироваться в браузере</span>
+          <span class="text-black font-bold">Подключить SoundCloud через браузер</span>
         </button>
-        <p class="text-center text-neutral-400 text-[11px]">Google, Apple, Facebook или почта</p>
+        <p class="text-center text-neutral-400 text-[11px]">Google, Apple или Facebook</p>
         <button id="btn-oauth-window-login" type="button" class="w-full py-2.5 px-4 rounded-xl border border-white/10 hover:bg-white/5 text-neutral-300 text-xs font-semibold transition-all cursor-pointer">
-          Войти по почте в ONYX
+          Открыть встроенное окно SoundCloud
         </button>
       </div>
 
@@ -10265,7 +10265,7 @@
           <span>Вход только через аккаунт</span>
         </div>
         <p class="text-neutral-400 text-[11px]">
-          После входа в браузере вернитесь в ONYX и вставьте OAuth-токен SoundCloud ниже. При входе по почте в ONYX аккаунт подключится автоматически.
+          После входа на сайте SoundCloud нажмите в браузере закладку «Подключить к ONYX». На странице подключения показано, как её добавить.
         </p>
       </div>
 
@@ -25126,13 +25126,13 @@
           await api.openBrowserLogin();
           if (loginStatusMsg) {
             loginStatusMsg.className = 'text-xs text-neutral-400 min-h-[16px]';
-            loginStatusMsg.textContent = 'Завершите вход в браузере и вставьте OAuth-токен.';
+            loginStatusMsg.textContent = 'Следуйте инструкции на открывшейся странице ONYX.';
           }
         } catch (error) {
           console.warn('Could not open SoundCloud in the browser', error);
           if (loginStatusMsg) {
             loginStatusMsg.className = 'text-xs text-red-400 min-h-[16px]';
-            loginStatusMsg.textContent = 'Откройте soundcloud.com/signin в браузере вручную.';
+            loginStatusMsg.textContent = 'Не удалось открыть браузер. Попробуйте ещё раз.';
           }
         }
       });
@@ -25489,7 +25489,7 @@
             submitLoginBtn.disabled = false;
             if (loginSpinner) loginSpinner.classList.add('hidden');
             if (loginBtnText) loginBtnText.textContent = 'Войти по токену';
-            if (loginStatusMsg) loginStatusMsg.textContent = 'Вставьте OAuth-токен SoundCloud или войдите по почте в ONYX.';
+            if (loginStatusMsg) loginStatusMsg.textContent = 'Вставьте OAuth-токен или подключите аккаунт через браузер.';
             return;
           }
 
