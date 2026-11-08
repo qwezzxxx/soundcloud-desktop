@@ -287,20 +287,14 @@ impl DiscordManager {
                 serde_json::json!(if state.show_status { "ONYX SOUND" } else { title }),
             );
         }
-        if state.show_status {
+        if state.show_status && *is_playing {
             assets.insert(
                 "small_image".to_string(),
-                serde_json::json!(if *is_playing { "play" } else { "pause" }),
+                serde_json::json!("play"),
             );
             assets.insert(
                 "small_text".to_string(),
-                serde_json::json!(if *is_playing {
-                    "Воспроизведение"
-                } else if playback.is_buffering {
-                    "Буферизация"
-                } else {
-                    "На паузе"
-                }),
+                serde_json::json!("Воспроизведение"),
             );
         }
         if !assets.is_empty() {
