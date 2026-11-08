@@ -250,9 +250,9 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
                                         .map(|(nonce, _)| nonce.clone())
                                 });
                                 if let Some(nonce) = nonce {
-                                    write_login_page(&mut stream, "200 OK", &LOGIN_PAGE.replace("__NONCE__", &nonce)).await;
+                                    write_login_page(&mut stream, "200 OK", &LOGIN_STEPS.replace("__NONCE__", &nonce)).await;
                                 } else {
-                                    write_login_page(&mut stream, "403 Forbidden", "Откройте страницу входа из ONYX.").await;
+                                    write_login_notice(&mut stream, "403 Forbidden", "Вход в SoundCloud", "Откройте страницу подключения из ONYX.").await;
                                 }
                             }
                             ("POST", "/auth") => {
@@ -285,19 +285,19 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
                                 };
                                 let _request = BROWSER_AUTH_REQUEST.lock().await;
                                 if !field("nonce").is_some_and(|nonce| consume_browser_login(&nonce)) {
-                                    write_login_page(&mut stream, "403 Forbidden", "Срок подключения истёк. Начните вход заново из ONYX.").await;
+                                    write_login_notice(&mut stream, "403 Forbidden", "Срок подключения истёк", "Начните вход заново из ONYX.").await;
                                     return;
                                 }
 
                                 match sc_ref.set_oauth_token(&token).await {
                                     Ok(data) => {
                                         let _ = app.emit("sc_auth_success", data);
-                                        write_login_page(&mut stream, "200 OK", "Аккаунт подключён. Можно вернуться в ONYX.").await;
+                                        write_login_notice(&mut stream, "200 OK", "Аккаунт подключён", "Закройте вкладку и вернитесь в ONYX.").await;
                                     }
                                     Err(_) => {
                                         let message = "SoundCloud отклонил подключение. Начните вход заново из ONYX.";
                                         let _ = app.emit("sc_auth_error", message);
-                                        write_login_page(&mut stream, "401 Unauthorized", message).await;
+                                        write_login_notice(&mut stream, "401 Unauthorized", "Подключение прервано", message).await;
                                     }
                                 }
                             }
@@ -342,39 +342,88 @@ fn request_header<'a>(headers: &'a str, key: &str) -> Option<&'a str> {
         .find_map(|(name, value)| name.eq_ignore_ascii_case(key).then(|| value.trim()))
 }
 
+async fn write_login_notice(stream: &mut TcpStream, status: &str, title: &str, message: &str) {
+    let body = format!(
+        r#"<main class="result"><div class="brand">ONYX</div><h1>{title}</h1><p>{message}</p></main>"#
+    );
+    write_login_page(stream, status, &body).await;
+}
+
 async fn write_login_page(stream: &mut TcpStream, status: &str, body: &str) {
+    let page = format!("{LOGIN_HEAD}{body}</body></html>");
     let response = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
+        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",
+        page.len()
     );
     let _ = stream.write_all(response.as_bytes()).await;
 }
 
-const LOGIN_PAGE: &str = r#"<!DOCTYPE html>
+const LOGIN_HEAD: &str = r#"<!doctype html>
 <html lang="ru">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Подключение SoundCloud к ONYX</title>
+    <title>SoundCloud · ONYX</title>
     <style>
-        body { background:#111114; color:#eee; font:16px/1.5 system-ui,sans-serif; margin:0; }
-        main { max-width:520px; margin:10vh auto; padding:28px; }
-        li { margin-bottom:16px; }
-        a { color:#ff9b65; }
-        .bookmark { display:inline-block; padding:6px 10px; border:1px dashed currentColor; border-radius:6px; cursor:grab; }
+        :root { color-scheme: dark; --accent: #ff8554; --muted: #b9b6c3; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #0d0d12; color: #f9f8fb; font: 15px/1.5 system-ui, sans-serif; }
+        main { width: min(880px, 100%); overflow: hidden; border: 1px solid #36333f; border-radius: 24px; background: #16151d; box-shadow: 0 24px 80px #0007; }
+        .connect { display: grid; grid-template-columns: 1fr 1.2fr; }
+        .intro { display: flex; flex-direction: column; justify-content: center; gap: 16px; padding: 36px; background: radial-gradient(ellipse at top left, #542c29 0%, #231b26 58%, #1c1922 100%); }
+        .brand { color: #ffc1a8; font-size: 12px; font-weight: 750; letter-spacing: .2em; }
+        h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.05; letter-spacing: -.045em; margin: 0; }
+        p { margin: 0; color: var(--muted); }
+        .wave { width: 104px; height: 40px; color: var(--accent); }
+        ol { list-style: none; counter-reset: steps; margin: 0; padding: 30px; display: grid; gap: 14px; }
+        li { counter-increment: steps; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; gap: 12px; }
+        li::before { content: counter(steps, decimal-leading-zero); display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #583a36; border-radius: 10px; background: #2d2126; color: #ffb495; font-size: 12px; font-weight: 750; }
+        h2 { font-size: 15px; margin: 4px 0 5px; }
+        li p { font-size: 13px; }
+        a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+        .button { display: inline-flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 8px 12px; border-radius: 9px; color: #19100b; background: var(--accent); text-decoration: none; font-weight: 750; font-size: 13px; }
+        .button:hover { background: #ffa27e; }
+        .bookmark { color: #ffc1a8; background: #241d24; border: 1px dashed #a8604c; cursor: grab; }
+        .bookmark:hover { background: #3a292f; }
+        kbd { color: #f2e9f0; white-space: nowrap; }
+        .result { width: min(500px, 100%); padding: 32px; display: grid; gap: 14px; }
+        .result h1 { font-size: 30px; }
+        @media (max-width: 680px) {
+            body { padding: 14px; }
+            .connect { grid-template-columns: 1fr; }
+            .intro { padding: 24px; gap: 12px; }
+            ol { padding: 22px; }
+        }
     </style>
 </head>
-<body>
-    <main>
-        <h1>Подключение SoundCloud к ONYX</h1>
-        <ol>
-            <li>Перетащите кнопку <a class="bookmark" onclick="event.preventDefault(); alert('Перетащите эту кнопку на панель закладок.');" href="javascript:(function(){if(location.origin!=='https://soundcloud.com'){alert('Откройте soundcloud.com и войдите в аккаунт.');return;}const match=document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);if(!match){alert('Сессия SoundCloud недоступна. Войдите и попробуйте ещё раз.');return;}const form=document.createElement('form');form.method='POST';form.action='http://127.0.0.1:49221/auth';for(const [name,value] of Object.entries({nonce:'__NONCE__',token:decodeURIComponent(match[1])})){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.append(input);}document.body.append(form);form.submit();})();">Подключить к ONYX</a> на панель закладок. В Chrome и Edge панель открывается через <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>.</li>
-            <li><a href="https://soundcloud.com/signin" target="_blank" rel="noopener noreferrer">Войдите в SoundCloud</a> через Google, Apple или Facebook.</li>
-            <li>На вкладке SoundCloud нажмите закладку <strong>Подключить к ONYX</strong> и вернитесь в плеер.</li>
-        </ol>
-    </main>
-</body>
-</html>"#;
+<body>"#;
+
+const LOGIN_STEPS: &str = r#"<main class="connect">
+    <header class="intro">
+        <div class="brand">ONYX</div>
+        <svg class="wave" aria-hidden="true" viewBox="0 0 104 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+            <path d="M4 17v6m12-12v18m12-24v30m12-21v12m12-23v34m12-27v20m12-14v8m12-12v16m12-12v8"/>
+        </svg>
+        <h1>Подключите<br>SoundCloud</h1>
+        <p>Войдите через Google, Apple или Facebook и синхронизируйте лайки в ONYX.</p>
+    </header>
+    <ol>
+        <li><div>
+            <h2>Добавьте закладку</h2>
+            <p>Перетащите кнопку на панель закладок. В Chrome и Edge панель открывается через <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>.</p>
+            <a class="button bookmark" onclick="event.preventDefault(); alert('Перетащите эту кнопку на панель закладок.');" href="javascript:(function(){if(location.origin!=='https://soundcloud.com'){alert('Откройте soundcloud.com и войдите в аккаунт.');return;}const match=document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);if(!match){alert('Сессия SoundCloud недоступна. Войдите и попробуйте ещё раз.');return;}const form=document.createElement('form');form.method='POST';form.action='http://127.0.0.1:49221/auth';for(const [name,value] of Object.entries({nonce:'__NONCE__',token:decodeURIComponent(match[1])})){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.append(input);}document.body.append(form);form.submit();})();">Подключить к ONYX</a>
+        </div></li>
+        <li><div>
+            <h2>Войдите в SoundCloud</h2>
+            <p>Выберите способ входа на сайте SoundCloud.</p>
+            <a class="button" href="https://soundcloud.com/signin" target="_blank" rel="noopener noreferrer">Открыть SoundCloud <span aria-hidden="true">↗</span></a>
+        </div></li>
+        <li><div>
+            <h2>Подключите аккаунт</h2>
+            <p>На вкладке SoundCloud нажмите закладку <strong>«Подключить к ONYX»</strong>. После подтверждения вернитесь в плеер.</p>
+        </div></li>
+    </ol>
+</main>"#;
 
 fn parse_range_header(header: &str, file_size: u64) -> (u64, u64) {
     if file_size == 0 {
