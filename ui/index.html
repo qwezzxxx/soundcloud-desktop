@@ -17053,8 +17053,8 @@
       try {
         const reason = await api.toggleLike(change, newLikedState);
         if (pendingLikeWrites.get(strId) === change) {
-          const label = reason?.includes('CAPTCHA') ? 'CAPTCHA SoundCloud' : 'Только в ONYX';
-          showLikeSyncStatus(reason ? label : '', reason || '');
+          const detail = reason?.includes('CAPTCHA') ? '' : reason || '';
+          showLikeSyncStatus(detail ? 'Только в ONYX' : '', detail);
         }
       } catch (err) {
         if (pendingLikeWrites.get(strId) === change) {
