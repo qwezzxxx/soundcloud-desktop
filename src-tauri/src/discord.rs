@@ -257,7 +257,7 @@ impl DiscordManager {
             ..
         } = playback;
         let mut activity = serde_json::json!({
-            "name": if state.show_status { "ONYX SOUND" } else if title.trim().is_empty() { "Music" } else { title.trim() },
+            "name": "ONYX SOUND",
             "type": 2
         });
 
@@ -265,18 +265,14 @@ impl DiscordManager {
             activity["details"] = serde_json::json!(title);
         }
         let mut status = Vec::new();
-        if !is_playing && !playback.is_buffering {
-            let seconds = position.max(0.0) as u64;
-            status.push(format!("На паузе · {}:{:02}", seconds / 60, seconds % 60));
-        }
         if state.show_artist && !artist.trim().is_empty() {
             status.push(format!("by {artist}"));
         }
-        if state.show_status && playback.is_buffering {
-            status.push("Буферизация".to_string());
+        if state.show_status {
+            status.push("ONYX SOUND".to_string());
         }
         if !status.is_empty() {
-            activity["state"] = serde_json::json!(status.join(" • "));
+            activity["state"] = serde_json::json!(status.join("\n"));
         }
 
         let mut assets = serde_json::Map::new();
@@ -284,10 +280,10 @@ impl DiscordManager {
             assets.insert("large_image".to_string(), serde_json::json!(cover));
             assets.insert(
                 "large_text".to_string(),
-                serde_json::json!(if state.show_status { "ONYX SOUND" } else { title }),
+                serde_json::json!("ONYX SOUND"),
             );
         }
-        if state.show_status && *is_playing {
+        if state.show_status {
             assets.insert(
                 "small_image".to_string(),
                 serde_json::json!("play"),
