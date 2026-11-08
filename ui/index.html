@@ -6312,7 +6312,7 @@
 
 
 
-          <span class="text-xs text-neutral-400 font-mono">ONYX Edition</span>
+          <span id="settings-app-version" class="text-xs text-neutral-400 font-mono">ONYX Edition</span>
 
 
 
@@ -36604,6 +36604,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+
+    window.__TAURI__?.app?.getVersion?.().then(version => {
+      document.getElementById('settings-app-version').textContent = `ONYX v${version}`;
+    }).catch(error => console.warn('Не удалось получить версию ONYX:', error));
 
     initClient();
 
