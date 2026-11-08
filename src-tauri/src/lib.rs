@@ -2,9 +2,11 @@ mod auth_server;
 mod discord;
 mod soundcloud;
 mod multi_providers;
+#[cfg(all(windows, target_arch = "x86_64"))]
+mod updater;
 use multi_providers::MultiProviders;
 
-use discord::DiscordManager;
+use discord::{DiscordManager, DiscordPlayback};
 use serde_json::Value;
 use soundcloud::{AppConfig, FormattedTrack, SoundCloudClient};
 use std::path::PathBuf;
@@ -19,10 +21,7 @@ pub struct AppState {
 #[tauri::command]
 async fn init_app(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
     let cfg = state.sc.load_config();
-    let mut likes = state.sc.load_local_likes();
-    if likes.is_empty() {
-        likes = cfg.cached_likes.clone().unwrap_or_default();
-    }
+    let likes = state.sc.load_local_likes();
     let profile = cfg.user_profile.clone();
     let mixed = cfg.cached_mixed.clone();
     let user = profile.clone();
@@ -52,11 +51,8 @@ async fn init_app(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<V
         tokio::spawn(async move {
             let _ = sc_clone.get_profile().await;
             if let Ok(fetched) = sc_clone.get_liked_tracks(300).await {
-                if !fetched.is_empty() {
-                    let _ = sc_clone.save_local_likes(&fetched);
-                    use tauri::Emitter;
-                    let _ = app_handle.emit("likes_updated", &fetched);
-                }
+                use tauri::Emitter;
+                let _ = app_handle.emit("likes_updated", &fetched);
             }
             let _ = sc_clone.get_mixed_selections().await;
         });
@@ -70,17 +66,6 @@ async fn init_app(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<V
         "hasToken": has_token,
         "mixed": mixed
     }))
-}
-
-#[tauri::command]
-async fn save_local_likes(likes: Vec<Value>, state: State<'_, AppState>) -> Result<(), String> {
-    let mut tracks = Vec::new();
-    for v in likes {
-        if let Ok(t) = serde_json::from_value::<FormattedTrack>(v) {
-            tracks.push(t);
-        }
-    }
-    state.sc.save_local_likes(&tracks)
 }
 
 #[tauri::command]
@@ -134,9 +119,6 @@ async fn save_config(cfg: AppConfig, state: State<'_, AppState>) -> Result<(), S
         show_status,
         discord_client_id,
     );
-    if !discord_enabled {
-        state.discord.clear_activity();
-    }
 
     state.sc.save_config(&cfg)
 }
@@ -208,8 +190,8 @@ async fn get_stream_url(track_id: Value, state: State<'_, AppState>) -> Result<S
 }
 
 #[tauri::command]
-async fn toggle_like(track_id: Value, should_like: bool, state: State<'_, AppState>) -> Result<bool, String> {
-    state.sc.toggle_like(track_id, should_like).await
+async fn toggle_like(track: FormattedTrack, should_like: bool, state: State<'_, AppState>) -> Result<Option<String>, String> {
+    state.sc.toggle_like(track, should_like).await
 }
 
 #[tauri::command]
@@ -570,13 +552,10 @@ fn open_url(url: String) -> Result<(), String> {
 
 #[tauri::command]
 fn update_discord_activity(
-    title: String,
-    artist: String,
-    cover: String,
-    is_playing: bool,
+    playback: DiscordPlayback,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    state.discord.set_activity(&title, &artist, &cover, is_playing);
+    state.discord.set_activity(playback);
     Ok(())
 }
 
@@ -743,6 +722,9 @@ pub fn run() {
     tauri::Builder::default()
         .manage(state)
         .setup(move |app| {
+            #[cfg(all(windows, target_arch = "x86_64"))]
+            updater::start(app.handle())?;
+
             use tauri::Manager;
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_background_color(Some(bg_color));
@@ -818,7 +800,6 @@ pub fn run() {
             login_account,
             logout,
             init_app,
-            save_local_likes,
             get_local_likes,
             get_config,
             save_config,

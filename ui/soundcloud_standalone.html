@@ -9259,6 +9259,7 @@
 
 
             <span id="player-artist" class="truncate hover:text-white cursor-pointer" title="Развернуть на весь экран (Esc)">SoundCloud</span>
+            <span id="like-sync-status" role="status" class="hidden shrink-0 text-[10px] text-orange-400"></span>
 
 
 
@@ -11855,7 +11856,8 @@
 
 
 
-      toggleLike: (trackId, shouldLike) => api.invoke('toggle_like', { trackId, shouldLike }),
+      toggleLike: (track, shouldLike) => api.invoke('toggle_like', { track, shouldLike }),
+      getLocalLikes: () => api.invoke('get_local_likes'),
 
 
 
@@ -12000,18 +12002,7 @@
 
 
 
-      updateDiscord: (title, artist, cover, isPlaying) => api.invoke('update_discord_activity', {
-        title: String(title || ''),
-        artist: String(artist || ''),
-        cover: String(cover || ''),
-        isPlaying: Boolean(isPlaying)
-      }),
-
-
-
-
-
-
+      updateDiscord: (playback) => api.invoke('update_discord_activity', { playback }),
 
       clearDiscord: () => api.invoke('clear_discord_activity'),
 
@@ -12184,6 +12175,24 @@
 
 
     let allTracks = [];
+    const pendingLikeWrites = new Map();
+
+    function mergePendingLikes(tracks) {
+      if (!pendingLikeWrites.size) return tracks;
+      const merged = tracks.filter(track => !pendingLikeWrites.has(String(track.id)));
+      for (const track of pendingLikeWrites.values()) {
+        if (track.liked) merged.unshift(track);
+      }
+      return merged;
+    }
+
+    function showLikeSyncStatus(label, detail = '') {
+      const status = document.getElementById('like-sync-status');
+      status.textContent = label;
+      status.title = detail;
+      status.setAttribute('aria-label', detail || label);
+      status.classList.toggle('hidden', !label);
+    }
 
 
 
@@ -12330,6 +12339,7 @@
 
 
     const audioEngine = document.getElementById('audio-engine');
+    let discordPlaybackTrack = null;
 
 
 
@@ -15968,7 +15978,7 @@
 
 
 
-      const isLiked = track.liked === true || allTracks.some(t => String(t.id) === strId && t.liked !== false);
+      const isLiked = allTracks.some(t => String(t.id) === strId && t.liked !== false);
 
 
 
@@ -16464,7 +16474,7 @@
 
 
 
-      const currentlyLiked = track.liked === true || allTracks.some(t => String(t.id) === strId && t.liked !== false);
+      const currentlyLiked = allTracks.some(t => String(t.id) === strId && t.liked !== false);
 
 
 
@@ -16473,6 +16483,12 @@
 
 
       const newLikedState = !currentlyLiked;
+      const change = { ...track, liked: newLikedState };
+      if (getInvoke()) {
+        pendingLikeWrites.delete(strId);
+        pendingLikeWrites.set(strId, change);
+        showLikeSyncStatus('');
+      }
 
 
 
@@ -16856,83 +16872,36 @@
 
 
 
-      // 7. Persist to cache
       saveLocalDatabase();
-
-
-
-
-
-
-
-      if (appConfig) {
-
-
-
-
-
-
-
-        appConfig.cached_likes = allTracks.filter(t => t.liked !== false);
-
-
-
-
-
-
-
-        api.saveConfig(appConfig).catch(console.warn);
-
-
-
-
-
-
-
-      }
-
-
-
-
-
-
-
-      notify(newLikedState ? `❤️ Добавлено в лайки: "${track.title}"` : `💔 Удалено из лайков: "${track.title}"`, newLikedState ? "❤️" : "💔");
-
-
-
-
-
-
-
-      // 8. Seamless background sync with SoundCloud API
-
-
-
-
-
-
+      if (!getInvoke()) return;
 
       try {
-        const syncOk = await api.toggleLike(track.id, newLikedState);
-        if (!syncOk && currentUser && currentUser.id) {
-          notify('Внимание: не удалось синхронизировать лайк с SoundCloud (проверьте сессию)', '⚠️');
+        const reason = await api.toggleLike(change, newLikedState);
+        if (pendingLikeWrites.get(strId) === change) {
+          const label = reason?.includes('CAPTCHA') ? 'CAPTCHA SoundCloud' : 'Только в ONYX';
+          showLikeSyncStatus(reason ? label : '', reason || '');
         }
       } catch (err) {
-        console.warn('Like toggle sync error:', err);
-        const msg = String((err && err.message) || err || '');
-        if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('ограничил') || msg.includes('рейт-лимит')) {
-          notify('SoundCloud временно ограничил лайки (429). Лайк сохранён локально в ONYX.', '⚠️');
-        } else {
-          notify('Ошибка синхронизации лайка с SoundCloud: ' + msg, '⚠️');
+        if (pendingLikeWrites.get(strId) === change) {
+          pendingLikeWrites.delete(strId);
+          showLikeSyncStatus('Ошибка сохранения', String(err));
+          const saved = await api.getLocalLikes().catch(() => null);
+          if (Array.isArray(saved)) {
+            allTracks = mergePendingLikes(saved);
+            const liked = allTracks.some(item => String(item.id) === strId);
+            for (const item of [track, ...currentQueue, ...currentSearchResults]) {
+              if (String(item?.id) === strId) item.liked = liked;
+            }
+            saveLocalDatabase();
+            updatePlayerLikeState();
+            renderLikedTable();
+            renderSearchResults();
+            applyUserProfile(currentUser, allTracks.length);
+          }
         }
+      } finally {
+        if (pendingLikeWrites.get(strId) === change) pendingLikeWrites.delete(strId);
       }
-
-
-
-
-
-
 
     }
 
@@ -17213,15 +17182,9 @@
         localStorage.setItem('sc_saved_likes', JSON.stringify(tracksToSave));
         if (currentUser && currentUser.id) {
           localStorage.setItem('sc_user_' + currentUser.id + '_likes', JSON.stringify(tracksToSave));
-          saveUserSettings(currentUser.id, { cached_likes: tracksToSave.slice(0, 500) });
+          if (!getInvoke()) saveUserSettings(currentUser.id, { cached_likes: tracksToSave.slice(0, 500) });
         }
-        if (appConfig) {
-          appConfig.cached_likes = tracksToSave;
-          if (api && api.saveConfig) api.saveConfig(appConfig).catch(() => {});
-        }
-        if (api && api.invoke) {
-          api.invoke('save_local_likes', { likes: tracksToSave }).catch(() => {});
-        }
+        if (appConfig && !getInvoke()) appConfig.cached_likes = tracksToSave;
       } catch (e) {
         console.warn('saveLocalDatabase error:', e);
       }
@@ -17384,9 +17347,6 @@
         // Restore Queue
         if (Array.isArray(session.queue) && session.queue.length > 0) {
           currentQueue = [...session.queue];
-          if (!allTracks || allTracks.length === 0) {
-            allTracks = [...session.queue];
-          }
           currentTrackIndex = (session.trackIndex >= 0 && session.trackIndex < currentQueue.length) ? session.trackIndex : 0;
           if (isShuffle && shufflePlayedTrackIds.size === 0) {
             currentQueue.slice(0, currentTrackIndex + 1).forEach(track => {
@@ -17505,6 +17465,7 @@
         if (!track) return;
         if (isShuffle && track.id != null) shufflePlayedTrackIds.add(String(track.id));
         currentlyPlayingTrackId = track.id;
+        discordPlaybackTrack = null;
         const requestId = ++currentPlayRequestId;
 
         // Wave tracking
@@ -17537,10 +17498,7 @@
         if (playIcon) playIcon.classList.add('hidden');
         if (pauseIcon) pauseIcon.classList.remove('hidden');
 
-        // Update Discord RPC
-        if (api && api.updateDiscord) {
-          api.updateDiscord(track.title, track.artist, track.cover || track.artwork_url, true).catch(() => {});
-        }
+
 
                 // Lyrics & Immersive View update on track change
         if (typeof updateImmersiveTrackView === 'function') {
@@ -17598,6 +17556,7 @@
           saveSessionState();
         };
 
+        discordPlaybackTrack = track;
         if (isPlatformLinux) {
           // WebKitGTK on Linux: Use native GStreamer playback directly.
           // Hls.js with MediaSource causes thread deadlocks in WebKitGTK when switching tracks.
@@ -17723,31 +17682,7 @@
 
 
 
-        if (currentQueue[currentTrackIndex]) {
 
-
-
-
-
-
-
-          const t = currentQueue[currentTrackIndex];
-
-
-
-
-
-
-
-          api.updateDiscord(t.title, t.artist, t.cover, true).catch(console.warn);
-
-
-
-
-
-
-
-        }
 
 
 
@@ -17787,31 +17722,7 @@
 
 
 
-        if (currentQueue[currentTrackIndex]) {
 
-
-
-
-
-
-
-          const t = currentQueue[currentTrackIndex];
-
-
-
-
-
-
-
-          api.updateDiscord(t.title, t.artist, t.cover, false).catch(console.warn);
-
-
-
-
-
-
-
-        }
 
 
 
@@ -20748,7 +20659,7 @@
 
 
 
-        const isLiked = t.liked === true || allTracks.some(x => String(x.id) === String(t.id) && x.liked !== false);
+        const isLiked = allTracks.some(x => String(x.id) === String(t.id) && x.liked !== false);
 
 
 
@@ -24641,8 +24552,8 @@
 
 
 
-            if (freshLikes && freshLikes.length > 0) {
-              allTracks = freshLikes;
+            if (Array.isArray(freshLikes)) {
+              allTracks = mergePendingLikes(freshLikes);
               currentQueue = [...allTracks];
               saveLocalDatabase();
             }
@@ -24881,7 +24792,7 @@
 
 
 
-          if (freshLikes && freshLikes.length > 0) {
+          if (Array.isArray(freshLikes)) {
 
 
 
@@ -24889,7 +24800,7 @@
 
 
 
-            allTracks = freshLikes;
+            allTracks = mergePendingLikes(freshLikes);
 
 
 
@@ -25137,7 +25048,7 @@
 
 
 
-            allTracks = res.likes || [];
+            allTracks = mergePendingLikes(res.likes || []);
 
 
 
@@ -25378,6 +25289,9 @@
       if (typeof closeImmersiveView === 'function') closeImmersiveView();
 
       // 5. Wipe all memory state
+      discordPlaybackTrack = null;
+      pendingLikeWrites.clear();
+      showLikeSyncStatus('');
       allTracks = [];
       currentQueue = [];
       originalQueue = null;
@@ -25736,7 +25650,7 @@
 
 
 
-          if (fresh && fresh.length > 0) {
+          if (Array.isArray(fresh)) {
 
 
 
@@ -25744,7 +25658,7 @@
 
 
 
-            allTracks = fresh;
+            allTracks = mergePendingLikes(fresh);
 
 
 
@@ -26348,12 +26262,12 @@
 
       try {
         const fresh = await api.syncLikes();
-        if (fresh && Array.isArray(fresh) && fresh.length > 0) {
+        if (Array.isArray(fresh)) {
           const oldLen = allTracks.length;
           const oldFirstId = oldLen > 0 ? (allTracks[0].id || allTracks[0].urn) : null;
           const newFirstId = fresh.length > 0 ? (fresh[0].id || fresh[0].urn) : null;
 
-          allTracks = fresh;
+          allTracks = mergePendingLikes(fresh);
           if (activeTab === 'tab-library') currentQueue = [...allTracks];
           saveLocalDatabase();
           renderLikedTable();
@@ -26417,8 +26331,8 @@
         if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
           try {
             window.__TAURI__.event.listen('likes_updated', (event) => {
-              if (event.payload && Array.isArray(event.payload) && event.payload.length > 0) {
-                allTracks = event.payload;
+              if (Array.isArray(event.payload)) {
+                allTracks = mergePendingLikes(event.payload);
                 allTracks.forEach(t => { if (t) t.liked = true; });
                 currentQueue = [...allTracks];
                 saveLocalDatabase();
@@ -26433,8 +26347,8 @@
                 if (data) {
                   if (data.profile) currentUser = data.profile;
                   if (data.config) appConfig = data.config;
-                  if (data.likes && Array.isArray(data.likes) && data.likes.length > 0) {
-                    allTracks = data.likes;
+                  if (Array.isArray(data.likes)) {
+                    allTracks = mergePendingLikes(data.likes);
                     allTracks.forEach(t => { if (t) t.liked = true; });
                     currentQueue = [...allTracks];
                   }
@@ -26932,14 +26846,14 @@
 
             const localDb = loadLocalDatabase();
             let initialLikes = [];
-            if (res.likes && Array.isArray(res.likes) && res.likes.length > 0) {
+            if (Array.isArray(res.likes)) {
               initialLikes = res.likes;
             } else if (localDb && Array.isArray(localDb) && localDb.length > 0) {
               initialLikes = localDb;
             } else if (appConfig && Array.isArray(appConfig.cached_likes) && appConfig.cached_likes.length > 0) {
               initialLikes = appConfig.cached_likes;
             }
-            allTracks = initialLikes;
+            allTracks = mergePendingLikes(initialLikes);
             allTracks.forEach(t => { if (t) t.liked = true; });
             currentQueue = [...allTracks];
             saveLocalDatabase();
@@ -26955,14 +26869,14 @@
           currentUser = null;
           const localDb = loadLocalDatabase();
           let initialLikes = [];
-          if (res.likes && Array.isArray(res.likes) && res.likes.length > 0) {
+          if (Array.isArray(res.likes)) {
             initialLikes = res.likes;
           } else if (localDb && Array.isArray(localDb) && localDb.length > 0) {
             initialLikes = localDb;
           } else if (appConfig && Array.isArray(appConfig.cached_likes) && appConfig.cached_likes.length > 0) {
             initialLikes = appConfig.cached_likes;
           }
-          allTracks = initialLikes;
+          allTracks = mergePendingLikes(initialLikes);
           allTracks.forEach(t => { if (t) t.liked = true; });
           currentQueue = [...allTracks];
           originalQueue = null;
@@ -32150,6 +32064,37 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+
+    // Use media events so Discord follows every control, including hardware keys and lyrics seeks.
+    let discordPlaybackTimer;
+    let discordPlaybackRequest = Promise.resolve();
+    function queueDiscordPlaybackUpdate() {
+      clearTimeout(discordPlaybackTimer);
+      discordPlaybackTimer = setTimeout(() => {
+        discordPlaybackRequest = discordPlaybackRequest.then(() => {
+          if (!getInvoke()) return;
+          const track = discordPlaybackTrack;
+          if (!track || audioEngine.ended || audioEngine.error || !audioEngine.currentSrc || !audioEngine.readyState) {
+            return api.clearDiscord();
+          }
+          const isBuffering = !audioEngine.paused && audioEngine.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+          return api.updateDiscord({
+            title: String(track.title || ''),
+            artist: String(track.artist || ''),
+            cover: String(track.cover || track.artwork_url || ''),
+            isPlaying: !audioEngine.paused && !isBuffering,
+            isBuffering,
+            position: audioEngine.currentTime,
+            duration: Number.isFinite(audioEngine.duration) ? audioEngine.duration : (track.duration_ms || 0) / 1000,
+            rate: audioEngine.playbackRate
+          });
+        }).catch(console.warn);
+      }, 120);
+    }
+
+    for (const event of ['playing', 'pause', 'seeked', 'ratechange', 'durationchange', 'waiting', 'ended', 'emptied', 'error']) {
+      audioEngine.addEventListener(event, queueDiscordPlaybackUpdate);
+    }
 
     audioEngine.addEventListener('loadstart', () => logD('audioEngine: loadstart'));
 

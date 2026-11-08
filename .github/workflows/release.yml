@@ -19,6 +19,9 @@ on:
 permissions:
   contents: write
 
+env:
+  RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag_name }}
+
 jobs:
   release:
     strategy:
@@ -70,10 +73,29 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: "./src-tauri"
-          tagName: ${{ github.ref_name != 'main' && github.ref_name || inputs.tag_name }}
-          releaseName: "ONYX ${{ github.ref_name != 'main' && github.ref_name || inputs.tag_name }}"
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: "ONYX ${{ env.RELEASE_TAG }}"
           releaseDraft: false
-          prerelease: ${{ contains(github.ref_name, 'pre') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') || inputs.prerelease == true }}
+          prerelease: ${{ contains(env.RELEASE_TAG, 'pre') || contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'alpha') || contains(env.RELEASE_TAG, 'rc') || inputs.prerelease == true }}
+          includeUpdaterJson: false
+
+      - name: Sign Windows update
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          $config = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $exe = 'src-tauri/target/release/onyx.exe'
+          if (!$env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Missing updater signing key' }
+          npx --yes @tauri-apps/cli@2.12.4 signer sign --app-version $config.version $exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tag = [uri]::EscapeDataString($env:RELEASE_TAG)
+          @{
+            version = $config.version
+            url = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/releases/download/$tag/ONYX.exe"
+            signature = (Get-Content "$exe.sig" -Raw).Trim()
+          } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM latest-windows.json
 
       - name: Upload Windows Portable Binaries
         if: matrix.platform == 'windows-latest'
@@ -82,9 +104,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ github.ref_name != 'main' && github.ref_name || inputs.tag_name }}"
+          TAG="$RELEASE_TAG"
           mkdir -p dist_portable
-          EXE_PATH=$(find src-tauri/target/release -maxdepth 1 -name "*.exe" ! -name "*setup*" | head -n 1)
+          EXE_PATH=src-tauri/target/release/onyx.exe
           cp "$EXE_PATH" dist_portable/ONYX.exe
           cp "$EXE_PATH" ./ONYX.exe
           cp "$EXE_PATH" ./onyx-portable.exe
@@ -111,3 +133,4 @@ jobs:
 
           # Upload portable standalone exe and zip to the release
           gh release upload "$TAG" ONYX.exe onyx-portable.exe "ONYX-${TAG}-windows-x64.zip" --clobber
+          gh release upload "$TAG" latest-windows.json --clobber

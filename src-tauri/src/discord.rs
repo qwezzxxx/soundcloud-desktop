@@ -1,8 +1,9 @@
+use serde::Deserialize;
 use serde_json::Value;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub const DISCORD_CLIENT_ID: &str = "802958833214423081"; // Official SoundCloud Discord Client ID
 
@@ -17,6 +18,35 @@ type IpcStream = std::fs::File;
 #[cfg(not(target_os = "windows"))]
 type IpcStream = std::os::unix::net::UnixStream;
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscordPlayback {
+    title: String,
+    artist: String,
+    cover: String,
+    is_playing: bool,
+    is_buffering: bool,
+    position: f64,
+    duration: f64,
+    rate: f64,
+}
+
+impl DiscordPlayback {
+    fn timestamps(&self, now: f64) -> Option<Value> {
+        if !self.is_playing || self.rate <= 0.0 {
+            return None;
+        }
+        let start = (now - self.position.max(0.0) / self.rate).max(0.0);
+        let mut timestamps = serde_json::json!({ "start": start.round() as u64 });
+        if self.duration > self.position {
+            timestamps["end"] = serde_json::json!((now
+                + (self.duration - self.position) / self.rate)
+                .ceil() as u64);
+        }
+        Some(timestamps)
+    }
+}
+
 struct DiscordState {
     pipe: Option<IpcStream>,
     connected: bool,
@@ -27,10 +57,7 @@ struct DiscordState {
     show_cover: bool,
     show_status: bool,
     current_activity: Option<Value>,
-    last_title: String,
-    last_artist: String,
-    last_cover: String,
-    last_is_playing: bool,
+    last_playback: Option<(DiscordPlayback, f64)>,
 }
 
 impl DiscordManager {
@@ -46,25 +73,20 @@ impl DiscordManager {
                 show_cover: true,
                 show_status: true,
                 current_activity: None,
-                last_title: String::new(),
-                last_artist: String::new(),
-                last_cover: String::new(),
-                last_is_playing: false,
+                last_playback: None,
             })),
         };
 
         let mgr_clone = mgr.clone();
-        thread::spawn(move || {
-            loop {
-                thread::sleep(Duration::from_secs(5));
-                let should_reconnect = {
-                    let state = mgr_clone.inner.lock().unwrap();
-                    state.enabled && !state.connected
-                };
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_secs(5));
+            let should_reconnect = {
+                let state = mgr_clone.inner.lock().unwrap();
+                state.enabled && !state.connected
+            };
 
-                if should_reconnect {
-                    let _ = mgr_clone.try_connect();
-                }
+            if should_reconnect {
+                let _ = mgr_clone.try_connect();
             }
         });
 
@@ -88,6 +110,18 @@ impl DiscordManager {
         };
 
         let cid_changed = state.client_id != cid;
+        if !cid_changed
+            && (
+                state.enabled,
+                state.show_track,
+                state.show_artist,
+                state.show_cover,
+                state.show_status,
+            ) == (enabled, show_track, show_artist, show_cover, show_status)
+        {
+            return;
+        }
+
         state.enabled = enabled;
         state.show_track = show_track;
         state.show_artist = show_artist;
@@ -96,18 +130,24 @@ impl DiscordManager {
         state.client_id = cid;
 
         if !enabled || cid_changed {
+            Self::write_activity(&mut state, &Value::Null);
             state.connected = false;
             state.pipe = None;
         }
 
-        let has_last = !state.last_title.is_empty();
-        let (lt, la, lc, lip) = (state.last_title.clone(), state.last_artist.clone(), state.last_cover.clone(), state.last_is_playing);
+        state.current_activity = if enabled {
+            state
+                .last_playback
+                .as_ref()
+                .map(|(playback, now)| Self::render_activity(&state, playback, *now))
+        } else {
+            None
+        };
+        let activity = state.current_activity.clone();
         drop(state);
 
-        if !enabled {
-            self.clear_activity();
-        } else if has_last {
-            self.set_activity(&lt, &la, &lc, lip);
+        if let Some(activity) = activity {
+            self.send_activity_payload(activity);
         }
     }
 
@@ -115,6 +155,9 @@ impl DiscordManager {
         let mut state = self.inner.lock().unwrap();
         if !state.enabled {
             return false;
+        }
+        if state.connected && state.pipe.is_some() {
+            return true;
         }
 
         let cid = state.client_id.clone();
@@ -145,7 +188,7 @@ impl DiscordManager {
 
                     if let Some(act) = state.current_activity.clone() {
                         drop(state);
-                        let _ = self.send_activity_payload(act);
+                        self.send_activity_payload(act);
                     }
                     return true;
                 }
@@ -190,7 +233,7 @@ impl DiscordManager {
 
                             if let Some(act) = state.current_activity.clone() {
                                 drop(state);
-                                let _ = self.send_activity_payload(act);
+                                self.send_activity_payload(act);
                             }
                             return true;
                         }
@@ -204,154 +247,161 @@ impl DiscordManager {
         false
     }
 
-    pub fn set_activity(&self, title: &str, artist: &str, cover: &str, is_playing: bool) {
-        let (enabled, show_track, show_artist, show_cover, show_status) = {
-            let state = self.inner.lock().unwrap();
-            (
-                state.enabled,
-                state.show_track,
-                state.show_artist,
-                state.show_cover,
-                state.show_status,
-            )
-        };
+    fn render_activity(state: &DiscordState, playback: &DiscordPlayback, now: f64) -> Value {
+        let DiscordPlayback {
+            title,
+            artist,
+            cover,
+            is_playing,
+            position,
+            ..
+        } = playback;
+        let mut activity = serde_json::json!({
+            "name": if state.show_status { "ONYX" } else if title.trim().is_empty() { "Music" } else { title.trim() },
+            "type": 2
+        });
 
-        if !enabled {
-            return;
+        if state.show_track && !title.trim().is_empty() {
+            activity["details"] = serde_json::json!(title);
         }
-
-        let mut activity = serde_json::Map::new();
-
-        // When show_status is true, display SoundCloud. When false, use the track name or Music
-        let display_name = if show_status {
-            "ONYX".to_string()
-        } else {
-            if !title.trim().is_empty() {
-                title.trim().to_string()
-            } else {
-                "Music".to_string()
-            }
-        };
-
-        activity.insert("name".to_string(), serde_json::json!(display_name));
-        activity.insert("type".to_string(), serde_json::json!(2)); // 2 = Listening to
-
-        if show_track && !title.trim().is_empty() {
-            activity.insert("details".to_string(), serde_json::json!(title));
+        let mut status = Vec::new();
+        if state.show_artist && !artist.trim().is_empty() {
+            status.push(format!("by {artist}"));
         }
-        if show_artist && !artist.trim().is_empty() {
-            activity.insert("state".to_string(), serde_json::json!(format!("by {}", artist)));
+        if state.show_status && playback.is_buffering {
+            status.push("Буферизация".to_string());
+        } else if state.show_status && !is_playing {
+            let seconds = position.max(0.0) as u64;
+            status.push(format!("Пауза · {}:{:02}", seconds / 60, seconds % 60));
+        }
+        if !status.is_empty() {
+            activity["state"] = serde_json::json!(status.join(" • "));
         }
 
         let mut assets = serde_json::Map::new();
-        if show_cover && !cover.is_empty() {
+        if state.show_cover && !cover.is_empty() {
             assets.insert("large_image".to_string(), serde_json::json!(cover));
-            assets.insert("large_text".to_string(), serde_json::json!(if show_status { "ONYX" } else { title }));
+            assets.insert(
+                "large_text".to_string(),
+                serde_json::json!(if state.show_status { "ONYX" } else { title }),
+            );
         }
-
-        if show_status {
-            assets.insert("small_image".to_string(), serde_json::json!(if is_playing { "play" } else { "pause" }));
-            assets.insert("small_text".to_string(), serde_json::json!(if is_playing { "Воспроизведение" } else { "Пауза" }));
+        if state.show_status {
+            assets.insert(
+                "small_image".to_string(),
+                serde_json::json!(if *is_playing { "play" } else { "pause" }),
+            );
+            assets.insert(
+                "small_text".to_string(),
+                serde_json::json!(if *is_playing {
+                    "Воспроизведение"
+                } else if playback.is_buffering {
+                    "Буферизация"
+                } else {
+                    "Пауза"
+                }),
+            );
         }
-
         if !assets.is_empty() {
-            activity.insert("assets".to_string(), Value::Object(assets));
+            activity["assets"] = Value::Object(assets);
         }
 
-        if is_playing {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            let mut timestamps = serde_json::Map::new();
-            timestamps.insert("start".to_string(), serde_json::json!(now));
-            activity.insert("timestamps".to_string(), Value::Object(timestamps));
+        if let Some(timestamps) = playback.timestamps(now) {
+            activity["timestamps"] = timestamps;
         }
-
-        let act_val = Value::Object(activity);
-        {
-            let mut state = self.inner.lock().unwrap();
-            state.current_activity = Some(act_val.clone());
-            state.last_title = title.to_string();
-            state.last_artist = artist.to_string();
-            state.last_cover = cover.to_string();
-            state.last_is_playing = is_playing;
-        }
-
-        let _ = self.send_activity_payload(act_val);
+        activity
     }
 
-    fn send_activity_payload(&self, activity: Value) -> Result<(), Box<dyn std::error::Error>> {
-        let mut state = self.inner.lock().unwrap();
-        if !state.enabled {
-            return Ok(());
+    pub fn set_activity(&self, playback: DiscordPlayback) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
+        let activity = {
+            let mut state = self.inner.lock().unwrap();
+            let activity = state
+                .enabled
+                .then(|| Self::render_activity(&state, &playback, now));
+            state.last_playback = Some((playback, now));
+            if state.current_activity == activity {
+                return;
+            }
+            state.current_activity = activity.clone();
+            activity
+        };
+        if let Some(activity) = activity {
+            self.send_activity_payload(activity);
         }
-        if state.current_activity.as_ref() != Some(&activity) {
-            return Ok(());
-        }
+    }
 
+    fn send_activity_payload(&self, activity: Value) {
+        let mut state = self.inner.lock().unwrap();
+        if !state.enabled || state.current_activity.as_ref() != Some(&activity) {
+            return;
+        }
         if !state.connected || state.pipe.is_none() {
             drop(state);
-            if !self.try_connect() {
-                return Ok(());
-            }
-            state = self.inner.lock().unwrap();
-            if state.current_activity.as_ref() != Some(&activity) {
-                return Ok(());
-            }
+            self.try_connect();
+            return;
         }
+        Self::write_activity(&mut state, &activity);
+    }
 
-        let pid = std::process::id();
+    fn write_activity(state: &mut DiscordState, activity: &Value) {
+        let Some(pipe) = state.pipe.as_mut() else {
+            return;
+        };
         let payload = serde_json::json!({
             "cmd": "SET_ACTIVITY",
             "args": {
-                "pid": pid,
+                "pid": std::process::id(),
                 "activity": activity
             },
-            "nonce": format!("{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis())
-        });
+            "nonce": SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos().to_string()
+        }).to_string();
 
-        let s = payload.to_string();
-        let op = 1u32;
-        let len = s.len() as u32;
+        let mut packet = Vec::with_capacity(8 + payload.len());
+        packet.extend_from_slice(&1u32.to_le_bytes());
+        packet.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        packet.extend_from_slice(payload.as_bytes());
 
-        let mut packet = Vec::with_capacity(8 + s.len());
-        packet.extend_from_slice(&op.to_le_bytes());
-        packet.extend_from_slice(&len.to_le_bytes());
-        packet.extend_from_slice(s.as_bytes());
-
-        if let Some(pipe) = state.pipe.as_mut() {
-            if pipe.write_all(&packet).is_err() || pipe.flush().is_err() {
-                state.connected = false;
-                state.pipe = None;
-            }
+        if pipe.write_all(&packet).and_then(|_| pipe.flush()).is_err() {
+            state.connected = false;
+            state.pipe = None;
         }
-
-        Ok(())
     }
 
     pub fn clear_activity(&self) {
         let mut state = self.inner.lock().unwrap();
-        state.current_activity = None;
-        if let Some(pipe) = state.pipe.as_mut() {
-            let pid = std::process::id();
-            let payload = serde_json::json!({
-                "cmd": "SET_ACTIVITY",
-                "args": {
-                    "pid": pid,
-                    "activity": null
-                },
-                "nonce": "clear"
-            });
-            let s = payload.to_string();
-            let op = 1u32;
-            let len = s.len() as u32;
-            let mut packet = Vec::with_capacity(8 + s.len());
-            packet.extend_from_slice(&op.to_le_bytes());
-            packet.extend_from_slice(&len.to_le_bytes());
-            packet.extend_from_slice(s.as_bytes());
-            let _ = pipe.write_all(&packet);
-            let _ = pipe.flush();
+        state.last_playback = None;
+        if state.current_activity.take().is_some() {
+            Self::write_activity(&mut state, &Value::Null);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timestamps_follow_position_and_stop_while_paused() {
+        let mut playback: DiscordPlayback = serde_json::from_value(serde_json::json!({
+            "title": "Track", "artist": "Artist", "cover": "",
+            "isPlaying": true, "isBuffering": false, "position": 35.0, "duration": 120.0, "rate": 1.0
+        })).unwrap();
+        assert_eq!(
+            playback.timestamps(1000.0),
+            Some(serde_json::json!({ "start": 965, "end": 1085 }))
+        );
+        playback.is_playing = false;
+        assert_eq!(playback.timestamps(1010.0), None);
+        playback.is_playing = true;
+        playback.position = 80.0;
+        playback.rate = 2.0;
+        assert_eq!(
+            playback.timestamps(1015.0),
+            Some(serde_json::json!({ "start": 975, "end": 1035 }))
+        );
     }
 }
