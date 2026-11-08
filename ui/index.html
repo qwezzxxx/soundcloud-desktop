@@ -105,7 +105,7 @@
 
 
 
-  <title>ONYX — Music Player</title>
+  <title>ONYX SOUND — Music Player</title>
 
 
 
@@ -4799,7 +4799,7 @@
 
 
 
-        <span class="text-xs font-black text-white tracking-widest select-none uppercase">ONYX</span>
+        <span class="text-xs font-black text-white tracking-widest select-none uppercase">ONYX SOUND</span>
 
 
 
@@ -28252,7 +28252,9 @@
 
 
 
-      if (!eqPresets[presetKey]) return;
+      try {
+        localStorage.setItem('sc_eq_preset', presetKey);
+      } catch (e) {}
 
 
 
@@ -28880,7 +28882,7 @@
 
 
 
-          album: 'ONYX',
+          album: 'ONYX SOUND',
 
 
 
@@ -30594,6 +30596,10 @@
 
 
     wireEqSlider('eq-slider-12k', 'eq-val-12k', () => eq12kNode);
+    try {
+      const savedEqPreset = localStorage.getItem('sc_eq_preset') || 'flat';
+      applyEqPreset(savedEqPreset);
+    } catch(e) {}
 
 
 

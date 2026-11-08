@@ -257,7 +257,7 @@ impl DiscordManager {
             ..
         } = playback;
         let mut activity = serde_json::json!({
-            "name": if state.show_status { "ONYX" } else if title.trim().is_empty() { "Music" } else { title.trim() },
+            "name": if state.show_status { "ONYX SOUND" } else if title.trim().is_empty() { "Music" } else { title.trim() },
             "type": 2
         });
 
@@ -284,7 +284,7 @@ impl DiscordManager {
             assets.insert("large_image".to_string(), serde_json::json!(cover));
             assets.insert(
                 "large_text".to_string(),
-                serde_json::json!(if state.show_status { "ONYX" } else { title }),
+                serde_json::json!(if state.show_status { "ONYX SOUND" } else { title }),
             );
         }
         if state.show_status {
