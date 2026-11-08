@@ -405,7 +405,7 @@ const LOGIN_STEPS: &str = r#"<main class="connect">
             <path d="M4 17v6m12-12v18m12-24v30m12-21v12m12-23v34m12-27v20m12-14v8m12-12v16m12-12v8"/>
         </svg>
         <h1>Подключите<br>SoundCloud</h1>
-        <p>Войдите через Google, Apple или Facebook и синхронизируйте лайки в ONYX.</p>
+        <p>Подключите аккаунт и синхронизируйте лайки в ONYX.</p>
     </header>
     <ol>
         <li><div>
