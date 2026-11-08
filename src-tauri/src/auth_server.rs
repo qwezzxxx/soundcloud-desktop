@@ -1,21 +1,117 @@
-use std::sync::{Arc, OnceLock};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncSeekExt};
-use tokio::net::TcpListener;
+use std::collections::HashMap;
+use std::fmt::Write as _;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 use crate::soundcloud::SoundCloudClient;
 
-static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+static HTTP_CLIENT: OnceLock<Option<reqwest::Client>> = OnceLock::new();
+const AUTH_ADDRESS: &str = "127.0.0.1:49221";
+const LOGIN_TTL: Duration = Duration::from_secs(600);
+static BROWSER_LOGIN: Mutex<Option<(String, Instant)>> = Mutex::new(None);
+static BROWSER_AUTH_REQUEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-fn get_http_client() -> &'static reqwest::Client {
+pub(crate) fn random_ticket() -> Result<String, String> {
+    let mut random = [0u8; 32];
+    getrandom::fill(&mut random).map_err(|error| error.to_string())?;
+    let mut nonce = String::with_capacity(random.len() * 2);
+    for byte in random {
+        let _ = write!(nonce, "{byte:02x}");
+    }
+    Ok(nonce)
+}
+
+pub fn begin_browser_login() -> Result<String, String> {
+    let nonce = random_ticket()?;
+    let url = format!("http://{AUTH_ADDRESS}/login?nonce={nonce}");
+    let mut login = BROWSER_LOGIN.lock().map_err(|error| error.to_string())?;
+    *login = Some((nonce, Instant::now()));
+    Ok(url)
+}
+
+const STREAM_TTL: Duration = Duration::from_secs(3600);
+const MAX_STREAM_TICKETS: usize = 2048;
+static STREAM_TICKETS: OnceLock<Mutex<HashMap<String, (tauri::Url, Instant)>>> = OnceLock::new();
+
+fn is_youtube_media_url(url: &tauri::Url) -> bool {
+    url.scheme() == "https" && url.port_or_known_default() == Some(443)
+        && url.username().is_empty() && url.password().is_none()
+        && url.host_str().is_some_and(|host| host == "googlevideo.com" || host.ends_with(".googlevideo.com"))
+}
+
+pub fn register_youtube_stream(raw: &str) -> Option<String> {
+    let url = tauri::Url::parse(raw).ok()?;
+    if !is_youtube_media_url(&url) { return None; }
+    let key = random_ticket().ok()?;
+    let mut tickets = STREAM_TICKETS.get_or_init(Mutex::default).lock().ok()?;
+    tickets.retain(|_, (_, created)| created.elapsed() < STREAM_TTL);
+    if tickets.len() >= MAX_STREAM_TICKETS {
+        let oldest = tickets.iter().min_by_key(|(_, (_, created))| *created)?.0.clone();
+        tickets.remove(&oldest);
+    }
+    tickets.insert(key.clone(), (url, Instant::now()));
+    Some(format!("http://{AUTH_ADDRESS}/stream?key={key}"))
+}
+
+pub fn is_registered_stream_url(url: &tauri::Url) -> bool {
+    url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(49221)
+        && url.path() == "/stream" && url.query().and_then(|query| query.strip_prefix("key=")).is_some_and(|key| stream_url_for_ticket(key).is_some())
+}
+
+fn stream_url_for_ticket(key: &str) -> Option<tauri::Url> {
+    let tickets = STREAM_TICKETS.get()?.lock().ok()?;
+    let (url, created) = tickets.get(key)?;
+    (created.elapsed() < STREAM_TTL).then(|| url.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proxy_accepts_only_registered_youtube_media() {
+        for rejected in [
+            "http://127.0.0.1:8080/admin",
+            "https://googlevideo.com.example.org/audio",
+            "http://rr1.googlevideo.com/audio",
+            "https://rr1.googlevideo.com:8080/audio",
+            "https://name@rr1.googlevideo.com/audio",
+        ] {
+            assert!(register_youtube_stream(rejected).is_none(), "{rejected}");
+        }
+        let ticket = register_youtube_stream("https://rr1.googlevideo.com/audio").unwrap();
+        let url = tauri::Url::parse(&ticket).unwrap();
+        assert!(is_registered_stream_url(&url));
+        assert!(!ticket.contains("googlevideo.com"));
+        for rejected in [
+            "http://127.0.0.1:49221/stream?key=guessed",
+            "http://127.0.0.1:49221/stream?url=http://127.0.0.1/",
+        ] {
+            assert!(!is_registered_stream_url(&tauri::Url::parse(rejected).unwrap()));
+        }
+    }
+}
+
+fn get_http_client() -> Option<&'static reqwest::Client> {
     HTTP_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .tcp_keepalive(std::time::Duration::from_secs(60))
-            .timeout(std::time::Duration::from_secs(45))
+            .timeout(Duration::from_secs(45))
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if attempt.previous().len() >= 5 || !is_youtube_media_url(attempt.url()) {
+                    attempt.stop()
+                } else {
+                    attempt.follow()
+                }
+            }))
             .build()
-            .unwrap_or_default()
-    })
+            .ok()
+    }).as_ref()
 }
 
-pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
+pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
     std::thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
             Ok(rt) => rt,
@@ -26,7 +122,7 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
         };
 
         rt.block_on(async move {
-            let listener = match TcpListener::bind("127.0.0.1:49221").await {
+            let listener = match TcpListener::bind(AUTH_ADDRESS).await {
                 Ok(l) => l,
                 Err(e) => {
                     eprintln!("Auth server bind failed: {}", e);
@@ -34,16 +130,19 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
                 }
             };
 
+            let connections = Arc::new(tokio::sync::Semaphore::new(64));
             loop {
                 if let Ok((mut stream, _)) = listener.accept().await {
+                    let Ok(permit) = connections.clone().try_acquire_owned() else { continue; };
                     let sc_ref = sc.clone();
+                    let app = app.clone();
                     tokio::spawn(async move {
-                    let mut buffer = [0u8; 4096];
-                    if let Ok(bytes_read) = stream.read(&mut buffer).await {
-                        if bytes_read == 0 {
-                            return;
-                        }
-                        let request_str = String::from_utf8_lossy(&buffer[..bytes_read]);
+                        let _permit = permit;
+                        let mut buffer = [0u8; 16384];
+                    if let Ok(Some((bytes_read, headers_end))) =
+                        tokio::time::timeout(Duration::from_secs(5), read_headers(&mut stream, &mut buffer)).await
+                    {
+                        let request_str = String::from_utf8_lossy(&buffer[..headers_end]);
                         let first_line = request_str.lines().next().unwrap_or("");
                         let parts: Vec<&str> = first_line.split_whitespace().collect();
                         if parts.len() < 2 {
@@ -53,312 +152,85 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
                         let method = parts[0];
                         let path = parts[1];
 
-                        if method == "OPTIONS" {
-                            let response = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS, HEAD\r\nAccess-Control-Allow-Headers: Range, Origin, Content-Type, Accept\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                            let _ = stream.write_all(response.as_bytes()).await;
+                        if request_header(&request_str, "Host") != Some(AUTH_ADDRESS) {
+                            write_empty(&mut stream, "403 Forbidden").await;
                             return;
                         }
 
-                        if path.starts_with("/file") {
-                            let file_name = if let Some(idx) = path.find("name=") {
-                                let raw = &path[idx + 5..];
-                                let end = raw.find('&').unwrap_or(raw.len());
-                                urldecode(&raw[..end])
-                            } else {
-                                String::new()
-                            };
-
-                            let clean_name: String = file_name.chars()
-                                .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-' || *c == '.')
-                                .collect();
-
-                            let cache_dir = std::env::current_exe()
-                                .ok()
-                                .and_then(|p| p.parent().map(|d| d.join("audio_cache")))
-                                .unwrap_or_else(|| std::path::PathBuf::from("audio_cache"));
-
-                            let file_path = cache_dir.join(&clean_name);
-
-                            if file_path.exists() {
-                                if let Ok(mut f) = tokio::fs::File::open(&file_path).await {
-                                    let metadata = f.metadata().await;
-                                    let file_size = metadata.map(|m| m.len()).unwrap_or(0);
-
-                                    let range_header = request_str.lines()
-                                        .find(|l| l.to_lowercase().starts_with("range:"))
-                                        .and_then(|l| l.split(':').nth(1))
-                                        .map(|s| s.trim().to_string());
-
-                                    let (start, end) = if let Some(ref r) = range_header {
-                                        parse_range_header(r, file_size)
-                                    } else {
-                                        (0, file_size.saturating_sub(1))
-                                    };
-
-                                    let length = if file_size > 0 && end >= start {
-                                        (end - start) + 1
-                                    } else {
-                                        0
-                                    };
-
-                                    let _ = f.seek(std::io::SeekFrom::Start(start)).await;
-
-                                    let status_line = if range_header.is_some() {
-                                        "HTTP/1.1 206 Partial Content\r\n"
-                                    } else {
-                                        "HTTP/1.1 200 OK\r\n"
-                                    };
-
-                                    let content_type = if clean_name.ends_with(".mp3") {
-                                        "audio/mpeg"
-                                    } else {
-                                        "audio/mp4"
-                                    };
-
-                                    let header_str = format!(
-                                        "{}Access-Control-Allow-Origin: *\r\nAccept-Ranges: bytes\r\nContent-Type: {}\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nConnection: close\r\n\r\n",
-                                        status_line,
-                                        content_type,
-                                        length,
-                                        start,
-                                        end,
-                                        file_size
-                                    );
-
-                                    if stream.write_all(header_str.as_bytes()).await.is_ok() {
-                                        let mut chunk_buf = [0u8; 65536];
-                                        let mut remaining = length;
-                                        while remaining > 0 {
-                                            let to_read = std::cmp::min(remaining, chunk_buf.len() as u64) as usize;
-                                            if let Ok(n) = f.read(&mut chunk_buf[..to_read]).await {
-                                                if n == 0 { break; }
-                                                if stream.write_all(&chunk_buf[..n]).await.is_err() { break; }
-                                                remaining -= n as u64;
-                                            } else {
-                                                break;
-                                            }
-                                        }
-                                    }
+                        match (method, path) {
+                            ("GET" | "HEAD" | "OPTIONS", path) if path.starts_with("/stream?key=") => {
+                                serve_stream(&mut stream, method, path, &request_str).await;
+                            }
+                            ("GET", path) if path.starts_with("/login?nonce=") => {
+                                let requested = &path["/login?nonce=".len()..];
+                                let nonce = BROWSER_LOGIN.lock().ok().and_then(|login| {
+                                    login.as_ref()
+                                        .filter(|(nonce, started)| nonce == requested && started.elapsed() < LOGIN_TTL)
+                                        .map(|(nonce, _)| nonce.clone())
+                                });
+                                if let Some(nonce) = nonce {
+                                    write_login_page(&mut stream, "200 OK", &LOGIN_STEPS.replace("__NONCE__", &nonce)).await;
+                                } else {
+                                    write_login_notice(&mut stream, "403 Forbidden", "Вход в SoundCloud", "Откройте страницу подключения из ONYX.").await;
+                                }
+                            }
+                            ("POST", "/auth") => {
+                                // A normal form POST can carry an opaque origin under the page's referrer policy.
+                                // The one-time ticket is required in both cases.
+                                if !matches!(request_header(&request_str, "Origin"), Some("https://soundcloud.com" | "null"))
+                                    || !request_header(&request_str, "Content-Type").is_some_and(|content| {
+                                        content.split(';').next() == Some("application/x-www-form-urlencoded")
+                                    })
+                                {
+                                    write_empty(&mut stream, "403 Forbidden").await;
                                     return;
                                 }
-                            }
-                            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r
-").await;
-                            return;
-                        }
-
-                        if path.starts_with("/stream") {
-                            let target_url = if let Some(idx) = path.find("url=") {
-                                let raw = &path[idx + 4..];
-                                urldecode(raw)
-                            } else {
-                                String::new()
-                            };
-
-                            if target_url.is_empty() {
-                                let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n").await;
-                                return;
-                            }
-
-                            let client = get_http_client();
-
-                            // Extract Range header if requested by HTML5 audio
-                            let range_header = request_str.lines()
-                                .find(|l| l.to_lowercase().starts_with("range:"))
-                                .and_then(|l| l.split(':').nth(1))
-                                .map(|s| s.trim().to_string());
-
-                            let mut req = client.get(&target_url)
-                                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36")
-                                ;
-
-                            if let Some(ref r) = range_header {
-                                req = req.header("Range", r);
-                            }
-
-                            if let Ok(mut resp) = req.send().await {
-                                let status = resp.status();
-                                let content_type = resp.headers().get("content-type")
-                                    .and_then(|v| v.to_str().ok())
-                                    .unwrap_or("audio/mp4");
-                                let content_len = resp.headers().get("content-length")
-                                    .and_then(|v| v.to_str().ok())
-                                    .unwrap_or("");
-                                let content_range = resp.headers().get("content-range")
-                                    .and_then(|v| v.to_str().ok())
-                                    .unwrap_or("");
-
-                                let status_line = if status.is_success() && status.as_u16() == 206 {
-                                    "HTTP/1.1 206 Partial Content\r\n"
-                                } else {
-                                    "HTTP/1.1 200 OK\r\n"
+                                let length = request_header(&request_str, "Content-Length")
+                                    .and_then(|length| length.parse::<usize>().ok())
+                                    .filter(|&length| length <= 4096);
+                                let Some(end) = length.and_then(|length| headers_end.checked_add(length))
+                                    .filter(|&end| end > headers_end && end <= buffer.len())
+                                else {
+                                    write_login_page(&mut stream, "400 Bad Request", "Неверный запрос подключения.").await;
+                                    return;
                                 };
-
-                                let mut header_str = format!(
-                                    "{}Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS, HEAD\r\nAccess-Control-Allow-Headers: Range, Origin, Content-Type, Accept\r\nAccept-Ranges: bytes\r\nConnection: keep-alive\r\nContent-Type: {}\r\n",
-                                    status_line,
-                                    content_type
-                                );
-                                if !content_len.is_empty() {
-                                    header_str.push_str(&format!("Content-Length: {}\r\n", content_len));
+                                if bytes_read < end
+                                    && !matches!(
+                                        tokio::time::timeout(Duration::from_secs(5), stream.read_exact(&mut buffer[bytes_read..end])).await,
+                                        Ok(Ok(_))
+                                    )
+                                {
+                                    return;
                                 }
-                                if !content_range.is_empty() {
-                                    header_str.push_str(&format!("Content-Range: {}\r\n", content_range));
+                                let form = String::from_utf8_lossy(&buffer[headers_end..end]);
+                                let field = |key| {
+                                    form.split('&')
+                                        .filter_map(|field| field.split_once('='))
+                                        .find_map(|(name, value)| (name == key).then(|| urldecode(value)))
+                                };
+                                let Some(token) = field("token").filter(|value| value.len() >= 10) else {
+                                    write_login_page(&mut stream, "400 Bad Request", "Войдите в SoundCloud и повторите подключение.").await;
+                                    return;
+                                };
+                                let _request = BROWSER_AUTH_REQUEST.lock().await;
+                                if !field("nonce").is_some_and(|nonce| consume_browser_login(&nonce)) {
+                                    write_login_notice(&mut stream, "403 Forbidden", "Срок подключения истёк", "Начните вход заново из ONYX.").await;
+                                    return;
                                 }
-                                header_str.push_str("\r\n");
 
-                                if stream.write_all(header_str.as_bytes()).await.is_ok() {
-                                    while let Ok(Some(chunk)) = resp.chunk().await {
-                                        if stream.write_all(&chunk).await.is_err() {
-                                            break;
-                                        }
+                                match sc_ref.set_oauth_token(&token).await {
+                                    Ok(data) => {
+                                        let _ = app.emit("sc_auth_success", data);
+                                        write_login_notice(&mut stream, "200 OK", "Аккаунт подключён", "Закройте вкладку и вернитесь в ONYX.").await;
+                                    }
+                                    Err(_) => {
+                                        let message = "SoundCloud отклонил подключение. Начните вход заново из ONYX.";
+                                        let _ = app.emit("sc_auth_error", message);
+                                        write_login_notice(&mut stream, "401 Unauthorized", "Подключение прервано", message).await;
                                     }
                                 }
                             }
-                            return;
-                        }
-
-                        if path.starts_with("/auth") {
-                            // Extract token parameter
-                            let token_val = if let Some(idx) = path.find("token=") {
-                                let query = &path[idx + 6..];
-                                let raw_token = query.split('&').next().unwrap_or("");
-                                urldecode(raw_token)
-                            } else {
-                                String::new()
-                            };
-
-                            let trimmed = token_val.trim();
-                            if !trimmed.is_empty() {
-                                let mut cfg = sc_ref.load_config();
-                                cfg.oauth_token = Some(trimmed.to_string());
-                                let _ = sc_ref.save_config(&cfg);
-
-                                // Refresh profile
-                                let profile = sc_ref.get_profile().await.ok();
-                                let username = profile
-                                    .as_ref()
-                                    .and_then(|p| p.get("username"))
-                                    .and_then(|u| u.as_str())
-                                    .unwrap_or("SoundCloud User");
-
-                                let body = format!(
-                                    r#"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>SoundCloud Player Connected</title>
-    <style>
-        body {{ background: #0c0a10; color: #fff; font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }}
-        .card {{ background: #161420; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; text-align: center; max-width: 440px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }}
-        h1 {{ font-size: 20px; margin-bottom: 8px; color: #ff5500; }}
-        p {{ font-size: 13px; color: #aaa; line-height: 1.5; }}
-        .user {{ display: inline-block; background: rgba(255,85,0,0.15); border: 1px solid rgba(255,85,0,0.3); padding: 6px 14px; border-radius: 9999px; font-weight: bold; color: #ff7700; margin: 15px 0; }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h1>✅ Успешно подключено!</h1>
-        <div class="user">👤 {}</div>
-        <p>Аккаунт успешно привязан к десктопному плееру. Все лайки и миксы уже синхронизированы в приложении.</p>
-        <p style="font-size:11px; color:#666; margin-top:20px;">Можете закрыть эту вкладку и вернуться в плеер.</p>
-    </div>
-</body>
-</html>"#,
-                                    username
-                                );
-
-                                let response = format!(
-                                    "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                                    body.len(),
-                                    body
-                                );
-                                let _ = stream.write_all(response.as_bytes()).await;
-                            } else {
-                                let body = "Missing token";
-                                let response = format!(
-                                    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                                    body.len(),
-                                    body
-                                );
-                                let _ = stream.write_all(response.as_bytes()).await;
-                            }
-                        } else {
-                            // Serve login helper page
-                            let body = r#"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>Вход в SoundCloud Player</title>
-    <style>
-        body { background: #0c0a10; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .card { background: #15131e; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 36px; max-width: 520px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
-        .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,85,0,0.12); color: #ff5500; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; border: 1px solid rgba(255,85,0,0.25); }
-        h1 { font-size: 22px; font-weight: 800; margin: 0 0 10px 0; color: #fff; }
-        p { font-size: 13px; color: #9ca3af; line-height: 1.6; margin: 0 0 20px 0; }
-        .steps { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
-        .step { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 14px 16px; }
-        .step-num { font-size: 11px; font-weight: bold; color: #ff5500; margin-bottom: 4px; }
-        .step-title { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 4px; }
-        .step-desc { font-size: 12px; color: #888; }
-        .btn-orange { display: block; text-align: center; text-decoration: none; background: #ff5500; color: #fff; font-weight: bold; font-size: 13px; padding: 12px 20px; border-radius: 12px; transition: background 0.2s; margin-top: 8px; }
-        .btn-orange:hover { background: #e04b00; }
-        .bookmarklet-btn { display: inline-block; cursor: grab; background: #262335; border: 1px dashed rgba(255,85,0,0.5); color: #ff7722; font-size: 12px; font-weight: 600; padding: 10px 16px; border-radius: 10px; text-decoration: none; margin-top: 8px; }
-        .bookmarklet-btn:hover { background: #322e47; }
-        .input-row { display: flex; gap: 8px; margin-top: 10px; }
-        input[type="text"] { flex: 1; background: #0c0a10; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 12px; color: #fff; font-size: 12px; font-family: monospace; outline: none; }
-        input[type="text"]:focus { border-color: #ff5500; }
-        button.submit-btn { background: #fff; color: #000; border: none; font-weight: bold; font-size: 12px; padding: 0 16px; border-radius: 10px; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="badge">🌐 Браузерный вход</div>
-        <h1>Подключение SoundCloud</h1>
-        <p>Войдите в ваш аккаунт SoundCloud через ваш привычный браузер. Все пароли и Google-аккаунт сохраняются в вашем браузере.</p>
-
-        <div class="steps">
-            <div class="step">
-                <div class="step-num">ШАГ 1</div>
-                <div class="step-title">Откройте soundcloud.com</div>
-                <div class="step-desc">Убедитесь, что вы авторизованы в вашем профиле на сайте.</div>
-                <a href="https://soundcloud.com/signin" target="_blank" class="btn-orange">Открыть SoundCloud в новой вкладке ↗</a>
-            </div>
-
-            <div class="step">
-                <div class="step-num">ШАГ 2 (МГНОВЕННО)</div>
-                <div class="step-title">Закладка быстрого подключения</div>
-                <div class="step-desc">Перетащите кнопку ниже на панель закладок браузера, затем нажмите её, находясь на странице soundcloud.com:</div>
-                <a class="bookmarklet-btn" href="javascript:(function(){const m=document.cookie.match(/oauth_token=([^;]+)/);if(!m){alert('Сначала войдите в SoundCloud на этой вкладке!');return;}fetch('http://127.0.0.1:49221/auth?token='+encodeURIComponent(m[1])).then(r=>r.text()).then(()=>{alert('✅ Успешно! Аккаунт подключен к SoundCloud Player.');window.location.reload();}).catch(()=>alert('Запустите десктопный плеер SoundCloud!'));})();">🔗 Подключить к SoundCloud Player</a>
-            </div>
-
-            <div class="step">
-                <div class="step-num">ИЛИ ВРУЧНУЮ</div>
-                <div class="step-title">Вставьте oauth_token из Cookies</div>
-                <div class="input-row">
-                    <input id="tok" type="text" placeholder="2-29... или OAuth ...">
-                    <button class="submit-btn" onclick="save()">Войти</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function save() {
-            const v = document.getElementById('tok').value.trim();
-            if (!v) return;
-            window.location.href = '/auth?token=' + encodeURIComponent(v);
-        }
-    </script>
-</body>
-</html>"#;
-
-                            let response = format!(
-                                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                                body.len(),
-                                body
-                            );
-                            let _ = stream.write_all(response.as_bytes()).await;
+                            _ => write_login_page(&mut stream, "404 Not Found", "Страница не найдена.").await,
                         }
                     }
                 });
@@ -368,34 +240,186 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>) {
     });
 }
 
-fn parse_range_header(header: &str, file_size: u64) -> (u64, u64) {
-    if file_size == 0 {
-        return (0, 0);
-    }
-    let max_idx = file_size.saturating_sub(1);
-    let clean = header.trim();
-    if let Some(eq_idx) = clean.find('=') {
-        let range_spec = &clean[eq_idx + 1..];
-        let mut parts = range_spec.split('-');
-        let start_str = parts.next().unwrap_or("").trim();
-        let end_str = parts.next().unwrap_or("").trim();
+async fn write_empty(stream: &mut TcpStream, status: &str) {
+    let response = format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    let _ = stream.write_all(response.as_bytes()).await;
+}
 
-        if start_str.is_empty() && !end_str.is_empty() {
-            let suffix_len: u64 = end_str.parse().unwrap_or(0);
-            let start = file_size.saturating_sub(suffix_len);
-            return (start, max_idx);
-        } else if !start_str.is_empty() {
-            let start: u64 = start_str.parse().unwrap_or(0);
-            let end: u64 = if end_str.is_empty() {
-                max_idx
-            } else {
-                end_str.parse().unwrap_or(max_idx)
-            };
-            return (std::cmp::min(start, max_idx), std::cmp::min(end, max_idx));
+async fn serve_stream(stream: &mut TcpStream, method: &str, path: &str, headers: &str) {
+    let key = &path["/stream?key=".len()..];
+    let Some(url) = stream_url_for_ticket(key) else {
+        write_empty(stream, "404 Not Found").await;
+        return;
+    };
+    let origin = request_header(headers, "Origin").filter(|origin| {
+        matches!(*origin, "http://tauri.localhost" | "https://tauri.localhost" | "tauri://localhost")
+    });
+    let cors = origin.map(|origin| format!("Access-Control-Allow-Origin: {origin}\r\nVary: Origin\r\n")).unwrap_or_default();
+    if method == "OPTIONS" {
+        if origin.is_none() {
+            write_empty(stream, "403 Forbidden").await;
+            return;
+        }
+        let response = format!("HTTP/1.1 204 No Content\r\n{cors}Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: Range\r\nConnection: close\r\n\r\n");
+        let _ = stream.write_all(response.as_bytes()).await;
+        return;
+    }
+
+    let Some(client) = get_http_client() else {
+        write_empty(stream, "502 Bad Gateway").await;
+        return;
+    };
+    let mut request = if method == "HEAD" { client.head(url) } else { client.get(url) };
+    request = request.header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36");
+    if let Some(range) = request_header(headers, "Range") {
+        request = request.header(reqwest::header::RANGE, range);
+    }
+    let Ok(mut response) = request.send().await else {
+        write_empty(stream, "502 Bad Gateway").await;
+        return;
+    };
+    let status = match response.status().as_u16() {
+        200 => "200 OK",
+        206 => "206 Partial Content",
+        416 => "416 Range Not Satisfiable",
+        _ => {
+            write_empty(stream, "502 Bad Gateway").await;
+            return;
+        }
+    };
+    let media_type = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next()).filter(|value| value.starts_with("audio/") || *value == "application/octet-stream");
+    if media_type.is_none() && response.status().is_success() {
+        write_empty(stream, "502 Bad Gateway").await;
+        return;
+    }
+    let media_type = media_type.unwrap_or("application/octet-stream");
+    let mut head = format!("HTTP/1.1 {status}\r\n{cors}Content-Type: {media_type}\r\nX-Content-Type-Options: nosniff\r\nAccept-Ranges: bytes\r\nConnection: close\r\n");
+    for name in [reqwest::header::CONTENT_LENGTH, reqwest::header::CONTENT_RANGE] {
+        if let Some(value) = response.headers().get(&name).and_then(|value| value.to_str().ok()) {
+            let _ = write!(head, "{name}: {value}\r\n");
         }
     }
-    (0, max_idx)
+    head.push_str("\r\n");
+    if stream.write_all(head.as_bytes()).await.is_err() || method == "HEAD" { return; }
+    while let Ok(Some(chunk)) = response.chunk().await {
+        if stream.write_all(&chunk).await.is_err() { break; }
+    }
 }
+
+fn consume_browser_login(nonce: &str) -> bool {
+    let Ok(mut login) = BROWSER_LOGIN.lock() else {
+        return false;
+    };
+    if login.as_ref().is_some_and(|(expected, started)| expected == nonce && started.elapsed() < LOGIN_TTL) {
+        *login = None;
+        return true;
+    }
+    false
+}
+
+async fn read_headers(stream: &mut TcpStream, buffer: &mut [u8]) -> Option<(usize, usize)> {
+    let mut bytes_read = 0;
+    loop {
+        let count = stream.read(&mut buffer[bytes_read..]).await.ok()?;
+        if count == 0 {
+            return None;
+        }
+        bytes_read += count;
+        if let Some(end) = buffer[..bytes_read].windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+            return Some((bytes_read, end + 4));
+        }
+    }
+}
+
+fn request_header<'a>(headers: &'a str, key: &str) -> Option<&'a str> {
+    headers.lines()
+        .filter_map(|line| line.split_once(':'))
+        .find_map(|(name, value)| name.eq_ignore_ascii_case(key).then(|| value.trim()))
+}
+
+async fn write_login_notice(stream: &mut TcpStream, status: &str, title: &str, message: &str) {
+    let body = format!(
+        r#"<main class="result"><div class="brand">ONYX</div><h1>{title}</h1><p>{message}</p></main>"#
+    );
+    write_login_page(stream, status, &body).await;
+}
+
+async fn write_login_page(stream: &mut TcpStream, status: &str, body: &str) {
+    let page = format!("{LOGIN_HEAD}{body}</body></html>");
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",
+        page.len()
+    );
+    let _ = stream.write_all(response.as_bytes()).await;
+}
+
+const LOGIN_HEAD: &str = r#"<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>SoundCloud · ONYX</title>
+    <style>
+        :root { color-scheme: dark; --accent: #ff8554; --muted: #b9b6c3; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #0d0d12; color: #f9f8fb; font: 15px/1.5 system-ui, sans-serif; }
+        main { width: min(880px, 100%); overflow: hidden; border: 1px solid #36333f; border-radius: 24px; background: #16151d; box-shadow: 0 24px 80px #0007; }
+        .connect { display: grid; grid-template-columns: 1fr 1.2fr; }
+        .intro { display: flex; flex-direction: column; justify-content: center; gap: 16px; padding: 36px; background: radial-gradient(ellipse at top left, #542c29 0%, #231b26 58%, #1c1922 100%); }
+        .brand { color: #ffc1a8; font-size: 12px; font-weight: 750; letter-spacing: .2em; }
+        h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.05; letter-spacing: -.045em; margin: 0; }
+        p { margin: 0; color: var(--muted); }
+        .wave { width: 104px; height: 40px; color: var(--accent); }
+        ol { list-style: none; counter-reset: steps; margin: 0; padding: 30px; display: grid; gap: 14px; }
+        li { counter-increment: steps; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; gap: 12px; }
+        li::before { content: counter(steps, decimal-leading-zero); display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #583a36; border-radius: 10px; background: #2d2126; color: #ffb495; font-size: 12px; font-weight: 750; }
+        h2 { font-size: 15px; margin: 4px 0 5px; }
+        li p { font-size: 13px; }
+        a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+        .button { display: inline-flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 8px 12px; border-radius: 9px; color: #19100b; background: var(--accent); text-decoration: none; font-weight: 750; font-size: 13px; }
+        .button:hover { background: #ffa27e; }
+        .bookmark { color: #ffc1a8; background: #241d24; border: 1px dashed #a8604c; cursor: grab; }
+        .bookmark:hover { background: #3a292f; }
+        kbd { color: #f2e9f0; white-space: nowrap; }
+        .result { width: min(500px, 100%); padding: 32px; display: grid; gap: 14px; }
+        .result h1 { font-size: 30px; }
+        @media (max-width: 680px) {
+            body { padding: 14px; }
+            .connect { grid-template-columns: 1fr; }
+            .intro { padding: 24px; gap: 12px; }
+            ol { padding: 22px; }
+        }
+    </style>
+</head>
+<body>"#;
+
+const LOGIN_STEPS: &str = r#"<main class="connect">
+    <header class="intro">
+        <div class="brand">ONYX</div>
+        <svg class="wave" aria-hidden="true" viewBox="0 0 104 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+            <path d="M4 17v6m12-12v18m12-24v30m12-21v12m12-23v34m12-27v20m12-14v8m12-12v16m12-12v8"/>
+        </svg>
+        <h1>Подключите<br>SoundCloud</h1>
+        <p>Войдите в SoundCloud и синхронизируйте лайки в ONYX.</p>
+    </header>
+    <ol>
+        <li><div>
+            <h2>Добавьте закладку</h2>
+            <p>Перетащите кнопку на панель закладок. В Chrome и Edge панель открывается через <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>.</p>
+            <a class="button bookmark" onclick="event.preventDefault(); alert('Перетащите эту кнопку на панель закладок.');" href="javascript:(function(){if(location.origin!=='https://soundcloud.com'){alert('Откройте soundcloud.com и войдите в аккаунт.');return;}const match=document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);if(!match){alert('Сессия SoundCloud недоступна. Войдите и попробуйте ещё раз.');return;}const form=document.createElement('form');form.method='POST';form.action='http://127.0.0.1:49221/auth';for(const [name,value] of Object.entries({nonce:'__NONCE__',token:decodeURIComponent(match[1])})){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.append(input);}document.body.append(form);form.submit();})();">Подключить к ONYX</a>
+        </div></li>
+        <li><div>
+            <h2>Войдите в SoundCloud</h2>
+            <p>Выберите способ входа на сайте SoundCloud.</p>
+            <a class="button" href="https://soundcloud.com/signin" target="_blank" rel="noopener noreferrer">Открыть SoundCloud <span aria-hidden="true">↗</span></a>
+        </div></li>
+        <li><div>
+            <h2>Подключите аккаунт</h2>
+            <p>На вкладке SoundCloud нажмите закладку <strong>«Подключить к ONYX»</strong>. После подтверждения вернитесь в плеер.</p>
+        </div></li>
+    </ol>
+</main>"#;
 
 fn urldecode(input: &str) -> String {
     let mut result = String::new();

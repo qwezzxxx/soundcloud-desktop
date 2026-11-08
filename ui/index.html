@@ -1296,6 +1296,15 @@
 
 
 
+    .lyric-active.has-word-timings .lyric-word {
+      opacity: 0.66;
+    }
+
+    .lyric-active.has-word-timings .lyric-word-active {
+      opacity: 1;
+      text-shadow: 0 0 0.25em color-mix(in srgb, currentColor 40%, transparent);
+    }
+
     /* Active singing line: full line instantly illuminated in bold accent color */
 
 
@@ -7300,7 +7309,7 @@
                   <span>Локальный Whisper AI (Караоке)</span>
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">AI</span>
                 </div>
-                <div class="text-[11px] text-neutral-400 mt-0.5">Автоматически генерировать синхронный текст караоке, если его нет в сети</div>
+                <div class="text-[11px] text-neutral-400 mt-0.5">Автоматически готовить караоке и сверять слова с найденным текстом</div>
               </div>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
@@ -7310,6 +7319,13 @@
           <p class="text-[11px] text-neutral-400 leading-relaxed border-t border-white/5 pt-2.5">
             Нейросеть Whisper распознает слова песни прямо на вашем компьютере и расставляет посекундные тайминги караоке. Всё работает локально «из коробки».
           </p>
+          <label class="flex items-center justify-between gap-3 border-t border-white/5 pt-2.5 cursor-pointer">
+            <span>
+              <span class="block text-xs font-bold text-white">Точное караоке</span>
+              <span class="block text-[11px] text-neutral-400 mt-0.5">Whisper large-v3-turbo распознаёт весь трек. При первом запуске может потребоваться скачать модель (574 МБ).</span>
+            </span>
+            <input id="whisper-precise-toggle" type="checkbox" class="accent-rose-500 w-4 h-4 shrink-0 cursor-pointer">
+          </label>
         </div>
 
         <!-- Section 3: Глубокая кастомизация интерфейса -->
@@ -10246,13 +10262,15 @@
 
       </div>
 
-      <!-- Quick SoundCloud Auth Button -->
+      <!-- SoundCloud sign-in options -->
       <div class="space-y-2">
-        <button id="btn-oauth-window-login" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-neutral-200 active:scale-[0.98] text-black font-semibold text-xs flex items-center justify-center gap-2.5 shadow-lg shadow-white/5 transition-all cursor-pointer">
+        <button id="btn-browser-login" type="button" class="w-full py-3 px-4 rounded-xl bg-white hover:bg-neutral-200 active:scale-[0.98] text-black font-semibold text-xs flex items-center justify-center gap-2.5 shadow-lg shadow-white/5 transition-all cursor-pointer">
           <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M1.175 12.225c-.053 0-.097.042-.1.096l-.37 3.333c-.01.07.039.13.107.13h.363c.058 0 .106-.046.109-.104l.182-3.359c.003-.054-.04-.096-.091-.096zm1.312-.76c-.056 0-.102.044-.105.1l-.348 4.195c-.007.067.043.124.11.124h.347c.057 0 .104-.045.108-.102l.18-4.22c.002-.054-.04-.097-.092-.097zm1.309-.345c-.058 0-.105.045-.108.102l-.317 4.542c-.006.066.044.122.11.122h.34c.058 0 .106-.046.108-.103l.161-4.565c.002-.054-.041-.098-.094-.098zm1.308-.073c-.058 0-.106.046-.109.103l-.288 4.615c-.005.066.045.121.111.121h.334c.058 0 .106-.046.108-.104l.145-4.636c.002-.054-.041-.099-.094-.099zm1.308-.225c-.058 0-.106.046-.109.104l-.261 4.84c-.005.066.046.121.112.121h.328c.058 0 .106-.046.108-.104l.13-4.862c.002-.054-.041-.099-.094-.099zm1.307-.468c-.058 0-.106.046-.109.104l-.234 5.308c-.004.066.047.121.113.121h.323c.058 0 .106-.046.108-.104l.115-5.33c.002-.054-.041-.099-.094-.099zm1.307-.638c-.058 0-.106.046-.109.104l-.208 5.946c-.004.066.048.121.114.121h.317c.058 0 .106-.046.108-.105l.102-5.967c.001-.054-.042-.099-.094-.099zm1.307-.655c-.058 0-.106.046-.109.104l-.181 6.601c-.003.066.049.121.115.121h.312c.059 0 .107-.046.108-.105l.088-6.622c.001-.054-.042-.099-.095-.099zm2.463-2.613c-.33 0-.649.049-.95.138-.052.015-.084.066-.075.12l.143 9.008c.001.063.053.112.116.112h3.407c1.884 0 3.415-1.503 3.415-3.352 0-1.745-1.353-3.176-3.092-3.332-.303-1.528-1.673-2.694-3.314-2.694zm-1.156 1.761c-.058 0-.106.046-.108.104l-.154 7.37c-.002.066.05.121.116.121h.236c.058 0 .105-.046.107-.104l.104-7.391c0-.054-.043-.1-.095-.1h-.206z"/></svg>
-          <span class="text-black font-bold">Войти через SoundCloud</span>
+          <span class="text-black font-bold">Подключить SoundCloud через браузер</span>
         </button>
-        
+        <button id="btn-oauth-window-login" type="button" class="w-full py-2.5 px-4 rounded-xl border border-white/10 hover:bg-white/5 text-neutral-300 text-xs font-semibold transition-all cursor-pointer">
+          Открыть встроенное окно SoundCloud
+        </button>
       </div>
 
       <!-- Explanatory note about Account Requirement -->
@@ -10262,7 +10280,7 @@
           <span>Вход только через аккаунт</span>
         </div>
         <p class="text-neutral-400 text-[11px]">
-          Для работы плеера требуется авторизация в SoundCloud. Гостевой режим отключен. Нажмите кнопку <strong class="text-white">«Войти через SoundCloud»</strong> выше для автоматического входа через браузер или вставьте ваш <strong class="text-white">OAuth токен</strong> вручную ниже.
+          После входа на сайте SoundCloud нажмите в браузере закладку «Подключить к ONYX». На странице подключения показано, как её добавить.
         </p>
       </div>
 
@@ -10798,8 +10816,8 @@
                 <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 20 20"><path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z"/></svg>
               </button>
               <button id="immersive-play-btn" onclick="togglePlay()" class="w-10 h-10 rounded-full flex items-center justify-center bg-white text-black font-bold shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0" title="Воспроизведение / Пауза" style="pointer-events: auto !important;">
-                <svg id="immersive-play-icon" class="w-4 h-4 fill-black pointer-events-none ml-0.5" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/>
+                <svg id="immersive-play-icon" class="w-4 h-4 fill-black pointer-events-none" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M5.5 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 5.5 5.14z"/>
                 </svg>
                 <svg id="immersive-pause-icon" class="w-4 h-4 fill-black hidden pointer-events-none" viewBox="0 0 24 24">
                   <rect x="6" y="4" width="4" height="16" rx="1.5"/>
@@ -10837,6 +10855,7 @@
 
 
       <div class="md:col-span-6 lg:col-span-7 h-full max-h-[82vh] flex flex-col justify-center relative overflow-hidden select-none">
+        <button id="btn-custom-lyrics-edit" type="button" class="self-end shrink-0 rounded-lg px-3 py-1.5 text-xs text-neutral-400 hover:bg-white/10 hover:text-white cursor-pointer">Текст и тайминги</button>
 
 
 
@@ -12066,7 +12085,7 @@
 
 
       getLyrics: (title, artist, duration) => api.invoke('get_lyrics', { title, artist, duration }),
-      transcribeTrack: (trackId, streamUrl) => api.invoke('transcribe_track', { trackId, streamUrl }),
+      transcribeTrack: (trackId, streamUrl, precise) => api.invoke('transcribe_track', { trackId, streamUrl, precise }),
 
 
 
@@ -17665,38 +17684,18 @@
     async function prefetchLyricsForTrack(track) {
       if (!track || !track.id) return;
       const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
-      if (lyricsCache.has(cacheKey)) return;
+      if (usableCachedLyrics(lyricsCache.get(cacheKey))) return;
+      const cached = readTrackLyricsCache(track);
+      if (cached) {
+        lyricsCache.set(cacheKey, cached);
+        return;
+      }
       try {
-        const local = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
-        if (local) {
-          lyricsCache.set(cacheKey, JSON.parse(local));
-          return;
-        }
-      } catch (_) {}
-      try {
-        const durSec = track.duration_ms ? (track.duration_ms / 1000) : null;
-        const cleanTitle = cleanTrackTitleForLyrics(track.title || '');
-        const cleanArtist = (track.artist || '').trim();
-        const res = await api.getLyrics(cleanTitle, cleanArtist, durSec);
-        if (res && res.syncedLyrics) {
+        const res = await requestTrackLyrics(track);
+        if (res?.syncedLyrics && !usableCachedLyrics(lyricsCache.get(cacheKey))) {
           lyricsCache.set(cacheKey, res);
-          try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res)); } catch (_) {}
+          storeTrackLyrics(track, res);
           return;
-        }
-      } catch (_) {}
-      // Pre-transcribe with Whisper in background before the song turns on!
-      try {
-        let streamUrl = explicitStreamUrl || getCachedStreamUrl(track.id);
-        if (!streamUrl) {
-          streamUrl = await requestStreamUrl(track.id);
-        }
-        if (streamUrl) {
-          const aiRes = await api.transcribeTrack(track.id, streamUrl);
-          if (aiRes && aiRes.syncedLyrics) {
-            lyricsCache.set(cacheKey, aiRes);
-            try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(aiRes)); } catch (_) {}
-            logD('Background pre-transcription ready before song starts: ' + track.title);
-          }
         }
       } catch (_) {}
     }
@@ -17846,60 +17845,6 @@
           return;
         }
 
-        // PARSE LYRICS & TIMINGS BEFORE TURNING ON THE SONG ("до вкл песни"):
-        // If synced lyrics are not in cache, check cloud (200ms) or run local Whisper (3s)
-        // before audioEngine.play() starts, so the song turns on with karaoke already at 00:00!
-        const lyricsKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
-        let hasReadyLyrics = lyricsCache.has(lyricsKey);
-        if (!hasReadyLyrics) {
-          try {
-            const storedL = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
-            if (storedL) {
-              const parsedL = JSON.parse(storedL);
-              if (parsedL && (parsedL.syncedLyrics || parsedL.plainLyrics || parsedL.instrumental)) {
-                lyricsCache.set(lyricsKey, parsedL);
-                hasReadyLyrics = true;
-              }
-            }
-          } catch (_) {}
-        }
-
-        if (!hasReadyLyrics) {
-          setPlayerLoading(true, '✨ Поиск текста...');
-          try {
-            const durSec = track.duration_ms ? (track.duration_ms / 1000) : null;
-            const cleanTitle = cleanTrackTitleForLyrics(track.title || '');
-            const cleanArtist = (track.artist || '').trim();
-            const cloudRes = await Promise.race([
-              api.getLyrics(cleanTitle, cleanArtist, durSec).catch(() => null),
-              new Promise(r => setTimeout(r, 1200))
-            ]);
-            if (cloudRes && (cloudRes.syncedLyrics || cloudRes.plainLyrics || cloudRes.instrumental)) {
-              lyricsCache.set(lyricsKey, cloudRes);
-              try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(cloudRes)); } catch (_) {}
-              hasReadyLyrics = true;
-            }
-          } catch (_) {}
-        }
-
-        const curLyricsData = lyricsCache.get(lyricsKey);
-        const needsWhisperAi = !curLyricsData || (!curLyricsData.syncedLyrics && !curLyricsData.instrumental);
-        if (needsWhisperAi) {
-          setPlayerLoading(true, '✨ Whisper AI готовит караоке...');
-          try {
-            // Await local Whisper before starting the music, so lines and timestamps are ready from 0:00!
-            await Promise.race([
-              startWhisperTranscription(track, streamUrl),
-              new Promise(r => setTimeout(r, 6500))
-            ]);
-          } catch (_) {}
-        }
-
-        if (requestId !== currentPlayRequestId) {
-          setPlayerLoading(false);
-          return;
-        }
-
         const handlePlaybackStart = () => {
           if (window._pendingSeekTime && window._pendingSeekTime > 0) {
             try {
@@ -17908,6 +17853,7 @@
             window._pendingSeekTime = 0;
           }
           saveSessionState();
+          if (requestId === currentPlayRequestId) startAutomaticKaraoke(track, streamUrl);
         };
 
         discordPlaybackTrack = track;
@@ -19894,10 +19840,10 @@
         const row = document.createElement('div');
         row.className = 'flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors';
         row.innerHTML = `
-          <img src="${track.cover || track.artwork_url || 'logo.png'}" class="w-8 h-8 rounded-md object-cover shrink-0">
+          <img src="${escapeMarkup(track.cover || track.artwork_url || 'logo.png')}" class="w-8 h-8 rounded-md object-cover shrink-0">
           <div class="truncate flex-1">
-            <div class="text-white font-medium truncate">${track.title || 'Без названия'}</div>
-            <div class="text-[10px] text-neutral-400 truncate">${track.artist || 'Неизвестный исполнитель'}</div>
+            <div class="text-white font-medium truncate">${escapeMarkup(track.title || 'Без названия')}</div>
+            <div class="text-[10px] text-neutral-400 truncate">${escapeMarkup(track.artist || 'Неизвестный исполнитель')}</div>
           </div>
         `;
         row.addEventListener('click', () => playTrack(idx));
@@ -20290,7 +20236,7 @@
 
 
 
-            <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/5">
+            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/5">
 
 
 
@@ -20306,7 +20252,7 @@
 
 
 
-              <div class="liked-row-title text-xs font-semibold truncate ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-300'}" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title}</div>
+              <div class="liked-row-title text-xs font-semibold truncate ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-300'}" style="${isCurrent ? 'color: var(--accent);' : ''}">${escapeMarkup(t.title)}</div>
 
 
 
@@ -20314,7 +20260,7 @@
 
 
 
-              <div class="text-[11px] text-neutral-400 truncate">${t.artist}</div>
+              <div class="text-[11px] text-neutral-400 truncate">${escapeMarkup(t.artist)}</div>
 
 
 
@@ -20338,7 +20284,7 @@
 
 
 
-          <div class="text-right text-xs font-mono text-neutral-400">${t.duration}</div>
+          <div class="text-right text-xs font-mono text-neutral-400">${escapeMarkup(t.duration)}</div>
 
 
 
@@ -20354,7 +20300,7 @@
 
 
 
-            <button class="table-like-btn p-1 hover:scale-125 active:scale-75 transition-transform cursor-pointer" style="color: var(--accent);" data-id="${t.id}" title="Удалить из любимых">
+            <button class="table-like-btn p-1 hover:scale-125 active:scale-75 transition-transform cursor-pointer" style="color: var(--accent);" data-id="${escapeMarkup(t.id)}" title="Удалить из любимых">
 
 
 
@@ -21336,7 +21282,7 @@
 
 
 
-              <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
+              <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
 
 
 
@@ -21368,7 +21314,7 @@
 
 
 
-                <span class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
+                <span class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${escapeMarkup(t.title || 'Untitled Track')}</span>
 
 
 
@@ -21392,7 +21338,7 @@
 
 
 
-              <div class="text-[11px] text-neutral-400 truncate">${t.artist || 'Unknown Artist'}</div>
+              <div class="text-[11px] text-neutral-400 truncate">${escapeMarkup(t.artist || 'Unknown Artist')}</div>
 
 
 
@@ -21424,7 +21370,7 @@
 
 
 
-            <span class="text-xs text-neutral-500 font-mono hidden sm:inline">${t.duration || '0:00'}</span>
+            <span class="text-xs text-neutral-500 font-mono hidden sm:inline">${escapeMarkup(t.duration || '0:00')}</span>
 
 
 
@@ -22524,20 +22470,20 @@
             <div class="w-6 flex items-center justify-center shrink-0">
               ${iconHtml}
             </div>
-            <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm">
+            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm">
             <div class="truncate min-w-0">
-              <div class="text-xs truncate" style="${isCurrent ? `color: ${wt.activeTrackTitle}; font-weight: bold;` : ''}">${t.title}</div>
-              <div class="text-[11px] ${isLight ? 'text-slate-500' : 'text-neutral-400'} truncate">${t.artist}</div>
+              <div class="text-xs truncate" style="${isCurrent ? `color: ${wt.activeTrackTitle}; font-weight: bold;` : ''}">${escapeMarkup(t.title)}</div>
+              <div class="text-[11px] ${isLight ? 'text-slate-500' : 'text-neutral-400'} truncate">${escapeMarkup(t.artist)}</div>
             </div>
           </div>
           <div class="flex items-center gap-3 shrink-0">
-            <button class="wave-track-like-btn p-1.5 ${isLight ? 'text-slate-400 hover:text-rose-500' : 'text-neutral-500 hover:text-rose-500'} transition-colors cursor-pointer" title="Добавить в любимые" data-id="${t.id}">
+            <button class="wave-track-like-btn p-1.5 ${isLight ? 'text-slate-400 hover:text-rose-500' : 'text-neutral-500 hover:text-rose-500'} transition-colors cursor-pointer" title="Добавить в любимые" data-id="${escapeMarkup(t.id)}">
               <svg class="w-4 h-4 ${t.liked ? 'fill-rose-500 text-rose-500' : 'fill-none stroke-currentColor'}" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
             </button>
             <div class="text-xs ${isLight ? 'text-slate-500' : 'text-neutral-400'} font-mono">
-              ${t.duration || ''}
+              ${escapeMarkup(t.duration || '')}
             </div>
           </div>
         `;
@@ -22994,10 +22940,10 @@
         const card = document.createElement('div');
         card.className = `quick-card card-glass h-16 rounded-xl flex items-center gap-3.5 pr-4 overflow-hidden cursor-pointer group transition-all ${isCurrent ? 'bg-white/[0.08]' : ''}`;
         card.innerHTML = `
-          <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-16 h-16 object-cover shrink-0" alt="">
+          <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-16 h-16 object-cover shrink-0" alt="">
           <div class="flex-1 truncate">
-            <div class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${t.title}</div>
-            <div class="text-[11px] text-neutral-400 truncate">${t.artist}</div>
+            <div class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${escapeMarkup(t.title)}</div>
+            <div class="text-[11px] text-neutral-400 truncate">${escapeMarkup(t.artist)}</div>
           </div>
         `;
         card.addEventListener('click', () => {
@@ -23052,14 +22998,14 @@
             card.innerHTML = `
               <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
                 ${waveBadge}
-                <img src="${artwork}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <img src="${escapeMarkup(artwork)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                 <div class="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors flex items-center justify-center">
                   ${playBadge}
                 </div>
               </div>
               <div class="truncate">
-                <div class="text-xs font-bold ${isStationActive ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${title}</div>
-                <div class="text-[11px] text-neutral-400 truncate mt-0.5">${desc}</div>
+                <div class="text-xs font-bold ${isStationActive ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${escapeMarkup(title)}</div>
+                <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(desc)}</div>
               </div>
             `;
             card.addEventListener('click', () => {
@@ -23096,14 +23042,14 @@
                  </div>`;
             card.innerHTML = `
               <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
-                <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                 <div class="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors flex items-center justify-center">
                   ${playBadge}
                 </div>
               </div>
               <div class="truncate">
-                <div class="text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${t.title}</div>
-                <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist}</div>
+                <div class="text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${escapeMarkup(t.title)}</div>
+                <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(t.artist)}</div>
               </div>
             `;
             card.addEventListener('click', () => {
@@ -24045,7 +23991,7 @@
 
 
 
-          userAvatarEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" alt="${username}">`;
+          userAvatarEl.innerHTML = `<img src="${escapeMarkup(avatarUrl)}" class="w-full h-full object-cover rounded-full" alt="${escapeMarkup(username)}">`;
 
 
 
@@ -24085,7 +24031,7 @@
 
 
 
-          settingsAvatarEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" alt="${username}">`;
+          settingsAvatarEl.innerHTML = `<img src="${escapeMarkup(avatarUrl)}" class="w-full h-full object-cover rounded-full" alt="${escapeMarkup(username)}">`;
 
 
 
@@ -24117,7 +24063,7 @@
 
 
 
-          profileAvatarEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" alt="${username}">`;
+          profileAvatarEl.innerHTML = `<img src="${escapeMarkup(avatarUrl)}" class="w-full h-full object-cover rounded-full" alt="${escapeMarkup(username)}">`;
 
 
 
@@ -24974,7 +24920,7 @@
 
 
 
-          if (freshCfg && freshCfg.oauth_token && freshCfg.oauth_token.trim().length > 10) {
+          if (freshCfg?.hasToken) {
 
 
 
@@ -25034,7 +24980,7 @@
             }
             try {
               if (currentUser) localStorage.setItem('sc_local_user_profile', JSON.stringify(currentUser));
-              if (appConfig && appConfig.oauth_token) localStorage.setItem('sc_session_token', appConfig.oauth_token);
+              localStorage.removeItem('sc_session_token');
             } catch (_) {}
             applyUserProfile(currentUser, allTracks.length);
             saveSessionState();
@@ -25118,14 +25064,20 @@
 
 
     if (btnBrowserLogin) {
-      btnBrowserLogin.addEventListener('click', () => {
-        if (loginStatusMsg) {
-          loginStatusMsg.className = 'text-xs text-orange-400 min-h-[16px] animate-pulse';
-          loginStatusMsg.textContent = '⏳ Ожидание авторизации... Завершите вход в браузере';
+      btnBrowserLogin.addEventListener('click', async () => {
+        try {
+          await api.openBrowserLogin();
+          if (loginStatusMsg) {
+            loginStatusMsg.className = 'text-xs text-neutral-400 min-h-[16px]';
+            loginStatusMsg.textContent = 'Следуйте инструкции на открывшейся странице ONYX.';
+          }
+        } catch (error) {
+          console.warn('Could not open SoundCloud in the browser', error);
+          if (loginStatusMsg) {
+            loginStatusMsg.className = 'text-xs text-red-400 min-h-[16px]';
+            loginStatusMsg.textContent = 'Не удалось открыть браузер. Попробуйте ещё раз.';
+          }
         }
-        api.openBrowserLogin().catch(console.warn);
-        startAuthWatcher();
-        notify('Открыта страница авторизации в браузере...', '🌐');
       });
     }
 
@@ -25187,7 +25139,7 @@
 
 
 
-        if (freshCfg && freshCfg.oauth_token && freshCfg.oauth_token.trim().length > 10) {
+        if (freshCfg?.hasToken) {
 
 
 
@@ -25480,7 +25432,7 @@
             submitLoginBtn.disabled = false;
             if (loginSpinner) loginSpinner.classList.add('hidden');
             if (loginBtnText) loginBtnText.textContent = 'Войти по токену';
-            if (loginStatusMsg) loginStatusMsg.textContent = 'Гостевой режим отключен. Введите ваш OAuth токен или нажмите кнопку "Войти через SoundCloud" выше.';
+            if (loginStatusMsg) loginStatusMsg.textContent = 'Вставьте OAuth-токен или подключите аккаунт через браузер.';
             return;
           }
 
@@ -25779,7 +25731,7 @@
 
       // 7. Clear appConfig in memory and persist logout to disk
       if (appConfig) {
-        appConfig.oauth_token = "";
+        appConfig.hasToken = false;
         appConfig.user_id = null;
         appConfig.user_profile = null;
         appConfig.cached_likes = [];
@@ -26592,70 +26544,15 @@
 
 
 
-          appConfig.oauth_token = val;
-
-
-
-
-
-
-
           try {
-
-
-
-
-
-
-
-            await api.saveConfig(appConfig);
-
-
-
-
-
-
-
             if (val) {
-
-
-
-
-
-
-
-              notify("OAuth токен успешно сохранён", "💾");
-
-
-
-
-
-
-
+              await api.setOauthToken(val);
+              appConfig = await api.getConfig();
+              settingsTokenInput.value = '';
+              notify('Аккаунт SoundCloud подключён');
             } else {
-
-
-
-
-
-
-
-              notify("OAuth токен очищен", "ℹ️");
-
-
-
-
-
-
-
+              await logoutAccount();
             }
-
-
-
-
-
-
-
           } catch (e) {
 
 
@@ -26818,7 +26715,7 @@
                   }
                   try {
                     if (currentUser) localStorage.setItem('sc_local_user_profile', JSON.stringify(currentUser));
-                    if (appConfig && appConfig.oauth_token) localStorage.setItem('sc_session_token', appConfig.oauth_token);
+                    localStorage.removeItem('sc_session_token');
                   } catch (_) {}
                   saveLocalDatabase();
                   applyUserProfile(currentUser, allTracks.length);
@@ -27152,31 +27049,7 @@
 
 
 
-        if (appConfig && appConfig.oauth_token) {
-
-
-
-
-
-
-
-          const stInput = document.getElementById('settings-token-input');
-
-
-
-
-
-
-
-          if (stInput) stInput.value = appConfig.oauth_token;
-
-
-
-
-
-
-
-        }
+        try { localStorage.removeItem('sc_session_token'); } catch (_) {}
 
 
 
@@ -27193,12 +27066,20 @@
 
 
         const whisperToggle = document.getElementById('whisper-auto-toggle');
-        if (whisperToggle && appConfig && appConfig.whisper_auto_transcribe !== undefined) {
-          whisperToggle.checked = Boolean(appConfig.whisper_auto_transcribe);
+        if (whisperToggle && appConfig) {
+          whisperToggle.checked = appConfig.whisper_auto_transcribe !== false;
         }
         whisperToggle?.addEventListener('change', () => {
           if (appConfig) {
             appConfig.whisper_auto_transcribe = whisperToggle.checked;
+            api.saveConfig(appConfig).catch(() => {});
+          }
+        });
+        const preciseToggle = document.getElementById('whisper-precise-toggle');
+        if (preciseToggle) preciseToggle.checked = Boolean(appConfig?.whisper_precise);
+        preciseToggle?.addEventListener('change', () => {
+          if (appConfig) {
+            appConfig.whisper_precise = preciseToggle.checked;
             api.saveConfig(appConfig).catch(() => {});
           }
         });
@@ -27308,7 +27189,7 @@
 
         // User authentication & library initialization
         const hasSavedUser = Boolean(
-          (appConfig && appConfig.oauth_token && appConfig.oauth_token.trim().length > 10)
+          appConfig?.hasToken
           || (currentUser && currentUser.id)
           || (appConfig && appConfig.user_profile && appConfig.user_profile.id)
         );
@@ -30816,7 +30697,6 @@
 
 
 
-    let lyricsFetchRequestId = 0;
 
 
 
@@ -31465,6 +31345,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     let activeLyricIndex = -1;
+    let activeLyricWordIndex = -1;
 
 
 
@@ -31488,190 +31369,46 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+    function normalizeLyricWordTags(text) {
+      return text.replace(/&lt;(\d{2,}:\d{2}(?:\.\d{1,3})?)&gt;/gi, '<$1>');
+    }
+
+    function stripLyricWordTags(text) {
+      return normalizeLyricWordTags(text).replace(/<\d{2,}:\d{2}(?:\.\d{1,3})?>/g, '');
+    }
+
     function parseLrc(lrcText) {
-
-
-
-
-
-
-
       if (!lrcText) return [];
-
-
-
-
-
-
-
-      const lines = lrcText.split('\n');
-
-
-
-
-
-
-
       const result = [];
-
-
-
-
-
-
-
-      const timeRegex = /\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g;
-
-
-
-
-
-
-
-      for (const line of lines) {
-
-
-
-
-
-
-
-        let match;
-
-
-
-
-
-
-
-        const timestamps = [];
-
-
-
-
-
-
-
-        timeRegex.lastIndex = 0;
-
-
-
-
-
-
-
-        while ((match = timeRegex.exec(line)) !== null) {
-
-
-
-
-
-
-
-          const min = parseInt(match[1], 10);
-
-
-
-
-
-
-
-          const sec = parseFloat(match[2]);
-
-
-
-
-
-
-
-          timestamps.push(min * 60 + sec);
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
-        const text = line.replace(timeRegex, '').trim();
-
-
-
-
-
-
-
-        if (timestamps.length > 0 && text) {
-
-
-
-
-
-
-
-          for (const t of timestamps) {
-
-
-
-
-
-
-
-            result.push({ time: t, text });
-
-
-
-
-
-
-
+      const lineTime = /\[(\d{2,}):(\d{2}(?:\.\d{1,3})?)\]/g;
+      const wordTime = /<(\d{2,}):(\d{2}(?:\.\d{1,3})?)>/g;
+      const seconds = match => Number(match[1]) * 60 + Number(match[2]);
+      for (const line of lrcText.split('\n')) {
+        const timestamps = [...line.matchAll(lineTime)].map(seconds);
+        const content = normalizeLyricWordTags(line.replace(lineTime, '').trim());
+        const text = content.replace(wordTime, '').trim();
+        if (!timestamps.length || !text) continue;
+        const markers = [...content.matchAll(wordTime)];
+        const prefix = markers.length ? content.slice(0, markers[0].index) : '';
+        const words = markers.map((marker, index) => ({
+          time: seconds(marker),
+          text: content.slice(marker.index + marker[0].length, markers[index + 1]?.index),
+        })).filter(word => word.text.trim());
+        const hasWordTimes = words.length && words.every((word, index) => !index || word.time >= words[index - 1].time);
+        const lastMarker = markers.at(-1);
+        const wordEnd = lastMarker && !content.slice(lastMarker.index + lastMarker[0].length).trim() ? seconds(lastMarker) : null;
+        for (const time of timestamps) {
+          const line = { time, text };
+          if (hasWordTimes) {
+            line.prefix = prefix;
+            const offset = time - timestamps[0];
+            line.words = words.map(word => ({ text: word.text, time: word.time + offset }));
+            if (wordEnd > words.at(-1).time) line.wordEnd = wordEnd + offset;
           }
-
-
-
-
-
-
-
+          result.push(line);
         }
-
-
-
-
-
-
-
       }
-
-
-
-
-
-
-
-      result.sort((a, b) => a.time - b.time);
-
-
-
-
-
-
-
-      return result;
-
-
-
-
-
-
-
+      return result.sort((a, b) => a.time - b.time);
     }
 
 
@@ -31680,278 +31417,45 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            function updateLyricsSync() {
-
-
-
-
-
-
-
-      if (!currentParsedLyrics || currentParsedLyrics.length === 0) return;
-
-
-
-
-
-
-
-      // Precision teleprompter lead-in of +0.22s so active line highlights right on vocal cue
-
-
-
-
-
-
-
-      const ct = (audioEngine.currentTime || 0) + 0.22;
-
-
-
-
-
-
-
-      let currentIndex = -1;
-
-
-
-
-
-
-
-      for (let i = 0; i < currentParsedLyrics.length; i++) {
-
-
-
-
-
-
-
-        if (ct >= currentParsedLyrics[i].time) {
-
-
-
-
-
-
-
-          currentIndex = i;
-
-
-
-
-
-
-
-        } else {
-
-
-
-
-
-
-
-          break;
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
+    function updateLyricsSync() {
+      if (!currentParsedLyrics?.length) return;
+      const time = audioEngine.currentTime || 0;
+      let lineIndex = -1;
+      for (let index = 0; index < currentParsedLyrics.length && time >= currentParsedLyrics[index].time; index++) {
+        lineIndex = index;
       }
-
-
-
-
-
-
-
       const lines = document.querySelectorAll('.synced-lyric-line');
-
-
-
-
-
-
-
-      if (lines.length === 0) return;
-
-
-
-
-
-
-
-      if (currentIndex !== activeLyricIndex) {
-
-
-
-
-
-
-
-        activeLyricIndex = currentIndex;
-
-
-
-
-
-
-
-        lines.forEach((el, idx) => {
-
-
-
-
-
-
-
-          el.classList.remove('lyric-active', 'lyric-past', 'lyric-future');
-
-
-
-
-
-
-
-          if (idx === activeLyricIndex) {
-
-
-
-
-
-
-
-            el.classList.add('lyric-active');
-
-
-
-
-
-
-
-            if (!isUserScrollingLyrics) {
-
-
-
-
-
-
-
-              const lyricsContainer = document.getElementById('immersive-lyrics-content');
-
-
-
-
-
-
-
-              if (lyricsContainer) {
-
-
-
-
-
-
-
-                const top = el.offsetTop - (lyricsContainer.clientHeight / 2) + (el.clientHeight / 2);
-
-
-
-
-
-
-
-                lyricsContainer.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-
-
-
-
-
-
-
-              }
-
-
-
-
-
-
-
-            }
-
-
-
-
-
-
-
-          } else if (idx < activeLyricIndex) {
-
-
-
-
-
-
-
-            el.classList.add('lyric-past');
-
-
-
-
-
-
-
-          } else {
-
-
-
-
-
-
-
-            el.classList.add('lyric-future');
-
-
-
-
-
-
-
-          }
-
-
-
-
-
-
-
+      if (!lines.length) return;
+      const lineChanged = lineIndex !== activeLyricIndex;
+      if (lineChanged) {
+        lines[activeLyricIndex]?.querySelector('.lyric-word-active')?.classList.remove('lyric-word-active');
+        activeLyricIndex = lineIndex;
+        lines.forEach((line, index) => {
+          line.classList.toggle('lyric-active', index === lineIndex);
+          line.classList.toggle('lyric-past', index < lineIndex);
+          line.classList.toggle('lyric-future', index > lineIndex);
         });
-
-
-
-
-
-
-
+        const line = lines[lineIndex];
+        const container = document.getElementById('immersive-lyrics-content');
+        if (line && container && !isUserScrollingLyrics) {
+          const top = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
+          container.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+        }
       }
-
-
-
-
-
-
-
+      const activeLine = currentParsedLyrics[lineIndex];
+      const words = activeLine?.words;
+      let wordIndex = -1;
+      if (words && (activeLine.wordEnd == null || time < activeLine.wordEnd)) {
+        for (let index = 0; index < words.length && time >= words[index].time; index++) {
+          wordIndex = index;
+        }
+      }
+      if (lineChanged || wordIndex !== activeLyricWordIndex) {
+        lines[lineIndex]?.querySelectorAll('.lyric-word').forEach((word, index) => {
+          word.classList.toggle('lyric-word-active', index === wordIndex);
+        });
+        activeLyricWordIndex = wordIndex;
+      }
     }
 
 
@@ -32913,6 +32417,148 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
     const lyricsCache = new Map();
 
+    const lyricsLookups = new Map();
+
+    function trackLyricsKey(track) {
+      return `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+    }
+
+    function trackLyricsStorageKey(track) {
+      return 'sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title));
+    }
+
+    function wordLyricsStorageKey(legacyKey) {
+      return legacyKey.replace('sc_lyrics_cache_v2_', 'sc_lyrics_word_cache_v1_');
+    }
+
+    function writeLyricsCacheEntries(legacyKey, lyrics) {
+      const wordKey = wordLyricsStorageKey(legacyKey);
+      const synced = lyrics.syncedLyrics;
+      const lineOnly = typeof synced === 'string' ? stripLyricWordTags(synced) : synced;
+      const plain = typeof lyrics.plainLyrics === 'string' ? stripLyricWordTags(lyrics.plainLyrics) : lyrics.plainLyrics;
+      if (lineOnly !== synced) localStorage.setItem(wordKey, JSON.stringify(lyrics));
+      else localStorage.removeItem(wordKey);
+      localStorage.setItem(legacyKey, JSON.stringify({ ...lyrics, syncedLyrics: lineOnly, plainLyrics: plain }));
+    }
+
+    function storeTrackLyrics(track, lyrics) {
+      try { writeLyricsCacheEntries(trackLyricsStorageKey(track), lyrics); } catch (_) {}
+    }
+
+    function readTrackLyricsCache(track) {
+      const cached = lyricsCache.get(trackLyricsKey(track));
+      if (usableCachedLyrics(cached)) return cached;
+      const key = trackLyricsStorageKey(track);
+      try {
+        const stored = JSON.parse(localStorage.getItem(wordLyricsStorageKey(key)) || localStorage.getItem(key));
+        if (usableCachedLyrics(stored)) return stored;
+      } catch (_) {}
+      return null;
+    }
+
+    // Keep the old cache readable by builds that only understand line timestamps.
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (!key.startsWith('sc_lyrics_cache_v2_')) continue;
+        try {
+          const value = JSON.parse(localStorage.getItem(key));
+          if (typeof value?.syncedLyrics === 'string' && stripLyricWordTags(value.syncedLyrics) !== value.syncedLyrics) {
+            writeLyricsCacheEntries(key, value);
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    function trackLyricsIdentity(track) {
+      const label = track.title || '';
+      const separator = /\s[-–—]\s/.exec(label);
+      if (separator) {
+        return { title: cleanTrackTitleForLyrics(label.slice(separator.index + separator[0].length)), artist: label.slice(0, separator.index).trim() };
+      }
+      return { title: cleanTrackTitleForLyrics(label), artist: (track.artist || '').split(/[,&]/)[0].replace(/@\w+/g, '').trim() };
+    }
+
+    function requestTrackLyrics(track) {
+      const key = trackLyricsKey(track);
+      const pending = lyricsLookups.get(key);
+      if (pending) return pending;
+      const { title, artist } = trackLyricsIdentity(track);
+      const request = api.getLyrics(title, artist, getTrackDurationSec(track))
+        .catch(() => null).finally(() => lyricsLookups.delete(key));
+      lyricsLookups.set(key, request);
+      return request;
+    }
+
+    function matchedOriginalLyrics(lyrics, track) {
+      if (!lyrics || lyrics.isAi || !lyrics.trackName || !lyrics.artistName) return null;
+      if (!lyrics.instrumental && !lyrics.syncedLyrics?.trim() && !lyrics.plainLyrics?.trim()) return null;
+      if (lyrics.source === 'genius' && !lyrics.referenceMatched) return null;
+      const duration = getTrackDurationSec(track);
+      if (duration && lyrics.duration && Math.abs(duration - lyrics.duration) > 6) return null;
+      const key = value => value.normalize('NFKC').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]/gu, '');
+      const { title, artist } = trackLyricsIdentity(track);
+      if (!title || !artist || key(title) !== key(cleanTrackTitleForLyrics(lyrics.trackName)) || key(artist) !== key(lyrics.artistName)) return null;
+      return lyrics;
+    }
+
+    function lyricsDifferSubstantially(transcribed, original) {
+      const words = lyrics => (lyrics.plainLyrics || lyrics.syncedLyrics || '')
+        .normalize('NFKC').toLowerCase().replace(/ё/g, 'е')
+        .replace(/\[[^\]\n]*\]|<\d+:\d+(?:\.\d+)?>/g, ' ')
+        .match(/[\p{L}\p{N}]+/gu) || [];
+      const actual = words(transcribed);
+      const expected = words(original);
+      if (expected.length < 12) return false;
+      const overlap = (a, b) => {
+        const remaining = new Map();
+        for (const word of a) remaining.set(word, (remaining.get(word) || 0) + 1);
+        let shared = 0;
+        for (const word of b) {
+          const count = remaining.get(word);
+          if (count) {
+            shared++;
+            remaining.set(word, count - 1);
+          }
+        }
+        return 2 * shared / (a.length + b.length);
+      };
+      const pairs = tokens => tokens.slice(1).map((word, index) => `${tokens[index]} ${word}`);
+      return overlap(actual, expected) < 0.60 || overlap(pairs(actual), pairs(expected)) < 0.30;
+    }
+
+    function startAutomaticKaraoke(track, streamUrl = null) {
+      if (!appConfig || appConfig.whisper_auto_transcribe === false || !track.id) return;
+      if (localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
+      const cached = readTrackLyricsCache(track);
+      const mode = appConfig.whisper_precise ? 'precise' : 'fast';
+      if (cached?.lyricsCompared === mode || matchedOriginalLyrics(cached, track)?.instrumental) return;
+      void startWhisperTranscription(track, streamUrl, true).catch(() => {});
+    }
+
+    function whisperLyricLines(lrc) {
+      return (lrc || '').split('\n').filter(line => {
+        const words = stripLyricWordTags(line).replace(/^\s*(?:\[\d+:\d+(?:\.\d+)?\])+/, '')
+          .replace(/^[\s\[\]()♪♫]+|[\s\[\]()♪♫]+$/g, '');
+        return /[\p{L}\p{N}]/u.test(words) && !/^(?:music|instrumental|background music|музыка|инструментал)$/iu.test(words);
+      }).join('\n');
+    }
+
+    function usableCachedLyrics(lyrics) {
+      if (!lyrics) return false;
+      if (!lyrics.isAi) return true;
+      if (appConfig?.whisper_precise && lyrics.whisperRevision !== 2) return false;
+      const text = whisperLyricLines(lyrics.syncedLyrics || lyrics.plainLyrics);
+      if (!text) return false;
+      const lines = stripLyricWordTags(text).replace(/\[\d+:\d+(?:\.\d+)?\]/g, '').split('\n').map(line => line.trim().toLowerCase());
+      let run = 0;
+      let longest = 0;
+      for (let i = 0; i < lines.length; i++) {
+        run = lines[i] === lines[i - 1] ? run + 1 : 1;
+        longest = Math.max(longest, run);
+      }
+      return !((longest >= 8 && longest * 2 >= lines.length) || (longest >= 4 && longest * 4 >= lines.length * 3));
+    }
+
 
 
 
@@ -32932,6 +32578,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
       if (!lyricsData) return;
+
+      if (lyricsData.isAi) {
+        lyricsData = { ...lyricsData, syncedLyrics: whisperLyricLines(lyricsData.syncedLyrics), plainLyrics: whisperLyricLines(lyricsData.plainLyrics) };
+      }
 
 
 
@@ -33101,15 +32751,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-          currentParsedLyrics = [];
-
-
-
-          const cleanCustom = custom.replace(/\[\d{2}:\d{2}\.?\d*\]/g, '');
-
-
-
-          renderPlainLyrics(cleanCustom, lyricsContainer);
+          currentParsedLyrics = parseLrc(custom);
+          if (currentParsedLyrics.length) {
+            renderSyncedLyrics(currentParsedLyrics, lyricsContainer);
+            syncBadge?.classList.remove('hidden');
+          } else {
+            renderPlainLyrics(custom, lyricsContainer);
+          }
 
 
 
@@ -33141,7 +32789,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      if (lyricsCache.has(cacheKey)) {
+      if (usableCachedLyrics(lyricsCache.get(cacheKey))) {
 
 
 
@@ -33173,65 +32821,14 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      // 3. Instant LocalStorage Cache (0 ms)
-
-
-
-      try {
-
-
-
-        const stored = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
-
-
-
-        if (stored) {
-
-
-
-          const cached = JSON.parse(stored);
-
-
-
-          if (cached && (cached.syncedLyrics || cached.plainLyrics || cached.instrumental)) {
-
-
-
-            lyricsCache.set(cacheKey, cached);
-
-
-
-            if (!isBackground && lyricsContainer && currentFetchId === lyricsFetchCounter) {
-
-
-
-              renderTrackLyrics(cached, track, lyricsContainer);
-
-
-
-              return;
-
-
-
-            }
-
-
-
-          }
-
-
-
+      const stored = readTrackLyricsCache(track);
+      if (stored && (stored.syncedLyrics || stored.plainLyrics || stored.instrumental)) {
+        lyricsCache.set(cacheKey, stored);
+        if (!isBackground && lyricsContainer && currentFetchId === lyricsFetchCounter) {
+          renderTrackLyrics(stored, track, lyricsContainer);
         }
-
-
-
-      } catch (e) {}
-
-
-
-
-
-
+        return;
+      }
 
       // If not background, show snappy spinner
 
@@ -33281,102 +32878,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      const durSec = getTrackDurationSec(track);
-
-
-
-
-
-
-
-      // Clean title & artist
-
-
-
-      let cleanTitle = cleanTrackTitleForLyrics(track.title || '');
-
-
-
-      let cleanArtist = (track.artist || '')
-
-
-
-        .split(',')[0]
-
-
-
-        .split('&')[0]
-
-
-
-        .replace(/@\w+/g, '')
-
-
-
-        .trim();
-
-
-
-
-
-
-
-      if ((track.title || '').includes(' - ')) {
-
-
-
-        const parts = track.title.split(' - ');
-
-
-
-        if (parts.length >= 2) {
-
-
-
-          cleanArtist = parts[0].trim();
-
-
-
-          cleanTitle = cleanTrackTitleForLyrics(parts[1]);
-
-
-
-        }
-
-
-
-      } else if ((track.title || '').includes(' — ')) {
-
-
-
-        const parts = track.title.split(' — ');
-
-
-
-        if (parts.length >= 2) {
-
-
-
-          cleanArtist = parts[0].trim();
-
-
-
-          cleanTitle = cleanTrackTitleForLyrics(parts[1]);
-
-
-
-        }
-
-
-
-      }
-
-
-
-
-
-
-
       let lyricsData = null;
 
 
@@ -33393,7 +32894,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        const rustRes = await api.getLyrics(cleanTitle, cleanArtist, durSec);
+        const rustRes = await requestTrackLyrics(track);
 
 
 
@@ -33425,6 +32926,8 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+      const compared = lyricsCache.get(cacheKey);
+      if (compared?.lyricsCompared && usableCachedLyrics(compared)) lyricsData = compared;
       if (lyricsData) {
 
 
@@ -33433,15 +32936,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        try {
-
-
-
-          localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(lyricsData));
-
-
-
-        } catch (e) {}
+        storeTrackLyrics(track, lyricsData);
 
 
 
@@ -33561,7 +33056,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <div class="text-xs text-neutral-400 mt-1 truncate">${track.artist || ''} — ${track.title || ''}</div>
+            <div class="text-xs text-neutral-400 mt-1 truncate">${escapeMarkup(track.artist || '')} — ${escapeMarkup(track.title || '')}</div>
 
 
 
@@ -33588,7 +33083,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
               <span>✨ Распознать караоке (Whisper AI)</span>
             </button>
           </div>
-          <div id="whisper-status-line" class="text-xs text-orange-400 font-medium animate-pulse pt-2 text-center">✨ Идёт автоматическое распознавание текста нейросетью...</div>
+          <div id="whisper-status-line" class="hidden text-xs text-orange-400 font-medium animate-pulse pt-2 text-center" aria-live="polite"></div>
 
 
 
@@ -33610,10 +33105,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       if (emptyBtn) emptyBtn.addEventListener('click', () => promptCustomLyrics(track));
 
-      // Auto-transcribe immediately: do it right away so the user does NOT have to click buttons!
-      if (!isBackground) {
-        startWhisperTranscription(track).catch(() => {});
-      }
+      if (!isBackground) startAutomaticKaraoke(track);
 
 
 
@@ -33629,7 +33121,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        try { localStorage.removeItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title))); } catch (e) {}
+        try {
+          const key = trackLyricsStorageKey(track);
+          localStorage.removeItem(key);
+          localStorage.removeItem(wordLyricsStorageKey(key));
+        } catch (_) {}
 
 
 
@@ -33643,12 +33139,14 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
     }
 
-        const activeWhisperJobIds = new Set();
-    async function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null) {
+    const activeWhisperJobIds = new Set();
+    async function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null, automatic = false) {
       const track = explicitTrack || (currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex]);
       if (!track || !track.id) return;
-      if (activeWhisperJobIds.has(track.id)) return;
-      activeWhisperJobIds.add(track.id);
+      const precise = Boolean(appConfig?.whisper_precise);
+      const jobKey = `${track.id}:${precise}`;
+      if (activeWhisperJobIds.has(jobKey)) return;
+      activeWhisperJobIds.add(jobKey);
 
       const requestFetchId = lyricsFetchCounter;
       const targetTrackId = String(track.id);
@@ -33672,55 +33170,52 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       }
       if (statusLine) {
         statusLine.classList.remove('hidden');
-        statusLine.textContent = '✨ Whisper распознаёт аудио. Если текста будет мало или модель будет неуверена, ONYX повторит попытку на более точной модели; это может занять несколько минут.';
+        statusLine.textContent = precise
+          ? 'Whisper large-v3-turbo распознаёт весь трек. При первом запуске ONYX может скачать модель (574 МБ).'
+          : 'Whisper распознаёт аудио. При слабом результате ONYX повторит попытку на более точной модели.';
       }
 
-      notify('Запущен локальный Whisper AI...', '✨');
+      if (!automatic) notify(precise ? 'Точное караоке: Whisper large-v3-turbo' : 'Запущен локальный Whisper AI...', '✨');
 
       try {
-        let streamUrl = getCachedStreamUrl(track.id);
-        if (!streamUrl) {
-          streamUrl = await requestStreamUrl(track.id);
-        }
-        if (!streamUrl) throw new Error('Не удалось получить аудиопоток трека');
+        const previous = readTrackLyricsCache(track);
+        const originalRequest = matchedOriginalLyrics(previous, track) || requestTrackLyrics(track);
+        const recognition = (async () => {
+          const stream = explicitStreamUrl || getCachedStreamUrl(track.id) || await requestStreamUrl(track.id);
+          const streamUrl = typeof stream === 'object' && stream !== null ? stream.url : stream;
+          if (!streamUrl) throw new Error('Не удалось получить аудиопоток трека');
+          return api.transcribeTrack(track.id, streamUrl, precise);
+        })().then(data => ({ data }), error => ({ error }));
+        const [online, { data, error }] = await Promise.all([originalRequest, recognition]);
+        const original = matchedOriginalLyrics(online, track);
+        const recognized = data?.syncedLyrics && usableCachedLyrics(data) ? data : null;
+        const useOriginal = original && (original.instrumental || !recognized || lyricsDifferSubstantially(recognized, original));
+        const selected = useOriginal ? original : recognized;
+        if (!selected) throw error || new Error('Текст не распознан');
+        if (!usableCachedLyrics(selected)) return;
+        if (localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
+        const mode = precise ? 'precise' : 'fast';
+        const result = { ...selected, lyricsCompared: mode };
+        const cached = lyricsCache.get(trackLyricsKey(track));
+        if (!precise && (cached?.lyricsCompared === 'precise' || cached?.whisperPrecise)) return;
+        lyricsCache.set(trackLyricsKey(track), result);
+        storeTrackLyrics(track, result);
 
-        const res = await api.transcribeTrack(track.id, streamUrl);
-        if (res && res.syncedLyrics) {
-          const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
-          lyricsCache.set(cacheKey, res);
-          try {
-            localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res));
-          } catch (_) {}
-
-          // Strict guard: ONLY update DOM if this track is STILL the currently playing track!
-          const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
-          if (activeId && activeId !== targetTrackId) {
-            logD(`Whisper finished for track ${targetTrackId}, but active is ${activeId} — preserved in cache without overwriting UI`);
-            return;
-          }
-          if (requestFetchId !== lyricsFetchCounter) {
-            return;
-          }
-
-          if (lyricsContainer) {
-            currentParsedLyrics = parseLrc(res.syncedLyrics);
-            renderSyncedLyrics(currentParsedLyrics, lyricsContainer);
-            const syncBadge = document.getElementById('lyrics-synced-badge');
-            if (syncBadge) syncBadge.classList.remove('hidden');
-          }
-          notify('Караоке сгенерировано нейросетью! ✨', '🎤');
-        } else {
-          throw new Error('Текст не распознан');
-        }
+        const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
+        if (activeId ? activeId !== targetTrackId : requestFetchId !== lyricsFetchCounter) return;
+        renderTrackLyrics(result, track, lyricsContainer);
+        const syncBadge = document.getElementById('lyrics-synced-badge');
+        syncBadge?.classList.toggle('hidden', !currentParsedLyrics.length);
+        if (!automatic) notify(useOriginal ? 'Показан найденный текст песни' : 'Караоке готово', '🎤');
       } catch (err) {
         console.error('Whisper transcribe error:', err);
         const msg = err && err.message ? err.message : String(err || '');
-        notify(`Whisper: ${msg}`, '❌');
+        if (!automatic) notify(`Whisper: ${msg}`, '❌');
         if (statusLine) {
           statusLine.textContent = `❌ ${msg}`;
         }
       } finally {
-        activeWhisperJobIds.delete(track.id);
+        activeWhisperJobIds.delete(jobKey);
         if (btn) {
           btn.disabled = false;
           btn.classList.remove('opacity-75');
@@ -33745,246 +33240,36 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        function renderSyncedLyrics(parsed, container) {
-
-
-
-
-
-
-
-      container.innerHTML = '';
-
-
-
-
-
-
-
-      parsed.forEach((line, idx) => {
-
-
-
-
-
-
-
-        const p = document.createElement('div');
-
-
-
-
-
-
-
-        p.className = 'synced-lyric-line lyric-future';
-
-
-
-
-
-
-
-        p.setAttribute('data-index', idx);
-
-
-
-
-
-
-
-        p.setAttribute('data-time', line.time);
-
-
-
-
-
-
-
-        // Split into words and whitespace
-
-
-
-
-
-
-
-        const tokens = (line.text || '').split(/(\s+)/);
-
-
-
-
-
-
-
-        let wordCount = 0;
-
-
-
-
-
-
-
-        let innerHtml = '';
-
-
-
-
-
-
-
-        tokens.forEach(tok => {
-
-
-
-
-
-
-
-          if (tok.trim().length === 0) {
-
-
-
-
-
-
-
-            innerHtml += tok;
-
-
-
-
-
-
-
-          } else {
-
-
-
-
-
-
-
-            const cleanTok = tok.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-
-
-
-
-
-
-            innerHtml += `<span class="lyric-word" data-widx="${wordCount++}" data-len="${tok.length}">${cleanTok}</span>`;
-
-
-
-
-
-
-
+    function renderSyncedLyrics(parsed, container) {
+      container.replaceChildren();
+      parsed.forEach((line, index) => {
+        const element = document.createElement('div');
+        element.className = 'synced-lyric-line lyric-future';
+        element.dataset.index = index;
+        element.dataset.time = line.time;
+        if (line.words?.length) {
+          element.classList.add('has-word-timings');
+          if (line.prefix) element.append(line.prefix);
+          for (const word of line.words) {
+            const span = document.createElement('span');
+            span.className = 'lyric-word';
+            span.textContent = word.text;
+            element.append(span);
           }
-
-
-
-
-
-
-
-        });
-
-
-
-
-
-
-
-        p.innerHTML = innerHtml;
-
-
-
-
-
-
-
-        p.addEventListener('click', () => {
-
-
-
-
-
-
-
+        } else {
+          element.textContent = line.text;
+        }
+        element.addEventListener('click', () => {
           if (audioEngine) {
-
-
-
-
-
-
-
-            audioEngine.currentTime = Math.max(0, line.time - 0.1);
-
-
-
-
-
-
-
+            audioEngine.currentTime = line.time;
             if (!isPlaying) togglePlay();
-
-
-
-
-
-
-
           }
-
-
-
-
-
-
-
         });
-
-
-
-
-
-
-
-        container.appendChild(p);
-
-
-
-
-
-
-
+        container.append(element);
       });
-
-
-
-
-
-
-
       activeLyricIndex = -1;
-
-
-
-
-
-
-
+      activeLyricWordIndex = -1;
       updateLyricsSync();
-
-
-
-
-
-
-
     }
 
 
@@ -34169,7 +33454,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="">
+            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="">
 
 
 
@@ -34241,7 +33526,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <div class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} truncate transition-colors">${t.title}</div>
+            <div class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} truncate transition-colors">${escapeMarkup(t.title)}</div>
 
 
 
@@ -34249,7 +33534,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist}</div>
+            <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(t.artist)}</div>
 
 
 
@@ -34442,6 +33727,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     function renderPlainLyrics(rawText, container, isDescription = false) {
+      if (typeof rawText === 'string') rawText = stripLyricWordTags(rawText);
 
 
 
@@ -34664,7 +33950,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            if (item.type === 'header') return `<div class="text-xs font-bold uppercase tracking-widest text-neutral-400/70 pt-6 pb-1 select-none border-b border-white/5">${item.text}</div>`;
+            if (item.type === 'header') return `<div class="text-xs font-bold uppercase tracking-widest text-neutral-400/70 pt-6 pb-1 select-none border-b border-white/5">${escapeMarkup(item.text)}</div>`;
 
 
 
@@ -34672,7 +33958,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            return `<p class="plain-lyric-line text-xl sm:text-2xl font-semibold leading-relaxed transition-colors cursor-default">${item.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+            return `<p class="plain-lyric-line text-xl sm:text-2xl font-semibold leading-relaxed transition-colors cursor-default">${escapeMarkup(item.text)}</p>`;
 
 
 
@@ -34713,117 +33999,43 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     function promptCustomLyrics(track) {
-
-
-
-
-
-
-
-      const existing = localStorage.getItem('custom_lyrics_' + track.id) || '';
-
-
-
-
-
-
-
-      const text = prompt('Вставьте текст трека (поддерживается как обычный текст, так и синхронизированный LRC [00:12.34]):', existing);
-
-
-
-
-
-
-
-      if (text !== null) {
-
-
-
-
-
-
-
-        if (text.trim().length > 0) {
-
-
-
-
-
-
-
-          localStorage.setItem('custom_lyrics_' + track.id, text.trim());
-
-
-
-
-
-
-
-          notify('Текст трека сохранен!', '✨');
-
-
-
-
-
-
-
+      if (document.getElementById('custom-lyrics-editor')) return;
+      const storageKey = 'custom_lyrics_' + track.id;
+      const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+      const cached = lyricsCache.get(cacheKey);
+      const dialog = document.createElement('dialog');
+      dialog.id = 'custom-lyrics-editor';
+      dialog.setAttribute('aria-label', 'Редактировать текст и тайминги');
+      dialog.className = 'm-auto w-11/12 max-w-2xl rounded-2xl border border-white/10 bg-neutral-900 p-5 text-white backdrop:bg-black/70';
+      dialog.innerHTML = `
+        <form method="dialog" class="space-y-3">
+          <h2 class="text-base font-bold">Текст и тайминги караоке</h2>
+          <p class="text-xs text-neutral-400">Метка [00:12.34] задаёт начало строки, а &lt;00:12.34&gt; перед словом задаёт его подсветку.</p>
+          <textarea aria-label="Текст песни" autofocus spellcheck="false" class="block h-64 w-full resize-y rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-sm"></textarea>
+          <div class="flex justify-end gap-2">
+            <button value="cancel" class="rounded-lg bg-white/10 px-4 py-2 text-xs">Отмена</button>
+            <button value="save" class="rounded-lg bg-white px-4 py-2 text-xs font-bold text-black">Сохранить</button>
+          </div>
+        </form>`;
+      const editor = dialog.querySelector('textarea');
+      editor.value = localStorage.getItem(storageKey) || cached?.syncedLyrics || cached?.plainLyrics || '';
+      dialog.addEventListener('close', () => {
+        dialog.remove();
+        if (dialog.returnValue !== 'save') return;
+        const text = editor.value.trim();
+        if (text) {
+          localStorage.setItem(storageKey, text);
+          notify('Текст трека сохранён');
         } else {
-
-
-
-
-
-
-
-          localStorage.removeItem('custom_lyrics_' + track.id);
-
-
-
-
-
-
-
-          notify('Пользовательский текст удален', '🗑️');
-
-
-
-
-
-
-
+          localStorage.removeItem(storageKey);
+          notify('Пользовательский текст удалён');
         }
-
-
-
-
-
-
-
-        lyricsFetchRequestId++;
-
-
-
-
-
-
-
-        fetchLyricsForTrack(track);
-
-
-
-
-
-
-
-      }
-
-
-
-
-
-
-
+        if (String(currentlyPlayingTrackId) === String(track.id)) {
+          fetchLyricsForTrack(track);
+        }
+      }, { once: true });
+      document.body.appendChild(dialog);
+      dialog.showModal();
     }
 
 
@@ -36297,6 +35509,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
       appConfig.whisper_auto_transcribe = document.getElementById('whisper-auto-toggle')?.checked ?? false;
+      appConfig.whisper_precise = document.getElementById('whisper-precise-toggle')?.checked ?? false;
       appConfig.discord_rpc = document.getElementById('discord-rpc-toggle')?.checked ?? true;
 
 
@@ -36807,18 +36020,18 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
               ` : `<span>${idx + 1}</span>`}
             </div>
             <div class="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/5 shadow-sm">
-              <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
+              <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
             </div>
             <div class="min-w-0 flex-1 pr-2">
               <div class="flex items-center gap-1.5">
-                <span class="artist-track-title text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
+                <span class="artist-track-title text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${escapeMarkup(t.title || 'Untitled Track')}</span>
                 <span class="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">SC</span>
               </div>
-              <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist || 'Unknown Artist'}</div>
+              <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(t.artist || 'Unknown Artist')}</div>
             </div>
           </div>
           <div class="flex items-center gap-4 text-xs font-mono text-neutral-400 shrink-0">
-            <span class="hidden sm:inline">${t.duration || '0:00'}</span>
+            <span class="hidden sm:inline">${escapeMarkup(t.duration || '0:00')}</span>
             <button class="search-like-btn p-1.5 transition-transform hover:scale-125 active:scale-75 cursor-pointer select-none" title="Нравится" style="${isLiked ? `color: ${accent}; fill: ${accent};` : 'color: #737373;'}">
               <svg class="w-4 h-4 fill-current pointer-events-none" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             </button>
@@ -36923,10 +36136,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
         card.innerHTML = `
           <div class="relative aspect-square rounded-2xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5 select-none">
-            <img src="${album.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300 pointer-events-none">
+            <img src="${escapeMarkup(album.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300 pointer-events-none">
           </div>
-          <div class="text-xs font-bold text-white truncate">${album.title || 'Untitled Album'}</div>
-          <div class="text-[11px] text-neutral-400 mt-0.5">${album.release_year ? album.release_year + ' • ' : ''}${album.track_count || 0} треков</div>
+          <div class="text-xs font-bold text-white truncate">${escapeMarkup(album.title || 'Untitled Album')}</div>
+          <div class="text-[11px] text-neutral-400 mt-0.5">${escapeMarkup(album.release_year ? album.release_year + ' • ' : '')}${escapeMarkup(album.track_count || 0)} треков</div>
         `;
         container.appendChild(card);
       });
@@ -36961,10 +36174,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       container.classList.remove('hidden');
       container.innerHTML = `
-        <div class="card-dark p-4 flex items-center justify-between cursor-pointer border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition group rounded-2xl" onclick="openArtistProfile('${artist.id}')">
+        <div class="card-dark p-4 flex items-center justify-between cursor-pointer border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition group rounded-2xl">
           <div class="flex items-center gap-4 min-w-0">
             <div class="relative shrink-0">
-              <img src="${artist.avatar_url || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-14 h-14 rounded-full object-cover border border-white/10 group-hover:scale-105 transition">
+              <img src="${escapeMarkup(artist.avatar_url || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-14 h-14 rounded-full object-cover border border-white/10 group-hover:scale-105 transition">
               ${artist.verified ? `
                 <span class="absolute -bottom-1 -right-1 bg-neutral-900 rounded-full p-0.5">
                   <svg class="w-3.5 h-3.5 text-white fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
@@ -36973,10 +36186,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-white group-hover:text-white transition truncate">${artist.username || 'Исполнитель'}</span>
+                <span class="text-sm font-bold text-white group-hover:text-white transition truncate">${escapeMarkup(artist.username || 'Исполнитель')}</span>
                 <span class="text-[9px] font-bold px-2 py-0.5 rounded-md uppercase shrink-0 bg-white/10 text-neutral-300 border border-white/10">Исполнитель</span>
               </div>
-              <div class="text-xs text-neutral-400 mt-0.5 truncate">${(artist.followers_count || 0).toLocaleString()} подписчиков • ${(artist.track_count || 0).toLocaleString()} треков в SoundCloud</div>
+              <div class="text-xs text-neutral-400 mt-0.5 truncate">${escapeMarkup((artist.followers_count || 0).toLocaleString())} подписчиков • ${escapeMarkup((artist.track_count || 0).toLocaleString())} треков в SoundCloud</div>
             </div>
           </div>
           <button class="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition flex items-center gap-1.5 shrink-0 ml-3">
@@ -36984,6 +36197,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           </button>
         </div>
       `;
+      container.firstElementChild?.addEventListener('click', () => openArtistProfile(artist.id));
+    }
+
+    function escapeMarkup(value) {
+      return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[character]);
     }
 
 </script>
