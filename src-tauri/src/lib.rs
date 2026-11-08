@@ -247,19 +247,17 @@ async fn get_related_tracks(track_id: Value, state: State<'_, AppState>) -> Resu
 
 #[tauri::command]
 fn open_browser_login() -> Result<(), String> {
+    const SIGN_IN_URL: &str = "https://soundcloud.com/signin";
+
     #[cfg(target_os = "windows")]
-    {
-        let _ = std::process::Command::new("cmd")
-            .args(["/c", "start", "http://127.0.0.1:49221/login"])
-            .spawn();
-    }
+    let browser = std::process::Command::new("cmd")
+        .args(["/c", "start", "", SIGN_IN_URL])
+        .spawn();
+
     #[cfg(not(target_os = "windows"))]
-    {
-        let _ = std::process::Command::new("xdg-open")
-            .arg("http://127.0.0.1:49221/login")
-            .spawn();
-    }
-    Ok(())
+    let browser = std::process::Command::new("xdg-open").arg(SIGN_IN_URL).spawn();
+
+    browser.map(|_| ()).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
