@@ -19840,10 +19840,10 @@
         const row = document.createElement('div');
         row.className = 'flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors';
         row.innerHTML = `
-          <img src="${track.cover || track.artwork_url || 'logo.png'}" class="w-8 h-8 rounded-md object-cover shrink-0">
+          <img src="${escapeMarkup(track.cover || track.artwork_url || 'logo.png')}" class="w-8 h-8 rounded-md object-cover shrink-0">
           <div class="truncate flex-1">
-            <div class="text-white font-medium truncate">${track.title || 'Без названия'}</div>
-            <div class="text-[10px] text-neutral-400 truncate">${track.artist || 'Неизвестный исполнитель'}</div>
+            <div class="text-white font-medium truncate">${escapeMarkup(track.title || 'Без названия')}</div>
+            <div class="text-[10px] text-neutral-400 truncate">${escapeMarkup(track.artist || 'Неизвестный исполнитель')}</div>
           </div>
         `;
         row.addEventListener('click', () => playTrack(idx));
@@ -20236,7 +20236,7 @@
 
 
 
-            <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/5">
+            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/5">
 
 
 
@@ -20252,7 +20252,7 @@
 
 
 
-              <div class="liked-row-title text-xs font-semibold truncate ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-300'}" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title}</div>
+              <div class="liked-row-title text-xs font-semibold truncate ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-300'}" style="${isCurrent ? 'color: var(--accent);' : ''}">${escapeMarkup(t.title)}</div>
 
 
 
@@ -20260,7 +20260,7 @@
 
 
 
-              <div class="text-[11px] text-neutral-400 truncate">${t.artist}</div>
+              <div class="text-[11px] text-neutral-400 truncate">${escapeMarkup(t.artist)}</div>
 
 
 
@@ -20284,7 +20284,7 @@
 
 
 
-          <div class="text-right text-xs font-mono text-neutral-400">${t.duration}</div>
+          <div class="text-right text-xs font-mono text-neutral-400">${escapeMarkup(t.duration)}</div>
 
 
 
@@ -20300,7 +20300,7 @@
 
 
 
-            <button class="table-like-btn p-1 hover:scale-125 active:scale-75 transition-transform cursor-pointer" style="color: var(--accent);" data-id="${t.id}" title="Удалить из любимых">
+            <button class="table-like-btn p-1 hover:scale-125 active:scale-75 transition-transform cursor-pointer" style="color: var(--accent);" data-id="${escapeMarkup(t.id)}" title="Удалить из любимых">
 
 
 
@@ -21282,7 +21282,7 @@
 
 
 
-              <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
+              <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
 
 
 
@@ -21314,7 +21314,7 @@
 
 
 
-                <span class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
+                <span class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${escapeMarkup(t.title || 'Untitled Track')}</span>
 
 
 
@@ -21338,7 +21338,7 @@
 
 
 
-              <div class="text-[11px] text-neutral-400 truncate">${t.artist || 'Unknown Artist'}</div>
+              <div class="text-[11px] text-neutral-400 truncate">${escapeMarkup(t.artist || 'Unknown Artist')}</div>
 
 
 
@@ -21370,7 +21370,7 @@
 
 
 
-            <span class="text-xs text-neutral-500 font-mono hidden sm:inline">${t.duration || '0:00'}</span>
+            <span class="text-xs text-neutral-500 font-mono hidden sm:inline">${escapeMarkup(t.duration || '0:00')}</span>
 
 
 
@@ -22470,20 +22470,20 @@
             <div class="w-6 flex items-center justify-center shrink-0">
               ${iconHtml}
             </div>
-            <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm">
+            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm">
             <div class="truncate min-w-0">
-              <div class="text-xs truncate" style="${isCurrent ? `color: ${wt.activeTrackTitle}; font-weight: bold;` : ''}">${t.title}</div>
-              <div class="text-[11px] ${isLight ? 'text-slate-500' : 'text-neutral-400'} truncate">${t.artist}</div>
+              <div class="text-xs truncate" style="${isCurrent ? `color: ${wt.activeTrackTitle}; font-weight: bold;` : ''}">${escapeMarkup(t.title)}</div>
+              <div class="text-[11px] ${isLight ? 'text-slate-500' : 'text-neutral-400'} truncate">${escapeMarkup(t.artist)}</div>
             </div>
           </div>
           <div class="flex items-center gap-3 shrink-0">
-            <button class="wave-track-like-btn p-1.5 ${isLight ? 'text-slate-400 hover:text-rose-500' : 'text-neutral-500 hover:text-rose-500'} transition-colors cursor-pointer" title="Добавить в любимые" data-id="${t.id}">
+            <button class="wave-track-like-btn p-1.5 ${isLight ? 'text-slate-400 hover:text-rose-500' : 'text-neutral-500 hover:text-rose-500'} transition-colors cursor-pointer" title="Добавить в любимые" data-id="${escapeMarkup(t.id)}">
               <svg class="w-4 h-4 ${t.liked ? 'fill-rose-500 text-rose-500' : 'fill-none stroke-currentColor'}" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
             </button>
             <div class="text-xs ${isLight ? 'text-slate-500' : 'text-neutral-400'} font-mono">
-              ${t.duration || ''}
+              ${escapeMarkup(t.duration || '')}
             </div>
           </div>
         `;
@@ -22940,10 +22940,10 @@
         const card = document.createElement('div');
         card.className = `quick-card card-glass h-16 rounded-xl flex items-center gap-3.5 pr-4 overflow-hidden cursor-pointer group transition-all ${isCurrent ? 'bg-white/[0.08]' : ''}`;
         card.innerHTML = `
-          <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-16 h-16 object-cover shrink-0" alt="">
+          <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-16 h-16 object-cover shrink-0" alt="">
           <div class="flex-1 truncate">
-            <div class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${t.title}</div>
-            <div class="text-[11px] text-neutral-400 truncate">${t.artist}</div>
+            <div class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${escapeMarkup(t.title)}</div>
+            <div class="text-[11px] text-neutral-400 truncate">${escapeMarkup(t.artist)}</div>
           </div>
         `;
         card.addEventListener('click', () => {
@@ -22998,14 +22998,14 @@
             card.innerHTML = `
               <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
                 ${waveBadge}
-                <img src="${artwork}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <img src="${escapeMarkup(artwork)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                 <div class="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors flex items-center justify-center">
                   ${playBadge}
                 </div>
               </div>
               <div class="truncate">
-                <div class="text-xs font-bold ${isStationActive ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${title}</div>
-                <div class="text-[11px] text-neutral-400 truncate mt-0.5">${desc}</div>
+                <div class="text-xs font-bold ${isStationActive ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${escapeMarkup(title)}</div>
+                <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(desc)}</div>
               </div>
             `;
             card.addEventListener('click', () => {
@@ -23042,14 +23042,14 @@
                  </div>`;
             card.innerHTML = `
               <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
-                <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                 <div class="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors flex items-center justify-center">
                   ${playBadge}
                 </div>
               </div>
               <div class="truncate">
-                <div class="text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${t.title}</div>
-                <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist}</div>
+                <div class="text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} transition-colors truncate">${escapeMarkup(t.title)}</div>
+                <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(t.artist)}</div>
               </div>
             `;
             card.addEventListener('click', () => {
@@ -23991,7 +23991,7 @@
 
 
 
-          userAvatarEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" alt="${username}">`;
+          userAvatarEl.innerHTML = `<img src="${escapeMarkup(avatarUrl)}" class="w-full h-full object-cover rounded-full" alt="${escapeMarkup(username)}">`;
 
 
 
@@ -24031,7 +24031,7 @@
 
 
 
-          settingsAvatarEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" alt="${username}">`;
+          settingsAvatarEl.innerHTML = `<img src="${escapeMarkup(avatarUrl)}" class="w-full h-full object-cover rounded-full" alt="${escapeMarkup(username)}">`;
 
 
 
@@ -24063,7 +24063,7 @@
 
 
 
-          profileAvatarEl.innerHTML = `<img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" alt="${username}">`;
+          profileAvatarEl.innerHTML = `<img src="${escapeMarkup(avatarUrl)}" class="w-full h-full object-cover rounded-full" alt="${escapeMarkup(username)}">`;
 
 
 
@@ -24920,7 +24920,7 @@
 
 
 
-          if (freshCfg && freshCfg.oauth_token && freshCfg.oauth_token.trim().length > 10) {
+          if (freshCfg?.hasToken) {
 
 
 
@@ -24980,7 +24980,7 @@
             }
             try {
               if (currentUser) localStorage.setItem('sc_local_user_profile', JSON.stringify(currentUser));
-              if (appConfig && appConfig.oauth_token) localStorage.setItem('sc_session_token', appConfig.oauth_token);
+              localStorage.removeItem('sc_session_token');
             } catch (_) {}
             applyUserProfile(currentUser, allTracks.length);
             saveSessionState();
@@ -25139,7 +25139,7 @@
 
 
 
-        if (freshCfg && freshCfg.oauth_token && freshCfg.oauth_token.trim().length > 10) {
+        if (freshCfg?.hasToken) {
 
 
 
@@ -25731,7 +25731,7 @@
 
       // 7. Clear appConfig in memory and persist logout to disk
       if (appConfig) {
-        appConfig.oauth_token = "";
+        appConfig.hasToken = false;
         appConfig.user_id = null;
         appConfig.user_profile = null;
         appConfig.cached_likes = [];
@@ -26544,70 +26544,15 @@
 
 
 
-          appConfig.oauth_token = val;
-
-
-
-
-
-
-
           try {
-
-
-
-
-
-
-
-            await api.saveConfig(appConfig);
-
-
-
-
-
-
-
             if (val) {
-
-
-
-
-
-
-
-              notify("OAuth токен успешно сохранён", "💾");
-
-
-
-
-
-
-
+              await api.setOauthToken(val);
+              appConfig = await api.getConfig();
+              settingsTokenInput.value = '';
+              notify('Аккаунт SoundCloud подключён');
             } else {
-
-
-
-
-
-
-
-              notify("OAuth токен очищен", "ℹ️");
-
-
-
-
-
-
-
+              await logoutAccount();
             }
-
-
-
-
-
-
-
           } catch (e) {
 
 
@@ -26770,7 +26715,7 @@
                   }
                   try {
                     if (currentUser) localStorage.setItem('sc_local_user_profile', JSON.stringify(currentUser));
-                    if (appConfig && appConfig.oauth_token) localStorage.setItem('sc_session_token', appConfig.oauth_token);
+                    localStorage.removeItem('sc_session_token');
                   } catch (_) {}
                   saveLocalDatabase();
                   applyUserProfile(currentUser, allTracks.length);
@@ -27104,31 +27049,7 @@
 
 
 
-        if (appConfig && appConfig.oauth_token) {
-
-
-
-
-
-
-
-          const stInput = document.getElementById('settings-token-input');
-
-
-
-
-
-
-
-          if (stInput) stInput.value = appConfig.oauth_token;
-
-
-
-
-
-
-
-        }
+        try { localStorage.removeItem('sc_session_token'); } catch (_) {}
 
 
 
@@ -27268,7 +27189,7 @@
 
         // User authentication & library initialization
         const hasSavedUser = Boolean(
-          (appConfig && appConfig.oauth_token && appConfig.oauth_token.trim().length > 10)
+          appConfig?.hasToken
           || (currentUser && currentUser.id)
           || (appConfig && appConfig.user_profile && appConfig.user_profile.id)
         );
@@ -33135,7 +33056,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <div class="text-xs text-neutral-400 mt-1 truncate">${track.artist || ''} — ${track.title || ''}</div>
+            <div class="text-xs text-neutral-400 mt-1 truncate">${escapeMarkup(track.artist || '')} — ${escapeMarkup(track.title || '')}</div>
 
 
 
@@ -33533,7 +33454,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="">
+            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="">
 
 
 
@@ -33605,7 +33526,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <div class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} truncate transition-colors">${t.title}</div>
+            <div class="text-xs font-semibold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-rose-400'} truncate transition-colors">${escapeMarkup(t.title)}</div>
 
 
 
@@ -33613,7 +33534,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist}</div>
+            <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(t.artist)}</div>
 
 
 
@@ -34029,7 +33950,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            if (item.type === 'header') return `<div class="text-xs font-bold uppercase tracking-widest text-neutral-400/70 pt-6 pb-1 select-none border-b border-white/5">${item.text}</div>`;
+            if (item.type === 'header') return `<div class="text-xs font-bold uppercase tracking-widest text-neutral-400/70 pt-6 pb-1 select-none border-b border-white/5">${escapeMarkup(item.text)}</div>`;
 
 
 
@@ -34037,7 +33958,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            return `<p class="plain-lyric-line text-xl sm:text-2xl font-semibold leading-relaxed transition-colors cursor-default">${item.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`;
+            return `<p class="plain-lyric-line text-xl sm:text-2xl font-semibold leading-relaxed transition-colors cursor-default">${escapeMarkup(item.text)}</p>`;
 
 
 
@@ -36099,18 +36020,18 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
               ` : `<span>${idx + 1}</span>`}
             </div>
             <div class="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/5 shadow-sm">
-              <img src="${t.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
+              <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover">
             </div>
             <div class="min-w-0 flex-1 pr-2">
               <div class="flex items-center gap-1.5">
-                <span class="artist-track-title text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${t.title || 'Untitled Track'}</span>
+                <span class="artist-track-title text-xs font-bold ${isCurrent ? 'text-rose-400' : 'text-white group-hover:text-white'} truncate" style="${isCurrent ? 'color: var(--accent);' : ''}">${escapeMarkup(t.title || 'Untitled Track')}</span>
                 <span class="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">SC</span>
               </div>
-              <div class="text-[11px] text-neutral-400 truncate mt-0.5">${t.artist || 'Unknown Artist'}</div>
+              <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(t.artist || 'Unknown Artist')}</div>
             </div>
           </div>
           <div class="flex items-center gap-4 text-xs font-mono text-neutral-400 shrink-0">
-            <span class="hidden sm:inline">${t.duration || '0:00'}</span>
+            <span class="hidden sm:inline">${escapeMarkup(t.duration || '0:00')}</span>
             <button class="search-like-btn p-1.5 transition-transform hover:scale-125 active:scale-75 cursor-pointer select-none" title="Нравится" style="${isLiked ? `color: ${accent}; fill: ${accent};` : 'color: #737373;'}">
               <svg class="w-4 h-4 fill-current pointer-events-none" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             </button>
@@ -36215,10 +36136,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
         card.innerHTML = `
           <div class="relative aspect-square rounded-2xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5 select-none">
-            <img src="${album.cover || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300 pointer-events-none">
+            <img src="${escapeMarkup(album.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300 pointer-events-none">
           </div>
-          <div class="text-xs font-bold text-white truncate">${album.title || 'Untitled Album'}</div>
-          <div class="text-[11px] text-neutral-400 mt-0.5">${album.release_year ? album.release_year + ' • ' : ''}${album.track_count || 0} треков</div>
+          <div class="text-xs font-bold text-white truncate">${escapeMarkup(album.title || 'Untitled Album')}</div>
+          <div class="text-[11px] text-neutral-400 mt-0.5">${escapeMarkup(album.release_year ? album.release_year + ' • ' : '')}${escapeMarkup(album.track_count || 0)} треков</div>
         `;
         container.appendChild(card);
       });
@@ -36253,10 +36174,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       container.classList.remove('hidden');
       container.innerHTML = `
-        <div class="card-dark p-4 flex items-center justify-between cursor-pointer border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition group rounded-2xl" onclick="openArtistProfile('${artist.id}')">
+        <div class="card-dark p-4 flex items-center justify-between cursor-pointer border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition group rounded-2xl">
           <div class="flex items-center gap-4 min-w-0">
             <div class="relative shrink-0">
-              <img src="${artist.avatar_url || DEFAULT_COVER}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-14 h-14 rounded-full object-cover border border-white/10 group-hover:scale-105 transition">
+              <img src="${escapeMarkup(artist.avatar_url || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-14 h-14 rounded-full object-cover border border-white/10 group-hover:scale-105 transition">
               ${artist.verified ? `
                 <span class="absolute -bottom-1 -right-1 bg-neutral-900 rounded-full p-0.5">
                   <svg class="w-3.5 h-3.5 text-white fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
@@ -36265,10 +36186,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-white group-hover:text-white transition truncate">${artist.username || 'Исполнитель'}</span>
+                <span class="text-sm font-bold text-white group-hover:text-white transition truncate">${escapeMarkup(artist.username || 'Исполнитель')}</span>
                 <span class="text-[9px] font-bold px-2 py-0.5 rounded-md uppercase shrink-0 bg-white/10 text-neutral-300 border border-white/10">Исполнитель</span>
               </div>
-              <div class="text-xs text-neutral-400 mt-0.5 truncate">${(artist.followers_count || 0).toLocaleString()} подписчиков • ${(artist.track_count || 0).toLocaleString()} треков в SoundCloud</div>
+              <div class="text-xs text-neutral-400 mt-0.5 truncate">${escapeMarkup((artist.followers_count || 0).toLocaleString())} подписчиков • ${escapeMarkup((artist.track_count || 0).toLocaleString())} треков в SoundCloud</div>
             </div>
           </div>
           <button class="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition flex items-center gap-1.5 shrink-0 ml-3">
@@ -36276,6 +36197,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           </button>
         </div>
       `;
+      container.firstElementChild?.addEventListener('click', () => openArtistProfile(artist.id));
+    }
+
+    function escapeMarkup(value) {
+      return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[character]);
     }
 
 </script>

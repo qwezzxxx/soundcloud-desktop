@@ -1,37 +1,114 @@
+use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncSeekExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use crate::soundcloud::SoundCloudClient;
 
-static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+static HTTP_CLIENT: OnceLock<Option<reqwest::Client>> = OnceLock::new();
 const AUTH_ADDRESS: &str = "127.0.0.1:49221";
 const LOGIN_TTL: Duration = Duration::from_secs(600);
 static BROWSER_LOGIN: Mutex<Option<(String, Instant)>> = Mutex::new(None);
 static BROWSER_AUTH_REQUEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-pub fn begin_browser_login() -> Result<&'static str, String> {
+pub(crate) fn random_ticket() -> Result<String, String> {
     let mut random = [0u8; 32];
     getrandom::fill(&mut random).map_err(|error| error.to_string())?;
     let mut nonce = String::with_capacity(random.len() * 2);
     for byte in random {
         let _ = write!(nonce, "{byte:02x}");
     }
-    let mut login = BROWSER_LOGIN.lock().map_err(|error| error.to_string())?;
-    *login = Some((nonce, Instant::now()));
-    Ok("http://127.0.0.1:49221/login")
+    Ok(nonce)
 }
 
-fn get_http_client() -> &'static reqwest::Client {
+pub fn begin_browser_login() -> Result<String, String> {
+    let nonce = random_ticket()?;
+    let url = format!("http://{AUTH_ADDRESS}/login?nonce={nonce}");
+    let mut login = BROWSER_LOGIN.lock().map_err(|error| error.to_string())?;
+    *login = Some((nonce, Instant::now()));
+    Ok(url)
+}
+
+const STREAM_TTL: Duration = Duration::from_secs(3600);
+const MAX_STREAM_TICKETS: usize = 2048;
+static STREAM_TICKETS: OnceLock<Mutex<HashMap<String, (tauri::Url, Instant)>>> = OnceLock::new();
+
+fn is_youtube_media_url(url: &tauri::Url) -> bool {
+    url.scheme() == "https" && url.port_or_known_default() == Some(443)
+        && url.username().is_empty() && url.password().is_none()
+        && url.host_str().is_some_and(|host| host == "googlevideo.com" || host.ends_with(".googlevideo.com"))
+}
+
+pub fn register_youtube_stream(raw: &str) -> Option<String> {
+    let url = tauri::Url::parse(raw).ok()?;
+    if !is_youtube_media_url(&url) { return None; }
+    let key = random_ticket().ok()?;
+    let mut tickets = STREAM_TICKETS.get_or_init(Mutex::default).lock().ok()?;
+    tickets.retain(|_, (_, created)| created.elapsed() < STREAM_TTL);
+    if tickets.len() >= MAX_STREAM_TICKETS {
+        let oldest = tickets.iter().min_by_key(|(_, (_, created))| *created)?.0.clone();
+        tickets.remove(&oldest);
+    }
+    tickets.insert(key.clone(), (url, Instant::now()));
+    Some(format!("http://{AUTH_ADDRESS}/stream?key={key}"))
+}
+
+pub fn is_registered_stream_url(url: &tauri::Url) -> bool {
+    url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(49221)
+        && url.path() == "/stream" && url.query().and_then(|query| query.strip_prefix("key=")).is_some_and(|key| stream_url_for_ticket(key).is_some())
+}
+
+fn stream_url_for_ticket(key: &str) -> Option<tauri::Url> {
+    let tickets = STREAM_TICKETS.get()?.lock().ok()?;
+    let (url, created) = tickets.get(key)?;
+    (created.elapsed() < STREAM_TTL).then(|| url.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proxy_accepts_only_registered_youtube_media() {
+        for rejected in [
+            "http://127.0.0.1:8080/admin",
+            "https://googlevideo.com.example.org/audio",
+            "http://rr1.googlevideo.com/audio",
+            "https://rr1.googlevideo.com:8080/audio",
+            "https://name@rr1.googlevideo.com/audio",
+        ] {
+            assert!(register_youtube_stream(rejected).is_none(), "{rejected}");
+        }
+        let ticket = register_youtube_stream("https://rr1.googlevideo.com/audio").unwrap();
+        let url = tauri::Url::parse(&ticket).unwrap();
+        assert!(is_registered_stream_url(&url));
+        assert!(!ticket.contains("googlevideo.com"));
+        for rejected in [
+            "http://127.0.0.1:49221/stream?key=guessed",
+            "http://127.0.0.1:49221/stream?url=http://127.0.0.1/",
+        ] {
+            assert!(!is_registered_stream_url(&tauri::Url::parse(rejected).unwrap()));
+        }
+    }
+}
+
+fn get_http_client() -> Option<&'static reqwest::Client> {
     HTTP_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .tcp_keepalive(std::time::Duration::from_secs(60))
-            .timeout(std::time::Duration::from_secs(45))
+            .timeout(Duration::from_secs(45))
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if attempt.previous().len() >= 5 || !is_youtube_media_url(attempt.url()) {
+                    attempt.stop()
+                } else {
+                    attempt.follow()
+                }
+            }))
             .build()
-            .unwrap_or_default()
-    })
+            .ok()
+    }).as_ref()
 }
 
 pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
@@ -53,11 +130,14 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
                 }
             };
 
+            let connections = Arc::new(tokio::sync::Semaphore::new(64));
             loop {
                 if let Ok((mut stream, _)) = listener.accept().await {
+                    let Ok(permit) = connections.clone().try_acquire_owned() else { continue; };
                     let sc_ref = sc.clone();
                     let app = app.clone();
                     tokio::spawn(async move {
+                        let _permit = permit;
                         let mut buffer = [0u8; 16384];
                     if let Ok(Some((bytes_read, headers_end))) =
                         tokio::time::timeout(Duration::from_secs(5), read_headers(&mut stream, &mut buffer)).await
@@ -72,181 +152,20 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
                         let method = parts[0];
                         let path = parts[1];
 
-                        if method == "OPTIONS" {
-                            let response = "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS, HEAD\r\nAccess-Control-Allow-Headers: Range, Origin, Content-Type, Accept\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                            let _ = stream.write_all(response.as_bytes()).await;
-                            return;
-                        }
-
-                        if path.starts_with("/file") {
-                            let file_name = if let Some(idx) = path.find("name=") {
-                                let raw = &path[idx + 5..];
-                                let end = raw.find('&').unwrap_or(raw.len());
-                                urldecode(&raw[..end])
-                            } else {
-                                String::new()
-                            };
-
-                            let clean_name: String = file_name.chars()
-                                .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-' || *c == '.')
-                                .collect();
-
-                            let cache_dir = std::env::current_exe()
-                                .ok()
-                                .and_then(|p| p.parent().map(|d| d.join("audio_cache")))
-                                .unwrap_or_else(|| std::path::PathBuf::from("audio_cache"));
-
-                            let file_path = cache_dir.join(&clean_name);
-
-                            if file_path.exists() {
-                                if let Ok(mut f) = tokio::fs::File::open(&file_path).await {
-                                    let metadata = f.metadata().await;
-                                    let file_size = metadata.map(|m| m.len()).unwrap_or(0);
-
-                                    let range_header = request_str.lines()
-                                        .find(|l| l.to_lowercase().starts_with("range:"))
-                                        .and_then(|l| l.split(':').nth(1))
-                                        .map(|s| s.trim().to_string());
-
-                                    let (start, end) = if let Some(ref r) = range_header {
-                                        parse_range_header(r, file_size)
-                                    } else {
-                                        (0, file_size.saturating_sub(1))
-                                    };
-
-                                    let length = if file_size > 0 && end >= start {
-                                        (end - start) + 1
-                                    } else {
-                                        0
-                                    };
-
-                                    let _ = f.seek(std::io::SeekFrom::Start(start)).await;
-
-                                    let status_line = if range_header.is_some() {
-                                        "HTTP/1.1 206 Partial Content\r\n"
-                                    } else {
-                                        "HTTP/1.1 200 OK\r\n"
-                                    };
-
-                                    let content_type = if clean_name.ends_with(".mp3") {
-                                        "audio/mpeg"
-                                    } else {
-                                        "audio/mp4"
-                                    };
-
-                                    let header_str = format!(
-                                        "{}Access-Control-Allow-Origin: *\r\nAccept-Ranges: bytes\r\nContent-Type: {}\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nConnection: close\r\n\r\n",
-                                        status_line,
-                                        content_type,
-                                        length,
-                                        start,
-                                        end,
-                                        file_size
-                                    );
-
-                                    if stream.write_all(header_str.as_bytes()).await.is_ok() {
-                                        let mut chunk_buf = [0u8; 65536];
-                                        let mut remaining = length;
-                                        while remaining > 0 {
-                                            let to_read = std::cmp::min(remaining, chunk_buf.len() as u64) as usize;
-                                            if let Ok(n) = f.read(&mut chunk_buf[..to_read]).await {
-                                                if n == 0 { break; }
-                                                if stream.write_all(&chunk_buf[..n]).await.is_err() { break; }
-                                                remaining -= n as u64;
-                                            } else {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    return;
-                                }
-                            }
-                            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r
-").await;
-                            return;
-                        }
-
-                        if path.starts_with("/stream") {
-                            let target_url = if let Some(idx) = path.find("url=") {
-                                let raw = &path[idx + 4..];
-                                urldecode(raw)
-                            } else {
-                                String::new()
-                            };
-
-                            if target_url.is_empty() {
-                                let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n").await;
-                                return;
-                            }
-
-                            let client = get_http_client();
-
-                            // Extract Range header if requested by HTML5 audio
-                            let range_header = request_str.lines()
-                                .find(|l| l.to_lowercase().starts_with("range:"))
-                                .and_then(|l| l.split(':').nth(1))
-                                .map(|s| s.trim().to_string());
-
-                            let mut req = client.get(&target_url)
-                                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36")
-                                ;
-
-                            if let Some(ref r) = range_header {
-                                req = req.header("Range", r);
-                            }
-
-                            if let Ok(mut resp) = req.send().await {
-                                let status = resp.status();
-                                let content_type = resp.headers().get("content-type")
-                                    .and_then(|v| v.to_str().ok())
-                                    .unwrap_or("audio/mp4");
-                                let content_len = resp.headers().get("content-length")
-                                    .and_then(|v| v.to_str().ok())
-                                    .unwrap_or("");
-                                let content_range = resp.headers().get("content-range")
-                                    .and_then(|v| v.to_str().ok())
-                                    .unwrap_or("");
-
-                                let status_line = if status.is_success() && status.as_u16() == 206 {
-                                    "HTTP/1.1 206 Partial Content\r\n"
-                                } else {
-                                    "HTTP/1.1 200 OK\r\n"
-                                };
-
-                                let mut header_str = format!(
-                                    "{}Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, OPTIONS, HEAD\r\nAccess-Control-Allow-Headers: Range, Origin, Content-Type, Accept\r\nAccept-Ranges: bytes\r\nConnection: keep-alive\r\nContent-Type: {}\r\n",
-                                    status_line,
-                                    content_type
-                                );
-                                if !content_len.is_empty() {
-                                    header_str.push_str(&format!("Content-Length: {}\r\n", content_len));
-                                }
-                                if !content_range.is_empty() {
-                                    header_str.push_str(&format!("Content-Range: {}\r\n", content_range));
-                                }
-                                header_str.push_str("\r\n");
-
-                                if stream.write_all(header_str.as_bytes()).await.is_ok() {
-                                    while let Ok(Some(chunk)) = resp.chunk().await {
-                                        if stream.write_all(&chunk).await.is_err() {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            return;
-                        }
-
-                        let host = request_header(&request_str, "Host");
-                        if host != Some(AUTH_ADDRESS) {
+                        if request_header(&request_str, "Host") != Some(AUTH_ADDRESS) {
+                            write_empty(&mut stream, "403 Forbidden").await;
                             return;
                         }
 
                         match (method, path) {
-                            ("GET", "/login") => {
+                            ("GET" | "HEAD" | "OPTIONS", path) if path.starts_with("/stream?key=") => {
+                                serve_stream(&mut stream, method, path, &request_str).await;
+                            }
+                            ("GET", path) if path.starts_with("/login?nonce=") => {
+                                let requested = &path["/login?nonce=".len()..];
                                 let nonce = BROWSER_LOGIN.lock().ok().and_then(|login| {
                                     login.as_ref()
-                                        .filter(|(_, started)| started.elapsed() < LOGIN_TTL)
+                                        .filter(|(nonce, started)| nonce == requested && started.elapsed() < LOGIN_TTL)
                                         .map(|(nonce, _)| nonce.clone())
                                 });
                                 if let Some(nonce) = nonce {
@@ -256,6 +175,16 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
                                 }
                             }
                             ("POST", "/auth") => {
+                                // A normal form POST can carry an opaque origin under the page's referrer policy.
+                                // The one-time ticket is required in both cases.
+                                if !matches!(request_header(&request_str, "Origin"), Some("https://soundcloud.com" | "null"))
+                                    || !request_header(&request_str, "Content-Type").is_some_and(|content| {
+                                        content.split(';').next() == Some("application/x-www-form-urlencoded")
+                                    })
+                                {
+                                    write_empty(&mut stream, "403 Forbidden").await;
+                                    return;
+                                }
                                 let length = request_header(&request_str, "Content-Length")
                                     .and_then(|length| length.parse::<usize>().ok())
                                     .filter(|&length| length <= 4096);
@@ -309,6 +238,73 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
         }
         });
     });
+}
+
+async fn write_empty(stream: &mut TcpStream, status: &str) {
+    let response = format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    let _ = stream.write_all(response.as_bytes()).await;
+}
+
+async fn serve_stream(stream: &mut TcpStream, method: &str, path: &str, headers: &str) {
+    let key = &path["/stream?key=".len()..];
+    let Some(url) = stream_url_for_ticket(key) else {
+        write_empty(stream, "404 Not Found").await;
+        return;
+    };
+    let origin = request_header(headers, "Origin").filter(|origin| {
+        matches!(*origin, "http://tauri.localhost" | "https://tauri.localhost" | "tauri://localhost")
+    });
+    let cors = origin.map(|origin| format!("Access-Control-Allow-Origin: {origin}\r\nVary: Origin\r\n")).unwrap_or_default();
+    if method == "OPTIONS" {
+        if origin.is_none() {
+            write_empty(stream, "403 Forbidden").await;
+            return;
+        }
+        let response = format!("HTTP/1.1 204 No Content\r\n{cors}Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\nAccess-Control-Allow-Headers: Range\r\nConnection: close\r\n\r\n");
+        let _ = stream.write_all(response.as_bytes()).await;
+        return;
+    }
+
+    let Some(client) = get_http_client() else {
+        write_empty(stream, "502 Bad Gateway").await;
+        return;
+    };
+    let mut request = if method == "HEAD" { client.head(url) } else { client.get(url) };
+    request = request.header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36");
+    if let Some(range) = request_header(headers, "Range") {
+        request = request.header(reqwest::header::RANGE, range);
+    }
+    let Ok(mut response) = request.send().await else {
+        write_empty(stream, "502 Bad Gateway").await;
+        return;
+    };
+    let status = match response.status().as_u16() {
+        200 => "200 OK",
+        206 => "206 Partial Content",
+        416 => "416 Range Not Satisfiable",
+        _ => {
+            write_empty(stream, "502 Bad Gateway").await;
+            return;
+        }
+    };
+    let media_type = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next()).filter(|value| value.starts_with("audio/") || *value == "application/octet-stream");
+    if media_type.is_none() && response.status().is_success() {
+        write_empty(stream, "502 Bad Gateway").await;
+        return;
+    }
+    let media_type = media_type.unwrap_or("application/octet-stream");
+    let mut head = format!("HTTP/1.1 {status}\r\n{cors}Content-Type: {media_type}\r\nX-Content-Type-Options: nosniff\r\nAccept-Ranges: bytes\r\nConnection: close\r\n");
+    for name in [reqwest::header::CONTENT_LENGTH, reqwest::header::CONTENT_RANGE] {
+        if let Some(value) = response.headers().get(&name).and_then(|value| value.to_str().ok()) {
+            let _ = write!(head, "{name}: {value}\r\n");
+        }
+    }
+    head.push_str("\r\n");
+    if stream.write_all(head.as_bytes()).await.is_err() || method == "HEAD" { return; }
+    while let Ok(Some(chunk)) = response.chunk().await {
+        if stream.write_all(&chunk).await.is_err() { break; }
+    }
 }
 
 fn consume_browser_login(nonce: &str) -> bool {
@@ -424,35 +420,6 @@ const LOGIN_STEPS: &str = r#"<main class="connect">
         </div></li>
     </ol>
 </main>"#;
-
-fn parse_range_header(header: &str, file_size: u64) -> (u64, u64) {
-    if file_size == 0 {
-        return (0, 0);
-    }
-    let max_idx = file_size.saturating_sub(1);
-    let clean = header.trim();
-    if let Some(eq_idx) = clean.find('=') {
-        let range_spec = &clean[eq_idx + 1..];
-        let mut parts = range_spec.split('-');
-        let start_str = parts.next().unwrap_or("").trim();
-        let end_str = parts.next().unwrap_or("").trim();
-
-        if start_str.is_empty() && !end_str.is_empty() {
-            let suffix_len: u64 = end_str.parse().unwrap_or(0);
-            let start = file_size.saturating_sub(suffix_len);
-            return (start, max_idx);
-        } else if !start_str.is_empty() {
-            let start: u64 = start_str.parse().unwrap_or(0);
-            let end: u64 = if end_str.is_empty() {
-                max_idx
-            } else {
-                end_str.parse().unwrap_or(max_idx)
-            };
-            return (std::cmp::min(start, max_idx), std::cmp::min(end, max_idx));
-        }
-    }
-    (0, max_idx)
-}
 
 fn urldecode(input: &str) -> String {
     let mut result = String::new();

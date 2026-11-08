@@ -506,6 +506,7 @@ pub struct SoundCloudClient {
     like_requests: tokio::sync::Mutex<()>,
     likes_refresh: tokio::sync::Mutex<()>,
     whisper_job: tokio::sync::Mutex<()>,
+    config_write: std::sync::Mutex<()>,
 }
 
 
@@ -566,6 +567,7 @@ impl SoundCloudClient {
             like_requests: tokio::sync::Mutex::new(()),
             likes_refresh: tokio::sync::Mutex::new(()),
             whisper_job: tokio::sync::Mutex::new(()),
+            config_write: std::sync::Mutex::new(()),
         }
 
 
@@ -657,15 +659,12 @@ impl SoundCloudClient {
 
 
     pub fn save_config(&self, cfg: &AppConfig) -> Result<(), String> {
+        let _guard = self.config_write.lock().map_err(|e| e.to_string())?;
         let existing = self.load_config();
         let mut to_save = cfg.clone();
 
         // General settings update: preserve credentials and session
-        if to_save.oauth_token.as_ref().map(|s| s.trim().is_empty()).unwrap_or(true) {
-            if existing.oauth_token.as_ref().map(|s| !s.trim().is_empty()).unwrap_or(false) {
-                to_save.oauth_token = existing.oauth_token;
-            }
-        }
+        to_save.oauth_token = existing.oauth_token;
         if to_save.user_id.is_none() && existing.user_id.is_some() {
             to_save.user_id = existing.user_id;
         }
@@ -688,27 +687,21 @@ impl SoundCloudClient {
             to_save.last_tab = existing.last_tab;
         }
 
-        let json = serde_json::to_string_pretty(&to_save).map_err(|e| e.to_string())?;
-        fs::write(&self.config_path, json).map_err(|e| e.to_string())?;
-        Ok(())
+        self.write_config_file(&to_save)
     }
 
     pub fn save_raw_config(&self, cfg: &AppConfig) -> Result<(), String> {
+        let _guard = self.config_write.lock().map_err(|e| e.to_string())?;
+        self.write_config_file(cfg)
+    }
 
-
-
-        let json = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-
-
-
-        fs::write(&self.config_path, json).map_err(|e| e.to_string())?;
-
-
-
+    fn write_config_file(&self, cfg: &AppConfig) -> Result<(), String> {
+        let directory = self.config_path.parent().filter(|path| !path.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        let mut staged = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
+        serde_json::to_writer_pretty(staged.as_file_mut(), cfg).map_err(|e| e.to_string())?;
+        staged.as_file().sync_all().map_err(|e| e.to_string())?;
+        staged.persist(&self.config_path).map_err(|e| e.error.to_string())?;
         Ok(())
-
-
-
     }
 
 
@@ -848,7 +841,11 @@ impl SoundCloudClient {
                 break;
             }
 
-            next_url = body.get("next_href").and_then(|v| v.as_str()).map(|s| {
+            let next = body.get("next_href").and_then(Value::as_str);
+            if next.is_some_and(|url| !is_soundcloud_api_url(url)) {
+                return Err("Некорректная страница лайков SoundCloud".to_string());
+            }
+            next_url = next.map(|s| {
                 if !s.contains("client_id=") {
                     let sep = if s.contains('?') { "&" } else { "?" };
                     format!("{}{}client_id={}", s, sep, client_id)
@@ -1696,6 +1693,9 @@ impl SoundCloudClient {
                 return Ok(plain);
             }
         }
+        if !is_transcription_stream_url(stream_url) {
+            return Err("Недопустимый адрес аудиопотока".to_string());
+        }
 
         let whisper_exe = Self::find_whisper(precise).ok_or_else(|| "Движок Whisper не найден (положите whisper-cli.exe в папку whisper)".to_string())?;
         let ffmpeg_exe = Self::find_ffmpeg().ok_or_else(|| "FFmpeg не найден для аудио-конвертации".to_string())?;
@@ -1710,6 +1710,7 @@ impl SoundCloudClient {
         let mut ff_cmd = tokio::process::Command::new(&ffmpeg_exe);
         ff_cmd.kill_on_drop(true).args([
             "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+            "-protocol_whitelist", "http,https,tcp,tls,crypto",
             "-headers", "Origin: https://soundcloud.com\r\nReferer: https://soundcloud.com/\r\n",
             "-i", stream_url,
         ]);
@@ -2306,7 +2307,9 @@ impl SoundCloudClient {
                     continue 'endpoints;
                 }
 
-                next_url = body.get("next_href").and_then(|v| v.as_str()).map(|s| {
+                let next = body.get("next_href").and_then(Value::as_str);
+                if next.is_some_and(|url| !is_soundcloud_api_url(url)) { break; }
+                next_url = next.map(|s| {
                     if !s.contains("client_id=") {
                         let sep = if s.contains('?') { "&" } else { "?" };
                         format!("{}{}client_id={}", s, sep, client_id)
@@ -2423,7 +2426,7 @@ impl SoundCloudClient {
 
 
 
-        if clean_id.is_empty() {
+        if clean_id.len() != 11 || !clean_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
 
 
 
@@ -2575,10 +2578,7 @@ impl SoundCloudClient {
         {
             if cached_at.elapsed() < std::time::Duration::from_secs(6 * 3600) {
                 if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&cached_id).await {
-                    return Some(format!(
-                        "http://127.0.0.1:49221/stream?url={}",
-                        urlencoding_simple(&raw_url)
-                    ));
+                    return crate::auth_server::register_youtube_stream(&raw_url);
                 }
             }
         }
@@ -2686,8 +2686,7 @@ impl SoundCloudClient {
                 }
                 if let Some(id) = best_id {
                     if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&id).await {
-                        let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&raw_url));
-                        return Some(proxied);
+                        return crate::auth_server::register_youtube_stream(&raw_url);
                     }
                 }
             }
@@ -2842,7 +2841,8 @@ impl SoundCloudClient {
 
 
 
-                    let proxied = format!("http://127.0.0.1:49221/stream?url={}", urlencoding_simple(&audio_url));
+                    let proxied = crate::auth_server::register_youtube_stream(&audio_url)
+                        .ok_or_else(|| "Недопустимый адрес аудио YouTube".to_string())?;
 
 
 
@@ -3225,7 +3225,7 @@ impl SoundCloudClient {
 
 
 
-                            if let Some(stream_req_url) = tc.get("url").and_then(|v| v.as_str()) {
+                            if let Some(stream_req_url) = tc.get("url").and_then(|v| v.as_str()).filter(|url| is_soundcloud_api_url(url)) {
 
 
 
@@ -5318,6 +5318,23 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             None
         }
     }
+}
+
+fn is_soundcloud_api_url(raw: &str) -> bool {
+    tauri::Url::parse(raw).is_ok_and(|url| {
+        url.scheme() == "https" && url.host_str() == Some("api-v2.soundcloud.com")
+            && url.port_or_known_default() == Some(443) && url.username().is_empty() && url.password().is_none()
+    })
+}
+
+fn is_transcription_stream_url(raw: &str) -> bool {
+    let Ok(url) = tauri::Url::parse(raw) else { return false; };
+    if !url.username().is_empty() || url.password().is_some() { return false; }
+    if crate::auth_server::is_registered_stream_url(&url) { return true; }
+    url.scheme() == "https" && url.port_or_known_default() == Some(443)
+        && url.host_str().is_some_and(|host| {
+            host == "playback.media-streaming.soundcloud.cloud" || host.ends_with(".sndcdn.com") || host.ends_with(".dzcdn.net")
+        })
 }
 
 fn default_whisper_precise() -> bool {

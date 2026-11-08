@@ -18,6 +18,44 @@ pub struct AppState {
     pub discord: DiscordManager,
 }
 
+fn public_config(cfg: AppConfig) -> Result<Value, String> {
+    let has_token = cfg.oauth_token.as_ref().is_some_and(|token| !token.trim().is_empty());
+    let mut data = serde_json::to_value(cfg).map_err(|error| error.to_string())?;
+    if let Some(fields) = data.as_object_mut() {
+        fields.remove("oauth_token");
+        fields.insert("hasToken".to_string(), Value::Bool(has_token));
+    }
+    Ok(data)
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[test]
+    fn webview_configuration_does_not_contain_the_oauth_token() {
+        let cfg = AppConfig { oauth_token: Some("fixture-only-token".to_string()), ..AppConfig::default() };
+        let exposed = public_config(cfg).unwrap();
+        assert_eq!(exposed.get("hasToken"), Some(&Value::Bool(true)));
+        assert!(exposed.get("oauth_token").is_none());
+    }
+
+    #[test]
+    fn general_settings_cannot_replace_or_restore_oauth_credentials() {
+        let directory = tempfile::tempdir().unwrap();
+        let client = SoundCloudClient::new(directory.path().join("config.json"));
+        let initial = AppConfig { oauth_token: Some("fixture-only-token".to_string()), ..AppConfig::default() };
+        client.save_raw_config(&initial).unwrap();
+        let mut settings = initial.clone();
+        settings.oauth_token = Some("untrusted-value".to_string());
+        client.save_config(&settings).unwrap();
+        assert_eq!(client.load_config().oauth_token, initial.oauth_token);
+        client.save_raw_config(&AppConfig::default()).unwrap();
+        client.save_config(&initial).unwrap();
+        assert_eq!(client.load_config().oauth_token, AppConfig::default().oauth_token);
+    }
+}
+
 #[tauri::command]
 async fn init_app(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
     let cfg = state.sc.load_config();
@@ -59,7 +97,7 @@ async fn init_app(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<V
     }
 
     Ok(serde_json::json!({
-        "config": cfg,
+        "config": public_config(cfg)?,
         "likes": likes,
         "user": user,
         "profile": profile,
@@ -74,8 +112,8 @@ async fn get_local_likes(state: State<'_, AppState>) -> Result<Vec<FormattedTrac
 }
 
 #[tauri::command]
-async fn get_config(state: State<'_, AppState>) -> Result<AppConfig, String> {
-    Ok(state.sc.load_config())
+async fn get_config(state: State<'_, AppState>) -> Result<Value, String> {
+    public_config(state.sc.load_config())
 }
 
 #[tauri::command]
@@ -97,7 +135,7 @@ async fn logout(state: State<'_, AppState>) -> Result<(), String> {
     cfg.cached_mixed = None;
     cfg.session = None;
     cfg.last_tab = Some("tab-home".to_string());
-    let _ = state.sc.save_raw_config(&cfg);
+    state.sc.save_raw_config(&cfg)?;
     state.discord.clear_activity();
     Ok(())
 }
@@ -247,17 +285,7 @@ async fn get_related_tracks(track_id: Value, state: State<'_, AppState>) -> Resu
 
 #[tauri::command]
 fn open_browser_login() -> Result<(), String> {
-    let login_url = auth_server::begin_browser_login()?;
-
-    #[cfg(target_os = "windows")]
-    let browser = std::process::Command::new("cmd")
-        .args(["/c", "start", "", login_url])
-        .spawn();
-
-    #[cfg(not(target_os = "windows"))]
-    let browser = std::process::Command::new("xdg-open").arg(login_url).spawn();
-
-    browser.map(|_| ()).map_err(|error| error.to_string())
+    open_url(auth_server::begin_browser_login()?)
 }
 
 #[tauri::command]
@@ -287,8 +315,10 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
         dir
     };
 
+    let login_nonce = auth_server::random_ticket()?;
     let auth_script = r#"
         (function() {
+            if (window.top !== window || location.origin !== 'https://soundcloud.com') return;
             if (window.__ONYX_AUTH_INJECTED__) return;
             window.__ONYX_AUTH_INJECTED__ = true;
 
@@ -308,14 +338,14 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                 } catch(e) {}
 
                 setTimeout(function() {
-                    window.location.href = 'https://soundcloud.com/?onyx_oauth_token=' + encodeURIComponent(tok);
+                    window.location.href = 'https://soundcloud.com/?onyx_login=__ONYX_NONCE__#onyx_oauth_token=' + encodeURIComponent(tok);
                 }, 300);
             }
 
             function check() {
                 if (tokenFound) return;
                 try {
-                    var m = document.cookie.match(/oauth_token=([^;]+)/);
+                    var m = document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);
                     if (m && m[1]) {
                         sendToken(m[1]);
                         return;
@@ -340,7 +370,8 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
                 var originalFetch = window.fetch;
                 window.fetch = function(input, init) {
                     try {
-                        if (init && init.headers) {
+                        var requestUrl = input instanceof Request ? input.url : input;
+                        if (new URL(requestUrl, location.href).origin === 'https://api-v2.soundcloud.com' && init && init.headers) {
                             var auth = null;
                             if (init.headers instanceof Headers) {
                                 auth = init.headers.get('Authorization') || init.headers.get('authorization');
@@ -360,10 +391,16 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
             } catch(e) {}
 
             try {
+                var xhrOrigins = new WeakMap();
+                var origOpen = XMLHttpRequest.prototype.open;
+                XMLHttpRequest.prototype.open = function(method, url) {
+                    try { xhrOrigins.set(this, new URL(url, location.href).origin); } catch(e) { xhrOrigins.delete(this); }
+                    return origOpen.apply(this, arguments);
+                };
                 var origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
                 XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
                     try {
-                        if (header && header.toLowerCase() === 'authorization' && value) {
+                        if (xhrOrigins.get(this) === 'https://api-v2.soundcloud.com' && header && header.toLowerCase() === 'authorization' && value) {
                             var mAuth = value.match(/OAuth\s+([^\s;]+)/i) || value.match(/Bearer\s+([^\s;]+)/i);
                             if (mAuth && mAuth[1]) {
                                 sendToken(mAuth[1]);
@@ -377,7 +414,7 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
             setInterval(check, 600);
             check();
         })();
-    "#;
+    "#.replace("__ONYX_NONCE__", &login_nonce);
 
     let target_url: tauri::Url = "https://soundcloud.com/signin".parse().unwrap();
     let app_handle = app.clone();
@@ -412,7 +449,7 @@ async fn open_in_app_login(app: tauri::AppHandle, state: State<'_, AppState>) ->
         let sc_inner = sc_nav.clone();
 
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            handle_oauth_navigation(url, &app_inner, &sc_inner)
+            handle_oauth_navigation(url, &login_nonce, &app_inner, &sc_inner)
         })) {
             Ok(allow) => allow,
             Err(payload) => {
@@ -447,7 +484,7 @@ fn close_login_window(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Handles a navigation performed by the sign-in webview.
 ///
-/// When the injected script appends `onyx_oauth_token=<token>` to the redirect URL,
+/// When the injected script puts `onyx_oauth_token=<token>` in the URL fragment,
 /// the token must be captured: the navigation itself is cancelled and the token is
 /// validated/persisted asynchronously. Returns `true` when the navigation is allowed.
 ///
@@ -455,24 +492,23 @@ fn close_login_window(app: tauri::AppHandle) -> Result<(), String> {
 /// and must never rely on a Tokio runtime context on the calling thread.
 fn handle_oauth_navigation(
     url: &tauri::Url,
+    nonce: &str,
     app: &tauri::AppHandle,
     sc: &Arc<SoundCloudClient>,
 ) -> bool {
     const MARKER: &str = "onyx_oauth_token=";
-    let url_str = url.as_str();
-    let Some(idx) = url_str.find(MARKER) else {
+    let Some(encoded) = url.fragment().and_then(|fragment| fragment.strip_prefix(MARKER)) else {
         return true;
     };
-
-    let rest = &url_str[idx + MARKER.len()..];
-    let end = rest.find('&').unwrap_or(rest.len());
-    let clean = &rest[..end];
-    let decoded = urlencoding::decode(clean)
-        .map(|c| c.to_string())
-        .unwrap_or_else(|_| clean.to_string());
+    if url.origin().ascii_serialization() != "https://soundcloud.com"
+        || !url.query_pairs().any(|(name, value)| name == "onyx_login" && value == nonce)
+    {
+        return false;
+    }
+    let Ok(decoded) = urlencoding::decode(encoded) else { return false; };
     let trimmed = decoded.trim().trim_matches(&['"', '\''][..]).trim().to_string();
     if trimmed.is_empty() {
-        return true;
+        return false;
     }
 
     let app_inner = app.clone();
@@ -521,22 +557,30 @@ fn handle_oauth_navigation(
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    let clean = url.trim();
-    if clean.starts_with("http://") || clean.starts_with("https://") {
-        #[cfg(target_os = "windows")]
-        {
-            let _ = std::process::Command::new("cmd")
-                .args(["/c", "start", "", clean])
-                .spawn();
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = std::process::Command::new("xdg-open")
-                .arg(clean)
-                .spawn();
-        }
+    let url = tauri::Url::parse(url.trim()).map_err(|_| "Некорректная ссылка".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none()
+        || !url.username().is_empty() || url.password().is_some()
+    {
+        return Err("Разрешены только ссылки HTTP и HTTPS без учётных данных".to_string());
     }
-    Ok(())
+    #[cfg(windows)]
+    {
+        use std::ptr::null;
+        use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
+        let target: Vec<u16> = url.as_str().encode_utf16().chain([0]).collect();
+        // Pass the parsed URL to the registered browser without a command interpreter.
+        let result = unsafe { ShellExecuteW(std::ptr::null_mut(), null(), target.as_ptr(), null(), null(), SW_SHOWNORMAL) };
+        if result as isize <= 32 {
+            return Err("Не удалось открыть ссылку в браузере".to_string());
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+        std::process::Command::new(opener).arg(url.as_str()).spawn()
+            .map(|_| ()).map_err(|error| error.to_string())
+    }
 }
 
 #[tauri::command]
