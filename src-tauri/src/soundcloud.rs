@@ -12,6 +12,7 @@ use std::fs;
 
 
 use std::path::{Path, PathBuf};
+use tokio::io::AsyncWriteExt;
 
 
 
@@ -20,6 +21,8 @@ use std::path::{Path, PathBuf};
 
 
 const DEFAULT_CLIENT_ID: &str = "QhVEWrrJKvW4uSU5u5EoI0FTXYUGzy5k";
+const PRECISE_WHISPER_MODEL: &str = "large-v3-turbo-q5_0";
+const PRECISE_WHISPER_MODEL_SIZE: u64 = 574_041_195;
 
 
 
@@ -190,6 +193,8 @@ pub struct AppConfig {
     pub last_tab: Option<String>,
     #[serde(default)]
     pub whisper_auto_transcribe: Option<bool>,
+    #[serde(default = "default_whisper_precise")]
+    pub whisper_precise: bool,
 
 
 
@@ -310,7 +315,8 @@ impl Default for AppConfig {
 
 
             last_tab: Some("tab-home".to_string()),
-            whisper_auto_transcribe: Some(false),
+            whisper_auto_transcribe: Some(true),
+            whisper_precise: default_whisper_precise(),
 
 
 
@@ -499,6 +505,7 @@ pub struct SoundCloudClient {
     likes_revision: std::sync::Mutex<u64>,
     like_requests: tokio::sync::Mutex<()>,
     likes_refresh: tokio::sync::Mutex<()>,
+    whisper_job: tokio::sync::Mutex<()>,
 }
 
 
@@ -558,6 +565,7 @@ impl SoundCloudClient {
             likes_revision: std::sync::Mutex::new(0),
             like_requests: tokio::sync::Mutex::new(()),
             likes_refresh: tokio::sync::Mutex::new(()),
+            whisper_job: tokio::sync::Mutex::new(()),
         }
 
 
@@ -1434,7 +1442,17 @@ impl SoundCloudClient {
         dir
     }
 
-    pub fn find_whisper() -> Option<PathBuf> {
+    pub fn find_whisper(precise: bool) -> Option<PathBuf> {
+        if precise {
+            let relative = Path::new("whisper").join("cuda").join("whisper-cli.exe");
+            let preferred = std::env::current_exe().ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join(&relative)))
+                .filter(|path| path.is_file());
+            let local = Path::new(r"F:\Soundcloud").join(relative);
+            if let Some(path) = preferred.or_else(|| local.is_file().then_some(local)) {
+                return Some(path);
+            }
+        }
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
                 for name in &["whisper-cli.exe", "whisper.exe"] {
@@ -1537,25 +1555,14 @@ impl SoundCloudClient {
         if let Some(m) = Self::find_whisper_model() {
             return Ok(m);
         }
-        let base_dir = if let Ok(exe) = std::env::current_exe() {
-            exe.parent().map(|d| d.join("models")).unwrap_or_else(|| PathBuf::from("models"))
-        } else {
-            PathBuf::from("models")
-        };
-        let _ = fs::create_dir_all(&base_dir);
-        let target = base_dir.join("ggml-tiny.bin");
-        let url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin";
-        let res = self.http.get(url).send().await.map_err(|e| format!("Failed to download Whisper model: {}", e))?;
-        if !res.status().is_success() {
-            return Err(format!("Whisper model download returned HTTP {}", res.status()));
-        }
-        let bytes = res.bytes().await.map_err(|e| format!("Failed to read Whisper model bytes: {}", e))?;
-        fs::write(&target, &bytes).map_err(|e| format!("Failed to write Whisper model: {}", e))?;
-        Ok(target)
+        self.ensure_whisper_model_named("tiny").await
     }
 
     async fn ensure_whisper_model_named(&self, model_name: &str) -> Result<PathBuf, String> {
         let filename = format!("ggml-{}.bin", model_name);
+        let model_size = (model_name == PRECISE_WHISPER_MODEL).then_some(PRECISE_WHISPER_MODEL_SIZE);
+        let base_dir = self.config_path.parent().unwrap_or(Path::new(".")).join("models");
+        let target = base_dir.join(&filename);
         let mut candidates = Vec::new();
 
         if let Ok(exe) = std::env::current_exe() {
@@ -1570,36 +1577,83 @@ impl SoundCloudClient {
         if let Ok(appdata) = std::env::var("APPDATA") {
             candidates.push(PathBuf::from(appdata).join("com.onyx.player").join("models").join(&filename));
         }
+        candidates.push(target.clone());
 
-        if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+        if let Some(path) = candidates.into_iter().find(|path| {
+            path.metadata().is_ok_and(|meta| meta.is_file() && model_size.unwrap_or(meta.len()) == meta.len())
+        }) {
             return Ok(path);
         }
 
-        let base_dir = if let Ok(exe) = std::env::current_exe() {
-            exe.parent().map(|d| d.join("models")).unwrap_or_else(|| PathBuf::from("models"))
-        } else {
-            PathBuf::from("models")
-        };
         fs::create_dir_all(&base_dir).map_err(|e| format!("Не удалось создать папку моделей Whisper: {}", e))?;
-        let target = base_dir.join(&filename);
-        let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}", filename);
-        let res = self.http.get(url).send().await.map_err(|e| format!("Не удалось скачать модель Whisper {}: {}", model_name, e))?;
-        if !res.status().is_success() {
-            return Err(format!("Загрузка модели Whisper {} вернула HTTP {}", model_name, res.status()));
+        let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}?download=true", filename);
+        let mut response = self.http.get(url)
+            .timeout(std::time::Duration::from_secs(1800))
+            .send().await.and_then(reqwest::Response::error_for_status)
+            .map_err(|e| format!("Не удалось скачать модель Whisper {}: {}", model_name, e))?;
+        let expected_size = model_size.or(response.content_length());
+        let (file, staged_path) = tempfile::NamedTempFile::new_in(&base_dir)
+            .map_err(|e| format!("Не удалось создать временный файл модели: {}", e))?.into_parts();
+        let mut file = tokio::fs::File::from_std(file);
+        let mut written = 0_u64;
+        while let Some(chunk) = response.chunk().await.map_err(|e| format!("Загрузка Whisper прервана: {}", e))? {
+            file.write_all(&chunk).await.map_err(|e| format!("Не удалось записать модель Whisper: {}", e))?;
+            written += chunk.len() as u64;
         }
-        let bytes = res.bytes().await.map_err(|e| format!("Не удалось прочитать модель Whisper {}: {}", model_name, e))?;
-        fs::write(&target, &bytes).map_err(|e| format!("Не удалось сохранить модель Whisper {}: {}", model_name, e))?;
+        if written == 0 || expected_size.is_some_and(|size| size != written) {
+            return Err(format!("Модель Whisper {} загружена не полностью", model_name));
+        }
+        file.flush().await.map_err(|e| format!("Не удалось завершить запись модели Whisper: {}", e))?;
+        drop(file);
+        staged_path.persist(&target).map_err(|e| format!("Не удалось сохранить модель Whisper: {}", e))?;
         Ok(target)
     }
 
-    fn whisper_output_is_low_quality(lrc: &str, json_path: &Path) -> bool {
-        let words = lrc.lines()
+    fn whisper_has_lyric_words(text: &str) -> bool {
+        let label = text.trim().trim_matches(|c: char| c.is_whitespace() || "[]()♪♫".contains(c));
+        label.chars().any(char::is_alphanumeric)
+            && !matches!(label.to_lowercase().as_str(), "music" | "instrumental" | "background music" | "музыка" | "инструментал")
+    }
+
+    fn clean_whisper_lrc(lrc: &str) -> String {
+        lrc.lines().filter(|line| {
+            let text = line.split_once(']').map(|(_, text)| text).unwrap_or(line);
+            let mut parts = text.split('<');
+            let mut plain = parts.next().unwrap_or_default().to_string();
+            for part in parts {
+                plain.push_str(part.split_once('>').map(|(_, word)| word).unwrap_or(part));
+            }
+            Self::whisper_has_lyric_words(&plain)
+        }).collect::<Vec<_>>().join("\n")
+    }
+
+    fn whisper_output_is_low_quality(lrc: &str, json_path: &Path, precise: bool) -> bool {
+        let lines = lrc.lines()
             .map(|line| line.split_once(']').map(|(_, text)| text).unwrap_or(line))
+            .map(str::trim)
+            .filter(|line| Self::whisper_has_lyric_words(line));
+        let words = lines.clone()
             .flat_map(str::split_whitespace)
             .filter(|word| word.chars().any(char::is_alphanumeric))
             .count();
         if words < 3 {
             return true;
+        }
+        if precise {
+            // Long runs of one line can occur when music is mistaken for vocals.
+            let mut previous = "";
+            let mut run = 0;
+            let mut longest = 0;
+            let mut count = 0;
+            for line in lines {
+                run = if line == previous { run + 1 } else { 1 };
+                longest = longest.max(run);
+                previous = line;
+                count += 1;
+            }
+            if (longest >= 8 && longest * 2 >= count) || (longest >= 4 && longest * 4 >= count * 3) {
+                return true;
+            }
         }
 
         let Ok(json_text) = fs::read_to_string(json_path) else { return false; };
@@ -1609,7 +1663,7 @@ impl SoundCloudClient {
         let mut weak = 0usize;
         for segment in segments {
             let Some(text) = segment.get("text").and_then(Value::as_str) else { continue; };
-            if !text.chars().any(char::is_alphanumeric) { continue; }
+            if !Self::whisper_has_lyric_words(text) { continue; }
             let token_probs = segment.get("tokens").and_then(Value::as_array)
                 .into_iter().flatten()
                 .filter_map(|token| token.get("p").and_then(Value::as_f64))
@@ -1623,89 +1677,91 @@ impl SoundCloudClient {
         scored > 0 && weak * 2 >= scored
     }
 
-    pub async fn transcribe_audio_stream(&self, track_id: &str, stream_url: &str) -> Result<Value, String> {
+    pub async fn transcribe_audio_stream(&self, track_id: &str, stream_url: &str, precise: bool) -> Result<Value, String> {
         let clean_id: String = track_id.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect();
         if clean_id.is_empty() {
             return Err("Invalid track id".to_string());
         }
 
-        // 1. Instant Cache hit (0 ms)
-        // v2 avoids reusing transcripts made with the old tiny-only path.
-        let cache_file = self.lyrics_cache_dir().join(format!("{}.v2.lrc", clean_id));
-        if cache_file.exists() {
-            if let Ok(content) = fs::read_to_string(&cache_file) {
-                if content.trim().len() > 10 {
-                    let plain = content.lines()
-                        .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
-                        .filter(|l| !l.is_empty() && !l.starts_with("[by:"))
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    return Ok(serde_json::json!({
-                        "syncedLyrics": content,
-                        "plainLyrics": plain,
-                        "isAi": true
-                    }));
-                }
+        // Serialize decoding and check the cache again for queued requests.
+        let _job = self.whisper_job.lock().await;
+        let cache_dir = self.lyrics_cache_dir();
+        let suffix = if precise { "large-v3-turbo-q5.v2" } else { "v2" };
+        let cache_file = cache_dir.join(format!("{}.{}.lrc", clean_id, suffix));
+        if let Ok(content) = fs::read_to_string(&cache_file) {
+            let content = Self::clean_whisper_lrc(&content);
+            let plain = Self::whisper_lyrics_result(content, precise);
+            let plain_text = plain.get("plainLyrics").and_then(Value::as_str).unwrap_or_default();
+            if !Self::whisper_output_is_low_quality(plain_text, Path::new(""), true) {
+                return Ok(plain);
             }
         }
 
-        let whisper_exe = Self::find_whisper().ok_or_else(|| "Движок Whisper не найден (положите whisper-cli.exe в папку whisper)".to_string())?;
-        let model_path = self.ensure_whisper_model().await?;
+        let whisper_exe = Self::find_whisper(precise).ok_or_else(|| "Движок Whisper не найден (положите whisper-cli.exe в папку whisper)".to_string())?;
         let ffmpeg_exe = Self::find_ffmpeg().ok_or_else(|| "FFmpeg не найден для аудио-конвертации".to_string())?;
 
-        let temp_dir = std::env::temp_dir();
-        let temp_wav = temp_dir.join(format!("onyx_whisper_{}.wav", clean_id));
-        let temp_out_base = temp_dir.join(format!("onyx_whisper_out_{}", clean_id));
-        let temp_lrc = temp_dir.join(format!("onyx_whisper_out_{}.lrc", clean_id));
+        let temp_dir = tempfile::Builder::new().prefix("onyx-whisper-").tempdir()
+            .map_err(|e| format!("Не удалось создать временную папку Whisper: {}", e))?;
+        let temp_wav = temp_dir.path().join("audio.wav");
+        let temp_out_base = temp_dir.path().join("lyrics");
+        let temp_lrc = temp_out_base.with_extension("lrc");
 
         // 2. Convert stream into 16kHz mono WAV using ffmpeg
         let mut ff_cmd = tokio::process::Command::new(&ffmpeg_exe);
-        ff_cmd.args([
+        ff_cmd.kill_on_drop(true).args([
+            "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
             "-headers", "Origin: https://soundcloud.com\r\nReferer: https://soundcloud.com/\r\n",
             "-i", stream_url,
-            "-t", "360",
-            "-ar", "16000",
-            "-ac", "1",
-            temp_wav.to_str().unwrap(),
-            "-y",
         ]);
+        if precise {
+            ff_cmd.arg("-xerror");
+        } else {
+            ff_cmd.args(["-t", "360"]);
+        }
+        ff_cmd.args(["-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le"]).arg(&temp_wav);
         #[cfg(windows)]
         ff_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
-        let ff_status = tokio::time::timeout(std::time::Duration::from_secs(35), ff_cmd.status()).await
-            .map_err(|_| "Таймаут скачивания аудио для распознавания (35 сек)".to_string())?
+        let audio_timeout = if precise { 180 } else { 35 };
+        let ff_status = tokio::time::timeout(std::time::Duration::from_secs(audio_timeout), ff_cmd.status()).await
+            .map_err(|_| format!("Таймаут скачивания аудио для распознавания ({} сек)", audio_timeout))?
             .map_err(|e| format!("Ошибка запуска ffmpeg: {}", e))?;
 
         if !ff_status.success() || !temp_wav.exists() {
-            let _ = fs::remove_file(&temp_wav);
             return Err("Не удалось подготовить аудиофайл для Whisper".to_string());
         }
+
+        let model_path = if precise {
+            self.ensure_whisper_model_named(PRECISE_WHISPER_MODEL).await?
+        } else {
+            self.ensure_whisper_model().await?
+        };
 
         // 3. Run the installed model first and emit JSON confidence data too.
         let temp_json = temp_out_base.with_extension("json");
         let run_whisper = |model: &Path, output_base: &Path| {
             let mut cmd = tokio::process::Command::new(&whisper_exe);
-            cmd.args([
-                "-m", model.to_str().unwrap(),
-                "-f", temp_wav.to_str().unwrap(),
-                "-olrc", "-ojf",
-                "-of", output_base.to_str().unwrap(),
-                "-l", "auto",
-                "-t", "4",
-            ]);
+            cmd.kill_on_drop(true)
+                .arg("-m").arg(model)
+                .arg("-f").arg(&temp_wav)
+                .args(["-olrc", "-ojf", "-l", "auto", "-t", "4", "-np"])
+                .arg("-of").arg(output_base);
+            if precise {
+                cmd.args(["-nfa", "-dtw", "large.v3.turbo"]);
+            }
             #[cfg(windows)]
             cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
             cmd
         };
 
-        let first_status = tokio::time::timeout(std::time::Duration::from_secs(120), run_whisper(&model_path, &temp_out_base).status()).await
-            .map_err(|_| "Таймаут распознавания Whisper (120 сек)".to_string())?
+        let whisper_timeout = if precise { 900 } else { 120 };
+        let first_status = tokio::time::timeout(std::time::Duration::from_secs(whisper_timeout), run_whisper(&model_path, &temp_out_base).status()).await
+            .map_err(|_| format!("Таймаут распознавания Whisper ({} сек)", whisper_timeout))?
             .map_err(|e| format!("Ошибка запуска Whisper: {}", e))?;
 
         let first_has_output = first_status.success() && temp_lrc.exists();
-        if !first_has_output {
-            let _ = fs::remove_file(&temp_lrc);
-            let _ = fs::remove_file(&temp_json);
+        if precise && !first_has_output {
+            return Err("Whisper large-v3-turbo не смог завершить распознавание".to_string());
         }
 
         let first_lrc = if first_has_output {
@@ -1713,67 +1769,126 @@ impl SoundCloudClient {
         } else {
             String::new()
         };
-        let first_is_weak = !first_has_output || Self::whisper_output_is_low_quality(&first_lrc, &temp_json);
+        let first_is_weak = !first_has_output || Self::whisper_output_is_low_quality(&first_lrc, &temp_json, precise);
         let mut raw_lrc = first_lrc;
 
         // If the fast model produced little or low-confidence text, retry once with small.
-        if first_is_weak && !model_path.file_name().and_then(|name| name.to_str()).unwrap_or_default().contains("small") {
-            let _ = fs::remove_file(&temp_lrc);
-            let _ = fs::remove_file(&temp_json);
+        if first_is_weak && !precise && !model_path.ends_with("ggml-small.bin") {
             let small_model = self.ensure_whisper_model_named("small").await?;
-            let small_base = temp_out_base.with_file_name(format!("onyx_whisper_out_{}_small", clean_id));
+            let small_base = temp_dir.path().join("lyrics-small");
             let small_lrc = small_base.with_extension("lrc");
             let small_json = small_base.with_extension("json");
             let small_status = tokio::time::timeout(std::time::Duration::from_secs(300), run_whisper(&small_model, &small_base).status()).await
                 .map_err(|_| "Таймаут повторного распознавания Whisper на модели small (300 сек)".to_string())?
                 .map_err(|e| format!("Ошибка запуска Whisper small: {}", e))?;
             if !small_status.success() || !small_lrc.exists() {
-                let _ = fs::remove_file(&temp_wav);
-                let _ = fs::remove_file(&small_lrc);
-                let _ = fs::remove_file(&small_json);
                 return Err("Whisper не смог распознать текст даже на более точной модели small".to_string());
             }
             raw_lrc = fs::read_to_string(&small_lrc).map_err(|e| format!("Не удалось прочесть повторный результат Whisper: {}", e))?;
-            let still_weak = Self::whisper_output_is_low_quality(&raw_lrc, &small_json);
-            let _ = fs::remove_file(&small_lrc);
-            let _ = fs::remove_file(&small_json);
-            if still_weak {
-                let _ = fs::remove_file(&temp_wav);
+            if Self::whisper_output_is_low_quality(&raw_lrc, &small_json, false) {
                 return Err("Whisper распознал слишком мало разборчивого текста. Результат не сохранён; попробуйте найти готовый текст или другой аудиомикс.".to_string());
             }
         } else if first_is_weak {
-            let _ = fs::remove_file(&temp_wav);
-            let _ = fs::remove_file(&temp_lrc);
-            let _ = fs::remove_file(&temp_json);
             return Err("Whisper распознал слишком мало разборчивого текста. Результат не сохранён.".to_string());
         }
 
-        let _ = fs::remove_file(&temp_wav);
-        let _ = fs::remove_file(&temp_lrc);
-        let _ = fs::remove_file(&temp_json);
+        let clean_lrc = Self::clean_whisper_lrc(&raw_lrc);
 
-        let clean_lrc = raw_lrc.lines()
-            .filter(|l| !l.starts_with("[by:whisper.cpp]"))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        if Self::whisper_output_is_low_quality(&clean_lrc, Path::new("")) {
+        if Self::whisper_output_is_low_quality(&clean_lrc, Path::new(""), false) {
             return Err("В треке не обнаружено разборчивого текста".to_string());
         }
 
-        let _ = fs::write(&cache_file, &clean_lrc);
+        let lrc = if precise {
+            Self::whisper_word_lrc(&temp_json).unwrap_or(clean_lrc)
+        } else {
+            clean_lrc
+        };
+        if let Ok(mut staged) = tempfile::NamedTempFile::new_in(&cache_dir) {
+            if std::io::Write::write_all(&mut staged, lrc.as_bytes()).is_ok() {
+                let _ = staged.persist(&cache_file);
+            }
+        }
+        Ok(Self::whisper_lyrics_result(lrc, precise))
+    }
 
-        let plain = clean_lrc.lines()
+    fn whisper_timestamp(ticks: u64) -> String {
+        format!("{:02}:{:02}.{:02}", ticks / 6000, ticks / 100 % 60, ticks % 100)
+    }
+
+    fn whisper_word_lrc(json_path: &Path) -> Option<String> {
+        let data: Value = serde_json::from_slice(&fs::read(json_path).ok()?).ok()?;
+        let mut lines = Vec::new();
+        for segment in data.get("transcription")?.as_array()? {
+            let text = segment.get("text")?.as_str()?.trim();
+            if !Self::whisper_has_lyric_words(text) { continue; }
+            let offsets = segment.get("offsets")?;
+            let from = offsets.get("from")?.as_u64()? / 10;
+            let to = offsets.get("to")?.as_u64()? / 10;
+            let mut reconstructed = String::new();
+            let mut starts = Vec::new();
+            let mut word_boundary = true;
+            for token in segment.get("tokens").and_then(Value::as_array).into_iter().flatten() {
+                let Some(text) = token.get("text").and_then(Value::as_str) else { continue; };
+                if text.starts_with("[_") && text.ends_with(']') { continue; }
+                let time = token.get("t_dtw").and_then(Value::as_u64).filter(|tick| (from..=to).contains(tick));
+                for ch in text.chars() {
+                    if word_boundary && !ch.is_whitespace() {
+                        starts.push(time);
+                    }
+                    word_boundary = ch.is_whitespace();
+                    reconstructed.push(ch);
+                }
+            }
+            let times = starts.into_iter().collect::<Option<Vec<_>>>();
+            let timed = times.filter(|times| !times.is_empty() && times.windows(2).all(|pair| pair[0] <= pair[1])
+                && reconstructed.split_whitespace().eq(text.split_whitespace()));
+            if let Some(times) = timed {
+                let mut line = format!("[{}]", Self::whisper_timestamp(times[0]));
+                let has_end = times.last().is_some_and(|last| *last < to);
+                for (index, (word, time)) in text.split_whitespace().zip(times).enumerate() {
+                    if index > 0 { line.push(' '); }
+                    line.push_str(&format!("<{}>{}", Self::whisper_timestamp(time), word));
+                }
+                if has_end { line.push_str(&format!("<{}>", Self::whisper_timestamp(to))); }
+                lines.push(line);
+            } else {
+                lines.push(format!("[{}]{}", Self::whisper_timestamp(from), text));
+            }
+        }
+        (!lines.is_empty()).then(|| lines.join("\n"))
+    }
+
+    fn whisper_lyrics_result(lrc: String, precise: bool) -> Value {
+        let plain = lrc.lines()
             .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
-            .filter(|l| !l.is_empty())
+            .filter(|l| !l.is_empty() && !l.starts_with("[by:"))
+            .map(|line| {
+                let mut pieces = line.split('<');
+                let mut text = pieces.next().unwrap_or_default().to_string();
+                for piece in pieces {
+                    if let Some((tag, rest)) = piece.split_once('>') {
+                        if let Some((minutes, seconds)) = tag.split_once(':') {
+                            if minutes.parse::<u64>().is_ok() && seconds.parse::<f64>().is_ok() {
+                                text.push_str(rest);
+                                continue;
+                            }
+                        }
+                    }
+                    text.push('<');
+                    text.push_str(piece);
+                }
+                text
+            })
             .collect::<Vec<_>>()
             .join("\n");
 
-        Ok(serde_json::json!({
-            "syncedLyrics": clean_lrc,
+        serde_json::json!({
+            "syncedLyrics": lrc,
             "plainLyrics": plain,
-            "isAi": true
-        }))
+            "isAi": true,
+            "whisperPrecise": precise,
+            "whisperRevision": precise.then_some(2)
+        })
     }
 
     pub fn format_artist(u: &Value) -> FormattedArtist {
@@ -5068,6 +5183,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             let mut obj = serde_json::Map::new();
             obj.insert("plainLyrics".to_string(), Value::String(genius_lyrics));
             obj.insert("source".to_string(), Value::String("genius".to_string()));
+            obj.insert("referenceMatched".to_string(), Value::Bool(true));
             obj.insert("trackName".to_string(), Value::String(clean_title.clone()));
             obj.insert("artistName".to_string(), Value::String(clean_artist.clone()));
             return Ok(Value::Object(obj));
@@ -5104,11 +5220,20 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         let sections = search_json.get("response").and_then(|r| r.get("sections")).and_then(|s| s.as_array())?;
         
         let mut song_path: Option<String> = None;
+        let title_key = clean_lyrics_text(title).to_lowercase();
+        let artist_key = clean_lyrics_text(artist).to_lowercase();
         for sec in sections {
             if sec.get("type").and_then(|t| t.as_str()) == Some("song") {
                 if let Some(hits) = sec.get("hits").and_then(|h| h.as_array()) {
                     for hit in hits {
                         if let Some(result) = hit.get("result") {
+                            let result_title = result.get("title").and_then(Value::as_str).unwrap_or_default();
+                            let result_artist = result.pointer("/primary_artist/name").and_then(Value::as_str).unwrap_or_default();
+                            if clean_lyrics_text(result_title).to_lowercase() != title_key
+                                || clean_lyrics_text(result_artist).to_lowercase() != artist_key
+                            {
+                                continue;
+                            }
                             if let Some(path) = result.get("path").and_then(|p| p.as_str()) {
                                 song_path = Some(path.to_string());
                                 break;
@@ -5193,6 +5318,10 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             None
         }
     }
+}
+
+fn default_whisper_precise() -> bool {
+    true
 }
 
 fn clean_lyrics_text(s: &str) -> String {

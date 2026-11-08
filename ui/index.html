@@ -1296,6 +1296,15 @@
 
 
 
+    .lyric-active.has-word-timings .lyric-word {
+      opacity: 0.66;
+    }
+
+    .lyric-active.has-word-timings .lyric-word-active {
+      opacity: 1;
+      text-shadow: 0 0 0.25em color-mix(in srgb, currentColor 40%, transparent);
+    }
+
     /* Active singing line: full line instantly illuminated in bold accent color */
 
 
@@ -7300,7 +7309,7 @@
                   <span>Локальный Whisper AI (Караоке)</span>
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">AI</span>
                 </div>
-                <div class="text-[11px] text-neutral-400 mt-0.5">Автоматически генерировать синхронный текст караоке, если его нет в сети</div>
+                <div class="text-[11px] text-neutral-400 mt-0.5">Автоматически готовить караоке и сверять слова с найденным текстом</div>
               </div>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
@@ -7310,6 +7319,13 @@
           <p class="text-[11px] text-neutral-400 leading-relaxed border-t border-white/5 pt-2.5">
             Нейросеть Whisper распознает слова песни прямо на вашем компьютере и расставляет посекундные тайминги караоке. Всё работает локально «из коробки».
           </p>
+          <label class="flex items-center justify-between gap-3 border-t border-white/5 pt-2.5 cursor-pointer">
+            <span>
+              <span class="block text-xs font-bold text-white">Точное караоке</span>
+              <span class="block text-[11px] text-neutral-400 mt-0.5">Whisper large-v3-turbo распознаёт весь трек. При первом запуске может потребоваться скачать модель (574 МБ).</span>
+            </span>
+            <input id="whisper-precise-toggle" type="checkbox" class="accent-rose-500 w-4 h-4 shrink-0 cursor-pointer">
+          </label>
         </div>
 
         <!-- Section 3: Глубокая кастомизация интерфейса -->
@@ -10800,8 +10816,8 @@
                 <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 20 20"><path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z"/></svg>
               </button>
               <button id="immersive-play-btn" onclick="togglePlay()" class="w-10 h-10 rounded-full flex items-center justify-center bg-white text-black font-bold shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0" title="Воспроизведение / Пауза" style="pointer-events: auto !important;">
-                <svg id="immersive-play-icon" class="w-4 h-4 fill-black pointer-events-none ml-0.5" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/>
+                <svg id="immersive-play-icon" class="w-4 h-4 fill-black pointer-events-none" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M5.5 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 5.5 5.14z"/>
                 </svg>
                 <svg id="immersive-pause-icon" class="w-4 h-4 fill-black hidden pointer-events-none" viewBox="0 0 24 24">
                   <rect x="6" y="4" width="4" height="16" rx="1.5"/>
@@ -10839,6 +10855,7 @@
 
 
       <div class="md:col-span-6 lg:col-span-7 h-full max-h-[82vh] flex flex-col justify-center relative overflow-hidden select-none">
+        <button id="btn-custom-lyrics-edit" type="button" class="self-end shrink-0 rounded-lg px-3 py-1.5 text-xs text-neutral-400 hover:bg-white/10 hover:text-white cursor-pointer">Текст и тайминги</button>
 
 
 
@@ -12068,7 +12085,7 @@
 
 
       getLyrics: (title, artist, duration) => api.invoke('get_lyrics', { title, artist, duration }),
-      transcribeTrack: (trackId, streamUrl) => api.invoke('transcribe_track', { trackId, streamUrl }),
+      transcribeTrack: (trackId, streamUrl, precise) => api.invoke('transcribe_track', { trackId, streamUrl, precise }),
 
 
 
@@ -17667,38 +17684,18 @@
     async function prefetchLyricsForTrack(track) {
       if (!track || !track.id) return;
       const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
-      if (lyricsCache.has(cacheKey)) return;
+      if (usableCachedLyrics(lyricsCache.get(cacheKey))) return;
+      const cached = readTrackLyricsCache(track);
+      if (cached) {
+        lyricsCache.set(cacheKey, cached);
+        return;
+      }
       try {
-        const local = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
-        if (local) {
-          lyricsCache.set(cacheKey, JSON.parse(local));
-          return;
-        }
-      } catch (_) {}
-      try {
-        const durSec = track.duration_ms ? (track.duration_ms / 1000) : null;
-        const cleanTitle = cleanTrackTitleForLyrics(track.title || '');
-        const cleanArtist = (track.artist || '').trim();
-        const res = await api.getLyrics(cleanTitle, cleanArtist, durSec);
-        if (res && res.syncedLyrics) {
+        const res = await requestTrackLyrics(track);
+        if (res?.syncedLyrics && !usableCachedLyrics(lyricsCache.get(cacheKey))) {
           lyricsCache.set(cacheKey, res);
-          try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res)); } catch (_) {}
+          storeTrackLyrics(track, res);
           return;
-        }
-      } catch (_) {}
-      // Pre-transcribe with Whisper in background before the song turns on!
-      try {
-        let streamUrl = explicitStreamUrl || getCachedStreamUrl(track.id);
-        if (!streamUrl) {
-          streamUrl = await requestStreamUrl(track.id);
-        }
-        if (streamUrl) {
-          const aiRes = await api.transcribeTrack(track.id, streamUrl);
-          if (aiRes && aiRes.syncedLyrics) {
-            lyricsCache.set(cacheKey, aiRes);
-            try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(aiRes)); } catch (_) {}
-            logD('Background pre-transcription ready before song starts: ' + track.title);
-          }
         }
       } catch (_) {}
     }
@@ -17848,60 +17845,6 @@
           return;
         }
 
-        // PARSE LYRICS & TIMINGS BEFORE TURNING ON THE SONG ("до вкл песни"):
-        // If synced lyrics are not in cache, check cloud (200ms) or run local Whisper (3s)
-        // before audioEngine.play() starts, so the song turns on with karaoke already at 00:00!
-        const lyricsKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
-        let hasReadyLyrics = lyricsCache.has(lyricsKey);
-        if (!hasReadyLyrics) {
-          try {
-            const storedL = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
-            if (storedL) {
-              const parsedL = JSON.parse(storedL);
-              if (parsedL && (parsedL.syncedLyrics || parsedL.plainLyrics || parsedL.instrumental)) {
-                lyricsCache.set(lyricsKey, parsedL);
-                hasReadyLyrics = true;
-              }
-            }
-          } catch (_) {}
-        }
-
-        if (!hasReadyLyrics) {
-          setPlayerLoading(true, '✨ Поиск текста...');
-          try {
-            const durSec = track.duration_ms ? (track.duration_ms / 1000) : null;
-            const cleanTitle = cleanTrackTitleForLyrics(track.title || '');
-            const cleanArtist = (track.artist || '').trim();
-            const cloudRes = await Promise.race([
-              api.getLyrics(cleanTitle, cleanArtist, durSec).catch(() => null),
-              new Promise(r => setTimeout(r, 1200))
-            ]);
-            if (cloudRes && (cloudRes.syncedLyrics || cloudRes.plainLyrics || cloudRes.instrumental)) {
-              lyricsCache.set(lyricsKey, cloudRes);
-              try { localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(cloudRes)); } catch (_) {}
-              hasReadyLyrics = true;
-            }
-          } catch (_) {}
-        }
-
-        const curLyricsData = lyricsCache.get(lyricsKey);
-        const needsWhisperAi = !curLyricsData || (!curLyricsData.syncedLyrics && !curLyricsData.instrumental);
-        if (needsWhisperAi) {
-          setPlayerLoading(true, '✨ Whisper AI готовит караоке...');
-          try {
-            // Await local Whisper before starting the music, so lines and timestamps are ready from 0:00!
-            await Promise.race([
-              startWhisperTranscription(track, streamUrl),
-              new Promise(r => setTimeout(r, 6500))
-            ]);
-          } catch (_) {}
-        }
-
-        if (requestId !== currentPlayRequestId) {
-          setPlayerLoading(false);
-          return;
-        }
-
         const handlePlaybackStart = () => {
           if (window._pendingSeekTime && window._pendingSeekTime > 0) {
             try {
@@ -17910,6 +17853,7 @@
             window._pendingSeekTime = 0;
           }
           saveSessionState();
+          if (requestId === currentPlayRequestId) startAutomaticKaraoke(track, streamUrl);
         };
 
         discordPlaybackTrack = track;
@@ -27201,12 +27145,20 @@
 
 
         const whisperToggle = document.getElementById('whisper-auto-toggle');
-        if (whisperToggle && appConfig && appConfig.whisper_auto_transcribe !== undefined) {
-          whisperToggle.checked = Boolean(appConfig.whisper_auto_transcribe);
+        if (whisperToggle && appConfig) {
+          whisperToggle.checked = appConfig.whisper_auto_transcribe !== false;
         }
         whisperToggle?.addEventListener('change', () => {
           if (appConfig) {
             appConfig.whisper_auto_transcribe = whisperToggle.checked;
+            api.saveConfig(appConfig).catch(() => {});
+          }
+        });
+        const preciseToggle = document.getElementById('whisper-precise-toggle');
+        if (preciseToggle) preciseToggle.checked = Boolean(appConfig?.whisper_precise);
+        preciseToggle?.addEventListener('change', () => {
+          if (appConfig) {
+            appConfig.whisper_precise = preciseToggle.checked;
             api.saveConfig(appConfig).catch(() => {});
           }
         });
@@ -30824,7 +30776,6 @@
 
 
 
-    let lyricsFetchRequestId = 0;
 
 
 
@@ -31473,6 +31424,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     let activeLyricIndex = -1;
+    let activeLyricWordIndex = -1;
 
 
 
@@ -31496,190 +31448,46 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+    function normalizeLyricWordTags(text) {
+      return text.replace(/&lt;(\d{2,}:\d{2}(?:\.\d{1,3})?)&gt;/gi, '<$1>');
+    }
+
+    function stripLyricWordTags(text) {
+      return normalizeLyricWordTags(text).replace(/<\d{2,}:\d{2}(?:\.\d{1,3})?>/g, '');
+    }
+
     function parseLrc(lrcText) {
-
-
-
-
-
-
-
       if (!lrcText) return [];
-
-
-
-
-
-
-
-      const lines = lrcText.split('\n');
-
-
-
-
-
-
-
       const result = [];
-
-
-
-
-
-
-
-      const timeRegex = /\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\]/g;
-
-
-
-
-
-
-
-      for (const line of lines) {
-
-
-
-
-
-
-
-        let match;
-
-
-
-
-
-
-
-        const timestamps = [];
-
-
-
-
-
-
-
-        timeRegex.lastIndex = 0;
-
-
-
-
-
-
-
-        while ((match = timeRegex.exec(line)) !== null) {
-
-
-
-
-
-
-
-          const min = parseInt(match[1], 10);
-
-
-
-
-
-
-
-          const sec = parseFloat(match[2]);
-
-
-
-
-
-
-
-          timestamps.push(min * 60 + sec);
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
-        const text = line.replace(timeRegex, '').trim();
-
-
-
-
-
-
-
-        if (timestamps.length > 0 && text) {
-
-
-
-
-
-
-
-          for (const t of timestamps) {
-
-
-
-
-
-
-
-            result.push({ time: t, text });
-
-
-
-
-
-
-
+      const lineTime = /\[(\d{2,}):(\d{2}(?:\.\d{1,3})?)\]/g;
+      const wordTime = /<(\d{2,}):(\d{2}(?:\.\d{1,3})?)>/g;
+      const seconds = match => Number(match[1]) * 60 + Number(match[2]);
+      for (const line of lrcText.split('\n')) {
+        const timestamps = [...line.matchAll(lineTime)].map(seconds);
+        const content = normalizeLyricWordTags(line.replace(lineTime, '').trim());
+        const text = content.replace(wordTime, '').trim();
+        if (!timestamps.length || !text) continue;
+        const markers = [...content.matchAll(wordTime)];
+        const prefix = markers.length ? content.slice(0, markers[0].index) : '';
+        const words = markers.map((marker, index) => ({
+          time: seconds(marker),
+          text: content.slice(marker.index + marker[0].length, markers[index + 1]?.index),
+        })).filter(word => word.text.trim());
+        const hasWordTimes = words.length && words.every((word, index) => !index || word.time >= words[index - 1].time);
+        const lastMarker = markers.at(-1);
+        const wordEnd = lastMarker && !content.slice(lastMarker.index + lastMarker[0].length).trim() ? seconds(lastMarker) : null;
+        for (const time of timestamps) {
+          const line = { time, text };
+          if (hasWordTimes) {
+            line.prefix = prefix;
+            const offset = time - timestamps[0];
+            line.words = words.map(word => ({ text: word.text, time: word.time + offset }));
+            if (wordEnd > words.at(-1).time) line.wordEnd = wordEnd + offset;
           }
-
-
-
-
-
-
-
+          result.push(line);
         }
-
-
-
-
-
-
-
       }
-
-
-
-
-
-
-
-      result.sort((a, b) => a.time - b.time);
-
-
-
-
-
-
-
-      return result;
-
-
-
-
-
-
-
+      return result.sort((a, b) => a.time - b.time);
     }
 
 
@@ -31688,278 +31496,45 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            function updateLyricsSync() {
-
-
-
-
-
-
-
-      if (!currentParsedLyrics || currentParsedLyrics.length === 0) return;
-
-
-
-
-
-
-
-      // Precision teleprompter lead-in of +0.22s so active line highlights right on vocal cue
-
-
-
-
-
-
-
-      const ct = (audioEngine.currentTime || 0) + 0.22;
-
-
-
-
-
-
-
-      let currentIndex = -1;
-
-
-
-
-
-
-
-      for (let i = 0; i < currentParsedLyrics.length; i++) {
-
-
-
-
-
-
-
-        if (ct >= currentParsedLyrics[i].time) {
-
-
-
-
-
-
-
-          currentIndex = i;
-
-
-
-
-
-
-
-        } else {
-
-
-
-
-
-
-
-          break;
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
+    function updateLyricsSync() {
+      if (!currentParsedLyrics?.length) return;
+      const time = audioEngine.currentTime || 0;
+      let lineIndex = -1;
+      for (let index = 0; index < currentParsedLyrics.length && time >= currentParsedLyrics[index].time; index++) {
+        lineIndex = index;
       }
-
-
-
-
-
-
-
       const lines = document.querySelectorAll('.synced-lyric-line');
-
-
-
-
-
-
-
-      if (lines.length === 0) return;
-
-
-
-
-
-
-
-      if (currentIndex !== activeLyricIndex) {
-
-
-
-
-
-
-
-        activeLyricIndex = currentIndex;
-
-
-
-
-
-
-
-        lines.forEach((el, idx) => {
-
-
-
-
-
-
-
-          el.classList.remove('lyric-active', 'lyric-past', 'lyric-future');
-
-
-
-
-
-
-
-          if (idx === activeLyricIndex) {
-
-
-
-
-
-
-
-            el.classList.add('lyric-active');
-
-
-
-
-
-
-
-            if (!isUserScrollingLyrics) {
-
-
-
-
-
-
-
-              const lyricsContainer = document.getElementById('immersive-lyrics-content');
-
-
-
-
-
-
-
-              if (lyricsContainer) {
-
-
-
-
-
-
-
-                const top = el.offsetTop - (lyricsContainer.clientHeight / 2) + (el.clientHeight / 2);
-
-
-
-
-
-
-
-                lyricsContainer.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-
-
-
-
-
-
-
-              }
-
-
-
-
-
-
-
-            }
-
-
-
-
-
-
-
-          } else if (idx < activeLyricIndex) {
-
-
-
-
-
-
-
-            el.classList.add('lyric-past');
-
-
-
-
-
-
-
-          } else {
-
-
-
-
-
-
-
-            el.classList.add('lyric-future');
-
-
-
-
-
-
-
-          }
-
-
-
-
-
-
-
+      if (!lines.length) return;
+      const lineChanged = lineIndex !== activeLyricIndex;
+      if (lineChanged) {
+        lines[activeLyricIndex]?.querySelector('.lyric-word-active')?.classList.remove('lyric-word-active');
+        activeLyricIndex = lineIndex;
+        lines.forEach((line, index) => {
+          line.classList.toggle('lyric-active', index === lineIndex);
+          line.classList.toggle('lyric-past', index < lineIndex);
+          line.classList.toggle('lyric-future', index > lineIndex);
         });
-
-
-
-
-
-
-
+        const line = lines[lineIndex];
+        const container = document.getElementById('immersive-lyrics-content');
+        if (line && container && !isUserScrollingLyrics) {
+          const top = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
+          container.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+        }
       }
-
-
-
-
-
-
-
+      const activeLine = currentParsedLyrics[lineIndex];
+      const words = activeLine?.words;
+      let wordIndex = -1;
+      if (words && (activeLine.wordEnd == null || time < activeLine.wordEnd)) {
+        for (let index = 0; index < words.length && time >= words[index].time; index++) {
+          wordIndex = index;
+        }
+      }
+      if (lineChanged || wordIndex !== activeLyricWordIndex) {
+        lines[lineIndex]?.querySelectorAll('.lyric-word').forEach((word, index) => {
+          word.classList.toggle('lyric-word-active', index === wordIndex);
+        });
+        activeLyricWordIndex = wordIndex;
+      }
     }
 
 
@@ -32921,6 +32496,148 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
     const lyricsCache = new Map();
 
+    const lyricsLookups = new Map();
+
+    function trackLyricsKey(track) {
+      return `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+    }
+
+    function trackLyricsStorageKey(track) {
+      return 'sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title));
+    }
+
+    function wordLyricsStorageKey(legacyKey) {
+      return legacyKey.replace('sc_lyrics_cache_v2_', 'sc_lyrics_word_cache_v1_');
+    }
+
+    function writeLyricsCacheEntries(legacyKey, lyrics) {
+      const wordKey = wordLyricsStorageKey(legacyKey);
+      const synced = lyrics.syncedLyrics;
+      const lineOnly = typeof synced === 'string' ? stripLyricWordTags(synced) : synced;
+      const plain = typeof lyrics.plainLyrics === 'string' ? stripLyricWordTags(lyrics.plainLyrics) : lyrics.plainLyrics;
+      if (lineOnly !== synced) localStorage.setItem(wordKey, JSON.stringify(lyrics));
+      else localStorage.removeItem(wordKey);
+      localStorage.setItem(legacyKey, JSON.stringify({ ...lyrics, syncedLyrics: lineOnly, plainLyrics: plain }));
+    }
+
+    function storeTrackLyrics(track, lyrics) {
+      try { writeLyricsCacheEntries(trackLyricsStorageKey(track), lyrics); } catch (_) {}
+    }
+
+    function readTrackLyricsCache(track) {
+      const cached = lyricsCache.get(trackLyricsKey(track));
+      if (usableCachedLyrics(cached)) return cached;
+      const key = trackLyricsStorageKey(track);
+      try {
+        const stored = JSON.parse(localStorage.getItem(wordLyricsStorageKey(key)) || localStorage.getItem(key));
+        if (usableCachedLyrics(stored)) return stored;
+      } catch (_) {}
+      return null;
+    }
+
+    // Keep the old cache readable by builds that only understand line timestamps.
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (!key.startsWith('sc_lyrics_cache_v2_')) continue;
+        try {
+          const value = JSON.parse(localStorage.getItem(key));
+          if (typeof value?.syncedLyrics === 'string' && stripLyricWordTags(value.syncedLyrics) !== value.syncedLyrics) {
+            writeLyricsCacheEntries(key, value);
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    function trackLyricsIdentity(track) {
+      const label = track.title || '';
+      const separator = /\s[-–—]\s/.exec(label);
+      if (separator) {
+        return { title: cleanTrackTitleForLyrics(label.slice(separator.index + separator[0].length)), artist: label.slice(0, separator.index).trim() };
+      }
+      return { title: cleanTrackTitleForLyrics(label), artist: (track.artist || '').split(/[,&]/)[0].replace(/@\w+/g, '').trim() };
+    }
+
+    function requestTrackLyrics(track) {
+      const key = trackLyricsKey(track);
+      const pending = lyricsLookups.get(key);
+      if (pending) return pending;
+      const { title, artist } = trackLyricsIdentity(track);
+      const request = api.getLyrics(title, artist, getTrackDurationSec(track))
+        .catch(() => null).finally(() => lyricsLookups.delete(key));
+      lyricsLookups.set(key, request);
+      return request;
+    }
+
+    function matchedOriginalLyrics(lyrics, track) {
+      if (!lyrics || lyrics.isAi || !lyrics.trackName || !lyrics.artistName) return null;
+      if (!lyrics.instrumental && !lyrics.syncedLyrics?.trim() && !lyrics.plainLyrics?.trim()) return null;
+      if (lyrics.source === 'genius' && !lyrics.referenceMatched) return null;
+      const duration = getTrackDurationSec(track);
+      if (duration && lyrics.duration && Math.abs(duration - lyrics.duration) > 6) return null;
+      const key = value => value.normalize('NFKC').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]/gu, '');
+      const { title, artist } = trackLyricsIdentity(track);
+      if (!title || !artist || key(title) !== key(cleanTrackTitleForLyrics(lyrics.trackName)) || key(artist) !== key(lyrics.artistName)) return null;
+      return lyrics;
+    }
+
+    function lyricsDifferSubstantially(transcribed, original) {
+      const words = lyrics => (lyrics.plainLyrics || lyrics.syncedLyrics || '')
+        .normalize('NFKC').toLowerCase().replace(/ё/g, 'е')
+        .replace(/\[[^\]\n]*\]|<\d+:\d+(?:\.\d+)?>/g, ' ')
+        .match(/[\p{L}\p{N}]+/gu) || [];
+      const actual = words(transcribed);
+      const expected = words(original);
+      if (expected.length < 12) return false;
+      const overlap = (a, b) => {
+        const remaining = new Map();
+        for (const word of a) remaining.set(word, (remaining.get(word) || 0) + 1);
+        let shared = 0;
+        for (const word of b) {
+          const count = remaining.get(word);
+          if (count) {
+            shared++;
+            remaining.set(word, count - 1);
+          }
+        }
+        return 2 * shared / (a.length + b.length);
+      };
+      const pairs = tokens => tokens.slice(1).map((word, index) => `${tokens[index]} ${word}`);
+      return overlap(actual, expected) < 0.60 || overlap(pairs(actual), pairs(expected)) < 0.30;
+    }
+
+    function startAutomaticKaraoke(track, streamUrl = null) {
+      if (!appConfig || appConfig.whisper_auto_transcribe === false || !track.id) return;
+      if (localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
+      const cached = readTrackLyricsCache(track);
+      const mode = appConfig.whisper_precise ? 'precise' : 'fast';
+      if (cached?.lyricsCompared === mode || matchedOriginalLyrics(cached, track)?.instrumental) return;
+      void startWhisperTranscription(track, streamUrl, true).catch(() => {});
+    }
+
+    function whisperLyricLines(lrc) {
+      return (lrc || '').split('\n').filter(line => {
+        const words = stripLyricWordTags(line).replace(/^\s*(?:\[\d+:\d+(?:\.\d+)?\])+/, '')
+          .replace(/^[\s\[\]()♪♫]+|[\s\[\]()♪♫]+$/g, '');
+        return /[\p{L}\p{N}]/u.test(words) && !/^(?:music|instrumental|background music|музыка|инструментал)$/iu.test(words);
+      }).join('\n');
+    }
+
+    function usableCachedLyrics(lyrics) {
+      if (!lyrics) return false;
+      if (!lyrics.isAi) return true;
+      if (appConfig?.whisper_precise && lyrics.whisperRevision !== 2) return false;
+      const text = whisperLyricLines(lyrics.syncedLyrics || lyrics.plainLyrics);
+      if (!text) return false;
+      const lines = stripLyricWordTags(text).replace(/\[\d+:\d+(?:\.\d+)?\]/g, '').split('\n').map(line => line.trim().toLowerCase());
+      let run = 0;
+      let longest = 0;
+      for (let i = 0; i < lines.length; i++) {
+        run = lines[i] === lines[i - 1] ? run + 1 : 1;
+        longest = Math.max(longest, run);
+      }
+      return !((longest >= 8 && longest * 2 >= lines.length) || (longest >= 4 && longest * 4 >= lines.length * 3));
+    }
+
 
 
 
@@ -32940,6 +32657,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
       if (!lyricsData) return;
+
+      if (lyricsData.isAi) {
+        lyricsData = { ...lyricsData, syncedLyrics: whisperLyricLines(lyricsData.syncedLyrics), plainLyrics: whisperLyricLines(lyricsData.plainLyrics) };
+      }
 
 
 
@@ -33109,15 +32830,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-          currentParsedLyrics = [];
-
-
-
-          const cleanCustom = custom.replace(/\[\d{2}:\d{2}\.?\d*\]/g, '');
-
-
-
-          renderPlainLyrics(cleanCustom, lyricsContainer);
+          currentParsedLyrics = parseLrc(custom);
+          if (currentParsedLyrics.length) {
+            renderSyncedLyrics(currentParsedLyrics, lyricsContainer);
+            syncBadge?.classList.remove('hidden');
+          } else {
+            renderPlainLyrics(custom, lyricsContainer);
+          }
 
 
 
@@ -33149,7 +32868,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      if (lyricsCache.has(cacheKey)) {
+      if (usableCachedLyrics(lyricsCache.get(cacheKey))) {
 
 
 
@@ -33181,65 +32900,14 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      // 3. Instant LocalStorage Cache (0 ms)
-
-
-
-      try {
-
-
-
-        const stored = localStorage.getItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)));
-
-
-
-        if (stored) {
-
-
-
-          const cached = JSON.parse(stored);
-
-
-
-          if (cached && (cached.syncedLyrics || cached.plainLyrics || cached.instrumental)) {
-
-
-
-            lyricsCache.set(cacheKey, cached);
-
-
-
-            if (!isBackground && lyricsContainer && currentFetchId === lyricsFetchCounter) {
-
-
-
-              renderTrackLyrics(cached, track, lyricsContainer);
-
-
-
-              return;
-
-
-
-            }
-
-
-
-          }
-
-
-
+      const stored = readTrackLyricsCache(track);
+      if (stored && (stored.syncedLyrics || stored.plainLyrics || stored.instrumental)) {
+        lyricsCache.set(cacheKey, stored);
+        if (!isBackground && lyricsContainer && currentFetchId === lyricsFetchCounter) {
+          renderTrackLyrics(stored, track, lyricsContainer);
         }
-
-
-
-      } catch (e) {}
-
-
-
-
-
-
+        return;
+      }
 
       // If not background, show snappy spinner
 
@@ -33289,102 +32957,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      const durSec = getTrackDurationSec(track);
-
-
-
-
-
-
-
-      // Clean title & artist
-
-
-
-      let cleanTitle = cleanTrackTitleForLyrics(track.title || '');
-
-
-
-      let cleanArtist = (track.artist || '')
-
-
-
-        .split(',')[0]
-
-
-
-        .split('&')[0]
-
-
-
-        .replace(/@\w+/g, '')
-
-
-
-        .trim();
-
-
-
-
-
-
-
-      if ((track.title || '').includes(' - ')) {
-
-
-
-        const parts = track.title.split(' - ');
-
-
-
-        if (parts.length >= 2) {
-
-
-
-          cleanArtist = parts[0].trim();
-
-
-
-          cleanTitle = cleanTrackTitleForLyrics(parts[1]);
-
-
-
-        }
-
-
-
-      } else if ((track.title || '').includes(' — ')) {
-
-
-
-        const parts = track.title.split(' — ');
-
-
-
-        if (parts.length >= 2) {
-
-
-
-          cleanArtist = parts[0].trim();
-
-
-
-          cleanTitle = cleanTrackTitleForLyrics(parts[1]);
-
-
-
-        }
-
-
-
-      }
-
-
-
-
-
-
-
       let lyricsData = null;
 
 
@@ -33401,7 +32973,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        const rustRes = await api.getLyrics(cleanTitle, cleanArtist, durSec);
+        const rustRes = await requestTrackLyrics(track);
 
 
 
@@ -33433,6 +33005,8 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+      const compared = lyricsCache.get(cacheKey);
+      if (compared?.lyricsCompared && usableCachedLyrics(compared)) lyricsData = compared;
       if (lyricsData) {
 
 
@@ -33441,15 +33015,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        try {
-
-
-
-          localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(lyricsData));
-
-
-
-        } catch (e) {}
+        storeTrackLyrics(track, lyricsData);
 
 
 
@@ -33596,7 +33162,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
               <span>✨ Распознать караоке (Whisper AI)</span>
             </button>
           </div>
-          <div id="whisper-status-line" class="text-xs text-orange-400 font-medium animate-pulse pt-2 text-center">✨ Идёт автоматическое распознавание текста нейросетью...</div>
+          <div id="whisper-status-line" class="hidden text-xs text-orange-400 font-medium animate-pulse pt-2 text-center" aria-live="polite"></div>
 
 
 
@@ -33618,10 +33184,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       if (emptyBtn) emptyBtn.addEventListener('click', () => promptCustomLyrics(track));
 
-      // Auto-transcribe immediately: do it right away so the user does NOT have to click buttons!
-      if (!isBackground) {
-        startWhisperTranscription(track).catch(() => {});
-      }
+      if (!isBackground) startAutomaticKaraoke(track);
 
 
 
@@ -33637,7 +33200,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        try { localStorage.removeItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title))); } catch (e) {}
+        try {
+          const key = trackLyricsStorageKey(track);
+          localStorage.removeItem(key);
+          localStorage.removeItem(wordLyricsStorageKey(key));
+        } catch (_) {}
 
 
 
@@ -33651,12 +33218,14 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
     }
 
-        const activeWhisperJobIds = new Set();
-    async function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null) {
+    const activeWhisperJobIds = new Set();
+    async function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null, automatic = false) {
       const track = explicitTrack || (currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex]);
       if (!track || !track.id) return;
-      if (activeWhisperJobIds.has(track.id)) return;
-      activeWhisperJobIds.add(track.id);
+      const precise = Boolean(appConfig?.whisper_precise);
+      const jobKey = `${track.id}:${precise}`;
+      if (activeWhisperJobIds.has(jobKey)) return;
+      activeWhisperJobIds.add(jobKey);
 
       const requestFetchId = lyricsFetchCounter;
       const targetTrackId = String(track.id);
@@ -33680,55 +33249,52 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       }
       if (statusLine) {
         statusLine.classList.remove('hidden');
-        statusLine.textContent = '✨ Whisper распознаёт аудио. Если текста будет мало или модель будет неуверена, ONYX повторит попытку на более точной модели; это может занять несколько минут.';
+        statusLine.textContent = precise
+          ? 'Whisper large-v3-turbo распознаёт весь трек. При первом запуске ONYX может скачать модель (574 МБ).'
+          : 'Whisper распознаёт аудио. При слабом результате ONYX повторит попытку на более точной модели.';
       }
 
-      notify('Запущен локальный Whisper AI...', '✨');
+      if (!automatic) notify(precise ? 'Точное караоке: Whisper large-v3-turbo' : 'Запущен локальный Whisper AI...', '✨');
 
       try {
-        let streamUrl = getCachedStreamUrl(track.id);
-        if (!streamUrl) {
-          streamUrl = await requestStreamUrl(track.id);
-        }
-        if (!streamUrl) throw new Error('Не удалось получить аудиопоток трека');
+        const previous = readTrackLyricsCache(track);
+        const originalRequest = matchedOriginalLyrics(previous, track) || requestTrackLyrics(track);
+        const recognition = (async () => {
+          const stream = explicitStreamUrl || getCachedStreamUrl(track.id) || await requestStreamUrl(track.id);
+          const streamUrl = typeof stream === 'object' && stream !== null ? stream.url : stream;
+          if (!streamUrl) throw new Error('Не удалось получить аудиопоток трека');
+          return api.transcribeTrack(track.id, streamUrl, precise);
+        })().then(data => ({ data }), error => ({ error }));
+        const [online, { data, error }] = await Promise.all([originalRequest, recognition]);
+        const original = matchedOriginalLyrics(online, track);
+        const recognized = data?.syncedLyrics && usableCachedLyrics(data) ? data : null;
+        const useOriginal = original && (original.instrumental || !recognized || lyricsDifferSubstantially(recognized, original));
+        const selected = useOriginal ? original : recognized;
+        if (!selected) throw error || new Error('Текст не распознан');
+        if (!usableCachedLyrics(selected)) return;
+        if (localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
+        const mode = precise ? 'precise' : 'fast';
+        const result = { ...selected, lyricsCompared: mode };
+        const cached = lyricsCache.get(trackLyricsKey(track));
+        if (!precise && (cached?.lyricsCompared === 'precise' || cached?.whisperPrecise)) return;
+        lyricsCache.set(trackLyricsKey(track), result);
+        storeTrackLyrics(track, result);
 
-        const res = await api.transcribeTrack(track.id, streamUrl);
-        if (res && res.syncedLyrics) {
-          const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
-          lyricsCache.set(cacheKey, res);
-          try {
-            localStorage.setItem('sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title)), JSON.stringify(res));
-          } catch (_) {}
-
-          // Strict guard: ONLY update DOM if this track is STILL the currently playing track!
-          const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
-          if (activeId && activeId !== targetTrackId) {
-            logD(`Whisper finished for track ${targetTrackId}, but active is ${activeId} — preserved in cache without overwriting UI`);
-            return;
-          }
-          if (requestFetchId !== lyricsFetchCounter) {
-            return;
-          }
-
-          if (lyricsContainer) {
-            currentParsedLyrics = parseLrc(res.syncedLyrics);
-            renderSyncedLyrics(currentParsedLyrics, lyricsContainer);
-            const syncBadge = document.getElementById('lyrics-synced-badge');
-            if (syncBadge) syncBadge.classList.remove('hidden');
-          }
-          notify('Караоке сгенерировано нейросетью! ✨', '🎤');
-        } else {
-          throw new Error('Текст не распознан');
-        }
+        const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
+        if (activeId ? activeId !== targetTrackId : requestFetchId !== lyricsFetchCounter) return;
+        renderTrackLyrics(result, track, lyricsContainer);
+        const syncBadge = document.getElementById('lyrics-synced-badge');
+        syncBadge?.classList.toggle('hidden', !currentParsedLyrics.length);
+        if (!automatic) notify(useOriginal ? 'Показан найденный текст песни' : 'Караоке готово', '🎤');
       } catch (err) {
         console.error('Whisper transcribe error:', err);
         const msg = err && err.message ? err.message : String(err || '');
-        notify(`Whisper: ${msg}`, '❌');
+        if (!automatic) notify(`Whisper: ${msg}`, '❌');
         if (statusLine) {
           statusLine.textContent = `❌ ${msg}`;
         }
       } finally {
-        activeWhisperJobIds.delete(track.id);
+        activeWhisperJobIds.delete(jobKey);
         if (btn) {
           btn.disabled = false;
           btn.classList.remove('opacity-75');
@@ -33753,246 +33319,36 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        function renderSyncedLyrics(parsed, container) {
-
-
-
-
-
-
-
-      container.innerHTML = '';
-
-
-
-
-
-
-
-      parsed.forEach((line, idx) => {
-
-
-
-
-
-
-
-        const p = document.createElement('div');
-
-
-
-
-
-
-
-        p.className = 'synced-lyric-line lyric-future';
-
-
-
-
-
-
-
-        p.setAttribute('data-index', idx);
-
-
-
-
-
-
-
-        p.setAttribute('data-time', line.time);
-
-
-
-
-
-
-
-        // Split into words and whitespace
-
-
-
-
-
-
-
-        const tokens = (line.text || '').split(/(\s+)/);
-
-
-
-
-
-
-
-        let wordCount = 0;
-
-
-
-
-
-
-
-        let innerHtml = '';
-
-
-
-
-
-
-
-        tokens.forEach(tok => {
-
-
-
-
-
-
-
-          if (tok.trim().length === 0) {
-
-
-
-
-
-
-
-            innerHtml += tok;
-
-
-
-
-
-
-
-          } else {
-
-
-
-
-
-
-
-            const cleanTok = tok.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-
-
-
-
-
-
-            innerHtml += `<span class="lyric-word" data-widx="${wordCount++}" data-len="${tok.length}">${cleanTok}</span>`;
-
-
-
-
-
-
-
+    function renderSyncedLyrics(parsed, container) {
+      container.replaceChildren();
+      parsed.forEach((line, index) => {
+        const element = document.createElement('div');
+        element.className = 'synced-lyric-line lyric-future';
+        element.dataset.index = index;
+        element.dataset.time = line.time;
+        if (line.words?.length) {
+          element.classList.add('has-word-timings');
+          if (line.prefix) element.append(line.prefix);
+          for (const word of line.words) {
+            const span = document.createElement('span');
+            span.className = 'lyric-word';
+            span.textContent = word.text;
+            element.append(span);
           }
-
-
-
-
-
-
-
-        });
-
-
-
-
-
-
-
-        p.innerHTML = innerHtml;
-
-
-
-
-
-
-
-        p.addEventListener('click', () => {
-
-
-
-
-
-
-
+        } else {
+          element.textContent = line.text;
+        }
+        element.addEventListener('click', () => {
           if (audioEngine) {
-
-
-
-
-
-
-
-            audioEngine.currentTime = Math.max(0, line.time - 0.1);
-
-
-
-
-
-
-
+            audioEngine.currentTime = line.time;
             if (!isPlaying) togglePlay();
-
-
-
-
-
-
-
           }
-
-
-
-
-
-
-
         });
-
-
-
-
-
-
-
-        container.appendChild(p);
-
-
-
-
-
-
-
+        container.append(element);
       });
-
-
-
-
-
-
-
       activeLyricIndex = -1;
-
-
-
-
-
-
-
+      activeLyricWordIndex = -1;
       updateLyricsSync();
-
-
-
-
-
-
-
     }
 
 
@@ -34450,6 +33806,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     function renderPlainLyrics(rawText, container, isDescription = false) {
+      if (typeof rawText === 'string') rawText = stripLyricWordTags(rawText);
 
 
 
@@ -34721,117 +34078,43 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     function promptCustomLyrics(track) {
-
-
-
-
-
-
-
-      const existing = localStorage.getItem('custom_lyrics_' + track.id) || '';
-
-
-
-
-
-
-
-      const text = prompt('Вставьте текст трека (поддерживается как обычный текст, так и синхронизированный LRC [00:12.34]):', existing);
-
-
-
-
-
-
-
-      if (text !== null) {
-
-
-
-
-
-
-
-        if (text.trim().length > 0) {
-
-
-
-
-
-
-
-          localStorage.setItem('custom_lyrics_' + track.id, text.trim());
-
-
-
-
-
-
-
-          notify('Текст трека сохранен!', '✨');
-
-
-
-
-
-
-
+      if (document.getElementById('custom-lyrics-editor')) return;
+      const storageKey = 'custom_lyrics_' + track.id;
+      const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+      const cached = lyricsCache.get(cacheKey);
+      const dialog = document.createElement('dialog');
+      dialog.id = 'custom-lyrics-editor';
+      dialog.setAttribute('aria-label', 'Редактировать текст и тайминги');
+      dialog.className = 'm-auto w-11/12 max-w-2xl rounded-2xl border border-white/10 bg-neutral-900 p-5 text-white backdrop:bg-black/70';
+      dialog.innerHTML = `
+        <form method="dialog" class="space-y-3">
+          <h2 class="text-base font-bold">Текст и тайминги караоке</h2>
+          <p class="text-xs text-neutral-400">Метка [00:12.34] задаёт начало строки, а &lt;00:12.34&gt; перед словом задаёт его подсветку.</p>
+          <textarea aria-label="Текст песни" autofocus spellcheck="false" class="block h-64 w-full resize-y rounded-xl border border-white/10 bg-black/30 p-3 font-mono text-sm"></textarea>
+          <div class="flex justify-end gap-2">
+            <button value="cancel" class="rounded-lg bg-white/10 px-4 py-2 text-xs">Отмена</button>
+            <button value="save" class="rounded-lg bg-white px-4 py-2 text-xs font-bold text-black">Сохранить</button>
+          </div>
+        </form>`;
+      const editor = dialog.querySelector('textarea');
+      editor.value = localStorage.getItem(storageKey) || cached?.syncedLyrics || cached?.plainLyrics || '';
+      dialog.addEventListener('close', () => {
+        dialog.remove();
+        if (dialog.returnValue !== 'save') return;
+        const text = editor.value.trim();
+        if (text) {
+          localStorage.setItem(storageKey, text);
+          notify('Текст трека сохранён');
         } else {
-
-
-
-
-
-
-
-          localStorage.removeItem('custom_lyrics_' + track.id);
-
-
-
-
-
-
-
-          notify('Пользовательский текст удален', '🗑️');
-
-
-
-
-
-
-
+          localStorage.removeItem(storageKey);
+          notify('Пользовательский текст удалён');
         }
-
-
-
-
-
-
-
-        lyricsFetchRequestId++;
-
-
-
-
-
-
-
-        fetchLyricsForTrack(track);
-
-
-
-
-
-
-
-      }
-
-
-
-
-
-
-
+        if (String(currentlyPlayingTrackId) === String(track.id)) {
+          fetchLyricsForTrack(track);
+        }
+      }, { once: true });
+      document.body.appendChild(dialog);
+      dialog.showModal();
     }
 
 
@@ -36305,6 +35588,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
       appConfig.whisper_auto_transcribe = document.getElementById('whisper-auto-toggle')?.checked ?? false;
+      appConfig.whisper_precise = document.getElementById('whisper-precise-toggle')?.checked ?? false;
       appConfig.discord_rpc = document.getElementById('discord-rpc-toggle')?.checked ?? true;
 
 
