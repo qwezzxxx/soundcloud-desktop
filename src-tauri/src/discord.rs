@@ -256,6 +256,7 @@ impl DiscordManager {
             position,
             ..
         } = playback;
+        let paused = !is_playing && !playback.is_buffering;
         let mut activity = serde_json::json!({
             "name": if state.show_status { "ONYX SOUND" } else if !state.show_track || title.trim().is_empty() { "Music" } else { title.trim() },
             "type": 2,
@@ -266,7 +267,7 @@ impl DiscordManager {
             activity["details"] = serde_json::json!(title);
         }
         let mut status = Vec::new();
-        if !is_playing && !playback.is_buffering {
+        if paused {
             let seconds = position.max(0.0) as u64;
             status.push(format!("На паузе · {}:{:02}", seconds / 60, seconds % 60));
         }
@@ -288,10 +289,11 @@ impl DiscordManager {
                 serde_json::json!(if state.show_status { "ONYX SOUND" } else if state.show_track { title } else { "Music" }),
             );
         }
-        if state.show_status || (!is_playing && !playback.is_buffering) {
+        if state.show_status || paused {
+            // Mirror the action shown on the player's play/pause button.
             assets.insert(
                 "small_image".to_string(),
-                serde_json::json!(if !is_playing && !playback.is_buffering { "pause" } else { "play" }),
+                serde_json::json!(if paused { "play" } else { "pause" }),
             );
             assets.insert(
                 "small_text".to_string(),
@@ -415,7 +417,7 @@ mod tests {
         assert_eq!(paused["details"], "Track");
         assert_eq!(paused["state"], "На паузе · 0:03 • by Artist");
         assert_eq!(paused["name"], "Track");
-        assert_eq!(paused["assets"]["small_image"], "pause");
+        assert_eq!(paused["assets"]["small_image"], "play");
         assert!(paused.get("timestamps").is_none());
 
         playback.is_buffering = true;
@@ -431,7 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn branding_toggle_preserves_track_details_and_pause_icon() {
+    fn branding_toggle_preserves_track_details_and_playback_action() {
         for show_status in [false, true] {
             for is_playing in [false, true] {
                 for show_track in [false, true] {
@@ -454,10 +456,10 @@ mod tests {
                     assert!(activity["state"].as_str().unwrap().contains("by Artist"));
                     assert_eq!(activity.get("timestamps").is_some(), is_playing);
                     if !is_playing {
-                        assert_eq!(activity["assets"]["small_image"], "pause");
+                        assert_eq!(activity["assets"]["small_image"], "play");
                         assert_eq!(activity["assets"]["small_text"], "На паузе");
                     } else if show_status {
-                        assert_eq!(activity["assets"]["small_image"], "play");
+                        assert_eq!(activity["assets"]["small_image"], "pause");
                     } else {
                         assert!(activity["assets"].get("small_image").is_none());
                     }
