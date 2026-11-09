@@ -12085,7 +12085,13 @@
 
 
       getLyrics: (title, artist, duration) => api.invoke('get_lyrics', { title, artist, duration }),
-      transcribeTrack: (trackId, streamUrl, precise, title, artist, prompt) => api.invoke('transcribe_track', { trackId, streamUrl, precise, title, artist, prompt }),
+      transcribeTrack: async (trackId, streamUrl, precise, title, artist, prompt) => {
+        try {
+          return await api.invoke('transcribe_track', { trackId, streamUrl, precise, title, artist, prompt });
+        } catch (_) {
+          return await api.invoke('transcribe_track', { trackId, streamUrl, precise });
+        }
+      },
 
 
 
