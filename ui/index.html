@@ -33192,17 +33192,45 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       try {
         const previous = readTrackLyricsCache(track);
-        const originalRequest = matchedOriginalLyrics(previous, track) || requestTrackLyrics(track);
+        let online = matchedOriginalLyrics(previous, track);
+        if (!online) {
+          try {
+            const fetched = await Promise.race([
+              requestTrackLyrics(track),
+              new Promise(r => setTimeout(() => r(null), 1200))
+            ]);
+            online = matchedOriginalLyrics(fetched, track);
+          } catch (_) {}
+        }
+
+        if (online?.syncedLyrics && usableCachedLyrics(online)) {
+          const mode = precise ? 'precise' : 'fast';
+          const result = { ...online, lyricsCompared: mode };
+          lyricsCache.set(trackLyricsKey(track), result);
+          storeTrackLyrics(track, result);
+          const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
+          if (!activeId || activeId === targetTrackId) {
+            renderTrackLyrics(result, track, lyricsContainer);
+            const syncBadge = document.getElementById('lyrics-synced-badge');
+            syncBadge?.classList.toggle('hidden', !currentParsedLyrics.length);
+          }
+          if (!automatic) notify('Найдено официальное караоке ✨', '🎤');
+          return;
+        }
+
         const { title, artist } = trackLyricsIdentity(track);
-        const promptCandidate = previous?.plainLyrics || previous?.syncedLyrics || null;
+        const promptCandidate = online?.plainLyrics || previous?.plainLyrics || previous?.syncedLyrics || null;
         const recognition = (async () => {
           const stream = explicitStreamUrl || getCachedStreamUrl(track.id) || await requestStreamUrl(track.id);
           const streamUrl = typeof stream === 'object' && stream !== null ? stream.url : stream;
           if (!streamUrl) throw new Error('Не удалось получить аудиопоток трека');
           return api.transcribeTrack(track.id, streamUrl, precise, title, artist, promptCandidate);
         })().then(data => ({ data }), error => ({ error }));
-        const [online, { data, error }] = await Promise.all([originalRequest, recognition]);
-        const original = matchedOriginalLyrics(online, track);
+        const [delayedOnline, { data, error }] = await Promise.all([
+          online ? Promise.resolve(online) : requestTrackLyrics(track).then(res => matchedOriginalLyrics(res, track)).catch(() => null),
+          recognition
+        ]);
+        const original = delayedOnline || online;
         const recognized = data?.syncedLyrics && usableCachedLyrics(data) ? data : null;
         const useOriginal = original && (original.instrumental || !recognized || lyricsDifferSubstantially(recognized, original));
         const selected = useOriginal ? original : recognized;

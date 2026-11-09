@@ -1869,7 +1869,15 @@ impl SoundCloudClient {
             return Err("В треке не обнаружено разборчивого текста".to_string());
         }
 
-        let lrc = if precise {
+        let lrc = if let Some(ref plain_text) = prompt.filter(|p| p.trim().len() > 30) {
+            if let Some(aligned) = Self::align_plain_lyrics_to_timestamps(plain_text, &clean_lrc) {
+                aligned
+            } else if precise {
+                Self::whisper_word_lrc(&temp_json).unwrap_or(clean_lrc)
+            } else {
+                clean_lrc
+            }
+        } else if precise {
             Self::whisper_word_lrc(&temp_json).unwrap_or(clean_lrc)
         } else {
             clean_lrc
@@ -1927,6 +1935,121 @@ impl SoundCloudClient {
             }
         }
         (!lines.is_empty()).then(|| lines.join("\n"))
+    }
+
+    fn align_plain_lyrics_to_timestamps(plain_lyrics: &str, whisper_lrc: &str) -> Option<String> {
+        let official_lines: Vec<&str> = plain_lyrics.lines()
+            .map(str::trim)
+            .filter(|l| {
+                if l.is_empty() { return false; }
+                if l.starts_with('[') && l.ends_with(']') { return false; }
+                if l.starts_with('(') && l.ends_with(')') && l.to_lowercase().contains("instrumental") { return false; }
+                l.chars().any(char::is_alphanumeric)
+            })
+            .collect();
+
+        if official_lines.is_empty() {
+            return None;
+        }
+
+        let mut whisper_segments: Vec<(&str, &str, u64)> = Vec::new();
+        for line in whisper_lrc.lines() {
+            let line = line.trim();
+            if let Some((tag, text)) = line.split_once(']') {
+                let tag = tag.trim_start_matches('[');
+                if let Some((min_str, sec_str)) = tag.split_once(':') {
+                    if let (Ok(min), Ok(sec)) = (min_str.parse::<u64>(), sec_str.parse::<f64>()) {
+                        let ms = min * 60_000 + (sec * 1000.0) as u64;
+                        let text = text.trim();
+                        let clean_text = text.split('<').next().unwrap_or(text).trim();
+                        if !clean_text.is_empty() {
+                            whisper_segments.push((tag, clean_text, ms));
+                        }
+                    }
+                }
+            }
+        }
+
+        if whisper_segments.is_empty() {
+            return None;
+        }
+
+        let normalize_words = |s: &str| -> Vec<String> {
+            s.to_lowercase()
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|w| !w.is_empty())
+                .map(String::from)
+                .collect()
+        };
+
+        let word_overlap = |a: &[String], b: &[String]| -> f32 {
+            if a.is_empty() || b.is_empty() { return 0.0; }
+            let mut matches = 0;
+            for w in a {
+                if b.contains(w) { matches += 1; }
+            }
+            (2.0 * matches as f32) / (a.len() + b.len()) as f32
+        };
+
+        let official_words: Vec<Vec<String>> = official_lines.iter().map(|l| normalize_words(l)).collect();
+        let whisper_words: Vec<Vec<String>> = whisper_segments.iter().map(|(_, t, _)| normalize_words(t)).collect();
+
+        let mut matched_indices: Vec<Option<usize>> = vec![None; official_lines.len()];
+        let mut last_whisper_idx = 0;
+        let mut match_count = 0;
+
+        for (off_idx, off_w) in official_words.iter().enumerate() {
+            if off_w.is_empty() { continue; }
+            let mut best_score = 0.28;
+            let mut best_idx = None;
+
+            let max_search = (last_whisper_idx + 8).min(whisper_segments.len());
+            for w_idx in last_whisper_idx..max_search {
+                let score = word_overlap(off_w, &whisper_words[w_idx]);
+                if score > best_score {
+                    best_score = score;
+                    best_idx = Some(w_idx);
+                }
+            }
+
+            if let Some(idx) = best_idx {
+                matched_indices[off_idx] = Some(idx);
+                last_whisper_idx = idx;
+                match_count += 1;
+            }
+        }
+
+        if match_count == 0 || match_count * 4 < official_lines.len().min(8) {
+            return None;
+        }
+
+        let mut final_lrc = Vec::new();
+        let mut anchor_time = whisper_segments[matched_indices.iter().flatten().next().copied().unwrap_or(0)].2;
+
+        for (i, &line) in official_lines.iter().enumerate() {
+            let timestamp_ms = if let Some(w_idx) = matched_indices[i] {
+                anchor_time = whisper_segments[w_idx].2;
+                anchor_time
+            } else {
+                let next_anchor = matched_indices.iter().enumerate()
+                    .skip(i + 1)
+                    .find_map(|(next_i, opt)| opt.map(|w_idx| (next_i, whisper_segments[w_idx].2)));
+
+                if let Some((next_i, next_time)) = next_anchor {
+                    let step = (next_time.saturating_sub(anchor_time)) / ((next_i - i + 1) as u64);
+                    anchor_time + step
+                } else {
+                    anchor_time + 3000
+                }
+            };
+
+            let mins = timestamp_ms / 60_000;
+            let secs = (timestamp_ms % 60_000) / 1000;
+            let centis = (timestamp_ms % 1000) / 10;
+            final_lrc.push(format!("[{:02}:{:02}.{:02}]{}", mins, secs, centis, line));
+        }
+
+        Some(final_lrc.join("\n"))
     }
 
     fn whisper_lyrics_result(lrc: String, precise: bool) -> Value {
@@ -5238,8 +5361,16 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             Self::fetch_genius_lyrics(&http_g, &g_title, &g_artist).await
         };
 
-        // Run LRCLIB and Genius concurrently!
-        let (lrclib_res, genius_res) = tokio::join!(lrclib_task, genius_task);
+        // 3. Parallel Task C: QQ Music (Tencent global synced lyrics database)
+        let http_q = self.http.clone();
+        let q_title = clean_title.clone();
+        let q_artist = clean_artist.clone();
+        let qq_task = async move {
+            Self::fetch_qq_lyrics(&http_q, &q_title, &q_artist, dur_val).await
+        };
+
+        // Run LRCLIB, QQ Music, and Genius concurrently!
+        let (lrclib_res, qq_res, genius_res) = tokio::join!(lrclib_task, qq_task, genius_task);
 
         // 1. If LRCLIB found synced lyrics, prioritize it!
         if let Some(ref lrc_data) = lrclib_res {
@@ -5248,7 +5379,14 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             }
         }
 
-        // 2. If Genius found lyrics, return it immediately
+        // 2. If QQ Music found synced lyrics, prioritize it!
+        if let Some(ref qq_data) = qq_res {
+            if qq_data.get("syncedLyrics").and_then(|s| s.as_str()).map(|s| s.trim().len() > 15).unwrap_or(false) {
+                return Ok(qq_data.clone());
+            }
+        }
+
+        // 3. If Genius found lyrics, return it immediately
         if let Some(genius_lyrics) = genius_res {
             let mut obj = serde_json::Map::new();
             obj.insert("plainLyrics".to_string(), Value::String(genius_lyrics));
@@ -5259,12 +5397,77 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             return Ok(Value::Object(obj));
         }
 
-        // 3. If LRCLIB found plain lyrics, return it
+        // 4. If LRCLIB found plain lyrics, return it
         if let Some(lrc_data) = lrclib_res {
             return Ok(lrc_data);
         }
 
+        // 5. If QQ Music found plain lyrics, return it
+        if let Some(qq_data) = qq_res {
+            return Ok(qq_data);
+        }
+
         Err("Lyrics not found".to_string())
+    }
+
+    pub async fn fetch_qq_lyrics(http: &reqwest::Client, title: &str, artist: &str, duration: Option<f64>) -> Option<Value> {
+        let query = format!("{} {}", artist, title).trim().to_string();
+        if query.is_empty() { return None; }
+
+        let search_url = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp";
+        let res = tokio::time::timeout(
+            std::time::Duration::from_millis(2500),
+            http.get(search_url)
+                .query(&[("w", query.as_str()), ("format", "json"), ("p", "1"), ("n", "5")])
+                .header("Referer", "https://y.qq.com")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .send()
+        ).await.ok()?.ok()?;
+
+        if !res.status().is_success() { return None; }
+        let data: Value = res.json().await.ok()?;
+        let songs = data.get("data")?.get("song")?.get("list")?.as_array()?;
+
+        for song in songs {
+            let songmid = song.get("songmid")?.as_str()?;
+            let song_dur = song.get("interval").and_then(Value::as_f64);
+            if let (Some(target_dur), Some(cand_dur)) = (duration, song_dur) {
+                if (target_dur - cand_dur).abs() > 6.0 {
+                    continue;
+                }
+            }
+
+            let lyric_url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg";
+            let lyr_res = tokio::time::timeout(
+                std::time::Duration::from_millis(2500),
+                http.get(lyric_url)
+                    .query(&[("songmid", songmid), ("format", "json"), ("nobase64", "1")])
+                    .header("Referer", "https://y.qq.com")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .send()
+            ).await.ok()?.ok()?;
+
+            if !lyr_res.status().is_success() { continue; }
+            let lyr_data: Value = lyr_res.json().await.ok()?;
+            let lyric = lyr_data.get("lyric").and_then(Value::as_str)?;
+            if lyric.trim().len() > 20 && lyric.contains('[') {
+                let plain = lyric.lines()
+                    .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
+                    .filter(|l| !l.is_empty() && !l.starts_with("[ti:") && !l.starts_with("[ar:") && !l.starts_with("[al:") && !l.starts_with("[by:") && !l.starts_with("[offset:"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                let mut obj = serde_json::Map::new();
+                obj.insert("syncedLyrics".to_string(), Value::String(lyric.to_string()));
+                obj.insert("plainLyrics".to_string(), Value::String(plain));
+                obj.insert("source".to_string(), Value::String("qqmusic".to_string()));
+                obj.insert("trackName".to_string(), Value::String(title.to_string()));
+                obj.insert("artistName".to_string(), Value::String(artist.to_string()));
+                obj.insert("duration".to_string(), json!(duration.or(song_dur).unwrap_or(0.0)));
+                return Some(Value::Object(obj));
+            }
+        }
+        None
     }
 
     pub async fn fetch_genius_lyrics(http: &reqwest::Client, title: &str, artist: &str) -> Option<String> {
