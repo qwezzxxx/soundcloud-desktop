@@ -9,8 +9,6 @@ use crate::soundcloud::SoundCloudClient;
 
 static HTTP_CLIENT: OnceLock<Option<reqwest::Client>> = OnceLock::new();
 const AUTH_ADDRESS: &str = "127.0.0.1:49221";
-const LOGIN_TTL: Duration = Duration::from_secs(600);
-static BROWSER_LOGIN: Mutex<Option<(String, Instant)>> = Mutex::new(None);
 static BROWSER_AUTH_REQUEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 pub(crate) fn random_ticket() -> Result<String, String> {
@@ -24,11 +22,7 @@ pub(crate) fn random_ticket() -> Result<String, String> {
 }
 
 pub fn begin_browser_login() -> Result<String, String> {
-    let nonce = random_ticket()?;
-    let url = format!("http://{AUTH_ADDRESS}/login?nonce={nonce}");
-    let mut login = BROWSER_LOGIN.lock().map_err(|error| error.to_string())?;
-    *login = Some((nonce, Instant::now()));
-    Ok(url)
+    Ok(format!("http://{AUTH_ADDRESS}/login"))
 }
 
 const STREAM_TTL: Duration = Duration::from_secs(3600);
@@ -152,7 +146,8 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
                         let method = parts[0];
                         let path = parts[1];
 
-                        if request_header(&request_str, "Host") != Some(AUTH_ADDRESS) {
+                        let host = request_header(&request_str, "Host");
+                        if !matches!(host, Some("127.0.0.1:49221" | "localhost:49221" | "127.0.0.1" | "localhost")) {
                             write_empty(&mut stream, "403 Forbidden").await;
                             return;
                         }
@@ -161,33 +156,39 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
                             ("GET" | "HEAD" | "OPTIONS", path) if path.starts_with("/stream?key=") => {
                                 serve_stream(&mut stream, method, path, &request_str).await;
                             }
-                            ("GET", path) if path.starts_with("/login?nonce=") => {
-                                let requested = &path["/login?nonce=".len()..];
-                                let nonce = BROWSER_LOGIN.lock().ok().and_then(|login| {
-                                    login.as_ref()
-                                        .filter(|(nonce, started)| nonce == requested && started.elapsed() < LOGIN_TTL)
-                                        .map(|(nonce, _)| nonce.clone())
-                                });
-                                if let Some(nonce) = nonce {
-                                    write_login_page(&mut stream, "200 OK", &LOGIN_STEPS.replace("__NONCE__", &nonce)).await;
+                            ("GET", path) if path == "/" || path == "/login" || path.starts_with("/login") => {
+                                write_login_page(&mut stream, "200 OK", LOGIN_STEPS).await;
+                            }
+                            ("GET", path) if path.starts_with("/auth") => {
+                                let token = if let Some(idx) = path.find("token=") {
+                                    let raw = &path[idx + 6..];
+                                    let end = raw.find('&').unwrap_or(raw.len());
+                                    urldecode(&raw[..end])
                                 } else {
-                                    write_login_notice(&mut stream, "403 Forbidden", "Вход в SoundCloud", "Откройте страницу подключения из ONYX.").await;
+                                    String::new()
+                                };
+                                let trimmed = token.trim();
+                                if trimmed.len() >= 10 {
+                                    let _request = BROWSER_AUTH_REQUEST.lock().await;
+                                    match sc_ref.set_oauth_token(trimmed).await {
+                                        Ok(data) => {
+                                            let _ = app.emit("sc_auth_success", data);
+                                            write_login_notice(&mut stream, "200 OK", "Аккаунт подключён", "Закройте вкладку и вернитесь в ONYX.").await;
+                                        }
+                                        Err(_) => {
+                                            let message = "SoundCloud отклонил токен. Проверьте правильность и попробуйте ещё раз.";
+                                            let _ = app.emit("sc_auth_error", message);
+                                            write_login_notice(&mut stream, "401 Unauthorized", "Подключение прервано", message).await;
+                                        }
+                                    }
+                                } else {
+                                    write_login_page(&mut stream, "400 Bad Request", "Не указан токен авторизации.").await;
                                 }
                             }
                             ("POST", "/auth") => {
-                                // A normal form POST can carry an opaque origin under the page's referrer policy.
-                                // The one-time ticket is required in both cases.
-                                if !matches!(request_header(&request_str, "Origin"), Some("https://soundcloud.com" | "null"))
-                                    || !request_header(&request_str, "Content-Type").is_some_and(|content| {
-                                        content.split(';').next() == Some("application/x-www-form-urlencoded")
-                                    })
-                                {
-                                    write_empty(&mut stream, "403 Forbidden").await;
-                                    return;
-                                }
                                 let length = request_header(&request_str, "Content-Length")
                                     .and_then(|length| length.parse::<usize>().ok())
-                                    .filter(|&length| length <= 4096);
+                                    .filter(|&length| length <= 8192);
                                 let Some(end) = length.and_then(|length| headers_end.checked_add(length))
                                     .filter(|&end| end > headers_end && end <= buffer.len())
                                 else {
@@ -208,23 +209,18 @@ pub fn start_auth_server(sc: Arc<SoundCloudClient>, app: AppHandle) {
                                         .filter_map(|field| field.split_once('='))
                                         .find_map(|(name, value)| (name == key).then(|| urldecode(value)))
                                 };
-                                let Some(token) = field("token").filter(|value| value.len() >= 10) else {
+                                let Some(token) = field("token").filter(|value| value.trim().len() >= 10) else {
                                     write_login_page(&mut stream, "400 Bad Request", "Войдите в SoundCloud и повторите подключение.").await;
                                     return;
                                 };
                                 let _request = BROWSER_AUTH_REQUEST.lock().await;
-                                if !field("nonce").is_some_and(|nonce| consume_browser_login(&nonce)) {
-                                    write_login_notice(&mut stream, "403 Forbidden", "Срок подключения истёк", "Начните вход заново из ONYX.").await;
-                                    return;
-                                }
-
-                                match sc_ref.set_oauth_token(&token).await {
+                                match sc_ref.set_oauth_token(token.trim()).await {
                                     Ok(data) => {
                                         let _ = app.emit("sc_auth_success", data);
                                         write_login_notice(&mut stream, "200 OK", "Аккаунт подключён", "Закройте вкладку и вернитесь в ONYX.").await;
                                     }
                                     Err(_) => {
-                                        let message = "SoundCloud отклонил подключение. Начните вход заново из ONYX.";
+                                        let message = "SoundCloud отклонил токен. Проверьте правильность и попробуйте ещё раз.";
                                         let _ = app.emit("sc_auth_error", message);
                                         write_login_notice(&mut stream, "401 Unauthorized", "Подключение прервано", message).await;
                                     }
@@ -307,16 +303,6 @@ async fn serve_stream(stream: &mut TcpStream, method: &str, path: &str, headers:
     }
 }
 
-fn consume_browser_login(nonce: &str) -> bool {
-    let Ok(mut login) = BROWSER_LOGIN.lock() else {
-        return false;
-    };
-    if login.as_ref().is_some_and(|(expected, started)| expected == nonce && started.elapsed() < LOGIN_TTL) {
-        *login = None;
-        return true;
-    }
-    false
-}
 
 async fn read_headers(stream: &mut TcpStream, buffer: &mut [u8]) -> Option<(usize, usize)> {
     let mut bytes_read = 0;
@@ -382,6 +368,11 @@ const LOGIN_HEAD: &str = r#"<!doctype html>
         .bookmark { color: #ffc1a8; background: #241d24; border: 1px dashed #a8604c; cursor: grab; }
         .bookmark:hover { background: #3a292f; }
         kbd { color: #f2e9f0; white-space: nowrap; }
+        .token-row { display: flex; gap: 8px; margin-top: 10px; }
+        .token-input { flex: 1; background: #0d0d12; border: 1px solid #36333f; border-radius: 9px; padding: 8px 12px; color: #fff; font-size: 13px; font-family: monospace; outline: none; }
+        .token-input:focus { border-color: var(--accent); }
+        .hint { font-size: 11px; color: #888; margin-top: 6px; }
+        .hint code { color: #ffb495; background: #241d24; padding: 1px 4px; border-radius: 4px; }
         .result { width: min(500px, 100%); padding: 32px; display: grid; gap: 14px; }
         .result h1 { font-size: 30px; }
         @media (max-width: 680px) {
@@ -405,18 +396,23 @@ const LOGIN_STEPS: &str = r#"<main class="connect">
     </header>
     <ol>
         <li><div>
-            <h2>Добавьте закладку</h2>
-            <p>Перетащите кнопку на панель закладок. В Chrome и Edge панель открывается через <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>.</p>
-            <a class="button bookmark" onclick="event.preventDefault(); alert('Перетащите эту кнопку на панель закладок.');" href="javascript:(function(){if(location.origin!=='https://soundcloud.com'){alert('Откройте soundcloud.com и войдите в аккаунт.');return;}const match=document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);if(!match){alert('Сессия SoundCloud недоступна. Войдите и попробуйте ещё раз.');return;}const form=document.createElement('form');form.method='POST';form.action='http://127.0.0.1:49221/auth';for(const [name,value] of Object.entries({nonce:'__NONCE__',token:decodeURIComponent(match[1])})){const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.append(input);}document.body.append(form);form.submit();})();">Подключить к ONYX</a>
-        </div></li>
-        <li><div>
             <h2>Войдите в SoundCloud</h2>
-            <p>Выберите способ входа на сайте SoundCloud.</p>
+            <p>Откройте сайт soundcloud.com и авторизуйтесь в вашем профиле.</p>
             <a class="button" href="https://soundcloud.com/signin" target="_blank" rel="noopener noreferrer">Открыть SoundCloud <span aria-hidden="true">↗</span></a>
         </div></li>
         <li><div>
-            <h2>Подключите аккаунт</h2>
-            <p>На вкладке SoundCloud нажмите закладку <strong>«Подключить к ONYX»</strong>. После подтверждения вернитесь в плеер.</p>
+            <h2>Быстрое подключение через закладку</h2>
+            <p>Перетащите кнопку на панель закладок браузера (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>). Затем перейдите на вкладку SoundCloud и нажмите её:</p>
+            <a class="button bookmark" onclick="event.preventDefault(); alert('Перетащите эту кнопку на панель закладок браузера, затем откройте soundcloud.com и нажмите её на вкладке.');" href="javascript:(function(){if(location.origin!=='https://soundcloud.com'){alert('Откройте вкладку soundcloud.com и войдите в аккаунт!');return;}var t=null;var m=document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);if(m&&m[1]){t=decodeURIComponent(m[1]);}if(!t){try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k==='oauth_token'||k==='sc_oauth_token'){var v=localStorage.getItem(k);if(v&&v.length>10){t=v;break;}}}}catch(e){}}if(!t){alert('Сессия SoundCloud не найдена. Убедитесь, что вы авторизованы на soundcloud.com!');return;}window.location.href='http://127.0.0.1:49221/auth?token='+encodeURIComponent(t);})();">🔗 Подключить к ONYX</a>
+        </div></li>
+        <li><div>
+            <h2>Или вставьте токен прямо здесь</h2>
+            <p>Скопируйте oauth_token из cookies или запросов и нажмите «Войти»:</p>
+            <div class="token-row">
+                <input id="token-input" class="token-input" type="text" placeholder="2-29... или OAuth ...">
+                <button class="button" style="margin:0; cursor:pointer;" onclick="var val=document.getElementById('token-input').value.trim();if(!val){alert('Вставьте токен!');return;}window.location.href='/auth?token='+encodeURIComponent(val);">Войти</button>
+            </div>
+            <p class="hint">В браузере: нажмите <code>F12</code> на soundcloud.com → вкладка <code>Application</code> (Приложение) → <code>Cookies</code> → скопируйте <code>oauth_token</code>.</p>
         </div></li>
     </ol>
 </main>"#;
