@@ -1607,7 +1607,7 @@ impl SoundCloudClient {
     }
 
     fn whisper_has_lyric_words(text: &str) -> bool {
-        let label = text.trim().trim_matches(|c: char| c.is_whitespace() || "[]()♪♫".contains(c));
+        let label = text.trim().trim_matches(|c: char| c.is_whitespace() || "[]()♪♫«»\"'".contains(c));
         if !label.chars().any(char::is_alphanumeric) {
             return false;
         }
@@ -1615,14 +1615,30 @@ impl SoundCloudClient {
         let is_noise = matches!(
             lower.as_str(),
             "music" | "instrumental" | "background music" | "музыка" | "инструментал" | "апплодисменты" | "applause"
-        ) || lower.starts_with("субтитры")
-          || lower.starts_with("subtitles")
+        ) || lower.contains("субтитр")
+          || lower.contains("subtitl")
+          || lower.contains("dimator")
+          || lower.contains("дима торжок")
+          || lower.contains("диматор")
+          || lower.contains("корректор")
+          || lower.contains("подогнал")
+          || lower.contains("симон")
+          || lower.contains("семкин")
+          || lower.contains("семецкая")
+          || lower.contains("синецкая")
+          || lower.contains("сухиашвили")
+          || lower.contains("кулакова")
+          || lower.contains("егорова")
           || lower.contains("community.org")
           || lower.contains("opensubtitles")
-          || lower.starts_with("перевод")
-          || lower.starts_with("редактор субтитров")
-          || lower.starts_with("thank you for watching")
-          || lower.starts_with("thanks for watching");
+          || lower.contains("amara.org")
+          || lower.contains("редактор")
+          || lower.contains("перевод")
+          || lower.contains("подписывайтесь")
+          || lower.contains("ставьте лайк")
+          || lower.contains("приятного просмотра")
+          || lower.contains("thank you for watching")
+          || lower.contains("thanks for watching");
         !is_noise
     }
 
