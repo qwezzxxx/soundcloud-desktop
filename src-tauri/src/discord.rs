@@ -258,7 +258,8 @@ impl DiscordManager {
         } = playback;
         let mut activity = serde_json::json!({
             "name": "ONYX SOUND",
-            "type": 2
+            "type": 2,
+            "status_display_type": 0
         });
 
         if state.show_track && !title.trim().is_empty() {
