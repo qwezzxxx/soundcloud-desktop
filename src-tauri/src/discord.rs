@@ -257,7 +257,7 @@ impl DiscordManager {
             ..
         } = playback;
         let mut activity = serde_json::json!({
-            "name": "ONYX SOUND",
+            "name": if state.show_status { "ONYX SOUND" } else if !state.show_track || title.trim().is_empty() { "Music" } else { title.trim() },
             "type": 2,
             "status_display_type": 0
         });
@@ -266,14 +266,18 @@ impl DiscordManager {
             activity["details"] = serde_json::json!(title);
         }
         let mut status = Vec::new();
+        if !is_playing && !playback.is_buffering {
+            let seconds = position.max(0.0) as u64;
+            status.push(format!("На паузе · {}:{:02}", seconds / 60, seconds % 60));
+        }
         if state.show_artist && !artist.trim().is_empty() {
             status.push(format!("by {artist}"));
         }
-        if state.show_status {
-            status.push("ONYX SOUND".to_string());
+        if state.show_status && playback.is_buffering {
+            status.push("Буферизация".to_string());
         }
         if !status.is_empty() {
-            activity["state"] = serde_json::json!(status.join("\n"));
+            activity["state"] = serde_json::json!(status.join(" • "));
         }
 
         let mut assets = serde_json::Map::new();
@@ -281,17 +285,23 @@ impl DiscordManager {
             assets.insert("large_image".to_string(), serde_json::json!(cover));
             assets.insert(
                 "large_text".to_string(),
-                serde_json::json!("ONYX SOUND"),
+                serde_json::json!(if state.show_status { "ONYX SOUND" } else if state.show_track { title } else { "Music" }),
             );
         }
-        if state.show_status {
+        if state.show_status || (!is_playing && !playback.is_buffering) {
             assets.insert(
                 "small_image".to_string(),
-                serde_json::json!("play"),
+                serde_json::json!(if !is_playing && !playback.is_buffering { "pause" } else { "play" }),
             );
             assets.insert(
                 "small_text".to_string(),
-                serde_json::json!("Воспроизведение"),
+                serde_json::json!(if *is_playing {
+                    "Воспроизведение"
+                } else if playback.is_buffering {
+                    "Буферизация"
+                } else {
+                    "На паузе"
+                }),
             );
         }
         if !assets.is_empty() {
@@ -404,6 +414,8 @@ mod tests {
         let paused = DiscordManager::render_activity(&state, &playback, 1000.0);
         assert_eq!(paused["details"], "Track");
         assert_eq!(paused["state"], "На паузе · 0:03 • by Artist");
+        assert_eq!(paused["name"], "Track");
+        assert_eq!(paused["assets"]["small_image"], "pause");
         assert!(paused.get("timestamps").is_none());
 
         playback.is_buffering = true;
@@ -414,7 +426,44 @@ mod tests {
         playback.is_playing = true;
         let resumed = DiscordManager::render_activity(&state, &playback, 1000.0);
         assert_eq!(resumed["state"], "by Artist");
+        assert!(resumed.get("assets").is_none());
         assert!(resumed.get("timestamps").is_some());
+    }
+
+    #[test]
+    fn branding_toggle_preserves_track_details_and_pause_icon() {
+        for show_status in [false, true] {
+            for is_playing in [false, true] {
+                for show_track in [false, true] {
+                    let state = DiscordState {
+                        pipe: None, connected: false, enabled: true,
+                        client_id: DISCORD_CLIENT_ID.to_string(),
+                        show_track, show_artist: true, show_cover: true, show_status,
+                        current_activity: None, last_playback: None,
+                    };
+                    let playback = DiscordPlayback {
+                        title: "Track".into(), artist: "Artist".into(),
+                        cover: "https://example.com/cover.jpg".into(),
+                        is_playing, is_buffering: false,
+                        position: 10.0, duration: 120.0, rate: 1.0,
+                    };
+                    let activity = DiscordManager::render_activity(&state, &playback, 1000.0);
+                    assert_eq!(activity["name"], if show_status { "ONYX SOUND" } else if show_track { "Track" } else { "Music" });
+                    assert_eq!(activity["status_display_type"], 0);
+                    assert_eq!(activity.get("details").is_some(), show_track);
+                    assert!(activity["state"].as_str().unwrap().contains("by Artist"));
+                    assert_eq!(activity.get("timestamps").is_some(), is_playing);
+                    if !is_playing {
+                        assert_eq!(activity["assets"]["small_image"], "pause");
+                        assert_eq!(activity["assets"]["small_text"], "На паузе");
+                    } else if show_status {
+                        assert_eq!(activity["assets"]["small_image"], "play");
+                    } else {
+                        assert!(activity["assets"].get("small_image").is_none());
+                    }
+                }
+            }
+        }
     }
 
     #[test]
