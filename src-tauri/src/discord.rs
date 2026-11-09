@@ -1,22 +1,19 @@
 use serde::Deserialize;
 use serde_json::Value;
-use std::io::Write;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::watch;
+
+mod ipc;
+use ipc::Presence;
 
 pub const DISCORD_CLIENT_ID: &str = "802958833214423081"; // Official SoundCloud Discord Client ID
 
 #[derive(Clone)]
 pub struct DiscordManager {
     inner: Arc<Mutex<DiscordState>>,
+    desired: watch::Sender<Option<Presence>>,
 }
-
-#[cfg(target_os = "windows")]
-type IpcStream = std::fs::File;
-
-#[cfg(not(target_os = "windows"))]
-type IpcStream = std::os::unix::net::UnixStream;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,49 +45,31 @@ impl DiscordPlayback {
 }
 
 struct DiscordState {
-    pipe: Option<IpcStream>,
-    connected: bool,
     enabled: bool,
     client_id: String,
     show_track: bool,
     show_artist: bool,
     show_cover: bool,
     show_status: bool,
-    current_activity: Option<Value>,
     last_playback: Option<(DiscordPlayback, f64)>,
 }
 
 impl DiscordManager {
     pub fn new() -> Self {
-        let mgr = Self {
+        let (desired, updates) = watch::channel(None);
+        tauri::async_runtime::spawn(ipc::run(updates));
+        Self {
             inner: Arc::new(Mutex::new(DiscordState {
-                pipe: None,
-                connected: false,
                 enabled: true,
                 client_id: DISCORD_CLIENT_ID.to_string(),
                 show_track: true,
                 show_artist: true,
                 show_cover: true,
                 show_status: true,
-                current_activity: None,
                 last_playback: None,
             })),
-        };
-
-        let mgr_clone = mgr.clone();
-        thread::spawn(move || loop {
-            thread::sleep(Duration::from_secs(5));
-            let should_reconnect = {
-                let state = mgr_clone.inner.lock().unwrap();
-                state.enabled && !state.connected
-            };
-
-            if should_reconnect {
-                let _ = mgr_clone.try_connect();
-            }
-        });
-
-        mgr
+            desired,
+        }
     }
 
     pub fn set_options(
@@ -129,120 +108,25 @@ impl DiscordManager {
         state.show_status = show_status;
         state.client_id = cid;
 
-        if !enabled || cid_changed {
-            Self::write_activity(&mut state, &Value::Null);
-            state.connected = false;
-            state.pipe = None;
-        }
-
-        state.current_activity = if enabled {
-            state
-                .last_playback
-                .as_ref()
-                .map(|(playback, now)| Self::render_activity(&state, playback, *now))
-        } else {
-            None
-        };
-        let activity = state.current_activity.clone();
-        drop(state);
-
-        if let Some(activity) = activity {
-            self.send_activity_payload(activity);
-        }
+        self.publish(&state);
     }
 
-    pub fn try_connect(&self) -> bool {
-        let mut state = self.inner.lock().unwrap();
-        if !state.enabled {
-            return false;
-        }
-        if state.connected && state.pipe.is_some() {
-            return true;
-        }
-
-        let cid = state.client_id.clone();
-        #[cfg(target_os = "windows")]
-        for i in 0..10 {
-            let pipe_path = format!(r"\\.\pipe\discord-ipc-{}", i);
-            if let Ok(mut file) = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(&pipe_path)
-            {
-                let handshake = serde_json::json!({
-                    "v": 1,
-                    "client_id": cid
-                });
-                let payload = handshake.to_string();
-                let op = 0u32;
-                let len = payload.len() as u32;
-
-                let mut packet = Vec::with_capacity(8 + payload.len());
-                packet.extend_from_slice(&op.to_le_bytes());
-                packet.extend_from_slice(&len.to_le_bytes());
-                packet.extend_from_slice(payload.as_bytes());
-
-                if file.write_all(&packet).is_ok() && file.flush().is_ok() {
-                    state.pipe = Some(file);
-                    state.connected = true;
-
-                    if let Some(act) = state.current_activity.clone() {
-                        Self::write_activity(&mut state, &act);
-                    }
-                    return state.connected;
-                }
+    fn publish(&self, state: &DiscordState) {
+        let latest = state.enabled.then(|| Presence {
+            client_id: state.client_id.clone(),
+            activity: state
+                .last_playback
+                .as_ref()
+                .map(|(playback, now)| Self::render_activity(state, playback, *now))
+                .unwrap_or(Value::Null),
+        });
+        self.desired.send_if_modified(|desired| {
+            if *desired == latest {
+                return false;
             }
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            let mut prefixes = Vec::new();
-            if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-                let p = std::path::PathBuf::from(runtime_dir);
-                prefixes.push(p.clone());
-                prefixes.push(p.join("app/com.discordapp.Discord"));
-                prefixes.push(p.join(".flatpak/org.equicord.equibop/xdg-run"));
-                prefixes.push(p.join(".flatpak/com.discordapp.Discord/xdg-run"));
-            }
-            if let Ok(tmp) = std::env::var("TMPDIR") {
-                prefixes.push(std::path::PathBuf::from(tmp));
-            }
-            prefixes.push(std::path::PathBuf::from("/tmp"));
-
-            for prefix in prefixes {
-                for i in 0..10 {
-                    let socket_path = prefix.join(format!("discord-ipc-{}", i));
-                    if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&socket_path) {
-                        let handshake = serde_json::json!({
-                            "v": 1,
-                            "client_id": cid
-                        });
-                        let payload = handshake.to_string();
-                        let op = 0u32;
-                        let len = payload.len() as u32;
-
-                        let mut packet = Vec::with_capacity(8 + payload.len());
-                        packet.extend_from_slice(&op.to_le_bytes());
-                        packet.extend_from_slice(&len.to_le_bytes());
-                        packet.extend_from_slice(payload.as_bytes());
-
-                        if stream.write_all(&packet).is_ok() && stream.flush().is_ok() {
-                            state.pipe = Some(stream);
-                            state.connected = true;
-
-                            if let Some(act) = state.current_activity.clone() {
-                                Self::write_activity(&mut state, &act);
-                            }
-                            return state.connected;
-                        }
-                    }
-                }
-            }
-        }
-
-        state.connected = false;
-        state.pipe = None;
-        false
+            *desired = latest;
+            true
+        });
     }
 
     fn render_activity(state: &DiscordState, playback: &DiscordPlayback, now: f64) -> Value {
@@ -315,67 +199,15 @@ impl DiscordManager {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs_f64();
-        let activity = {
-            let mut state = self.inner.lock().unwrap();
-            let activity = state
-                .enabled
-                .then(|| Self::render_activity(&state, &playback, now));
-            state.last_playback = Some((playback, now));
-            if state.current_activity == activity {
-                return;
-            }
-            state.current_activity = activity.clone();
-            activity
-        };
-        if let Some(activity) = activity {
-            self.send_activity_payload(activity);
-        }
-    }
-
-    fn send_activity_payload(&self, activity: Value) {
         let mut state = self.inner.lock().unwrap();
-        if !state.enabled || state.current_activity.as_ref() != Some(&activity) {
-            return;
-        }
-        if state.connected && state.pipe.is_some() {
-            Self::write_activity(&mut state, &activity);
-        }
-        if !state.connected || state.pipe.is_none() {
-            drop(state);
-            self.try_connect();
-        }
-    }
-
-    fn write_activity(state: &mut DiscordState, activity: &Value) {
-        let Some(pipe) = state.pipe.as_mut() else {
-            return;
-        };
-        let payload = serde_json::json!({
-            "cmd": "SET_ACTIVITY",
-            "args": {
-                "pid": std::process::id(),
-                "activity": activity
-            },
-            "nonce": SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos().to_string()
-        }).to_string();
-
-        let mut packet = Vec::with_capacity(8 + payload.len());
-        packet.extend_from_slice(&1u32.to_le_bytes());
-        packet.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-        packet.extend_from_slice(payload.as_bytes());
-
-        if pipe.write_all(&packet).and_then(|_| pipe.flush()).is_err() {
-            state.connected = false;
-            state.pipe = None;
-        }
+        state.last_playback = Some((playback, now));
+        self.publish(&state);
     }
 
     pub fn clear_activity(&self) {
         let mut state = self.inner.lock().unwrap();
         state.last_playback = None;
-        if state.current_activity.take().is_some() {
-            Self::write_activity(&mut state, &Value::Null);
-        }
+        self.publish(&state);
     }
 }
 
@@ -386,15 +218,12 @@ mod tests {
     #[test]
     fn shows_pause_in_the_card_with_the_status_badge_disabled() {
         let state = DiscordState {
-            pipe: None,
-            connected: false,
             enabled: true,
             client_id: DISCORD_CLIENT_ID.to_string(),
             show_track: true,
             show_artist: true,
             show_cover: true,
             show_status: false,
-            current_activity: None,
             last_playback: None,
         };
         let mut playback = DiscordPlayback {
@@ -433,10 +262,10 @@ mod tests {
             for is_playing in [false, true] {
                 for show_track in [false, true] {
                     let state = DiscordState {
-                        pipe: None, connected: false, enabled: true,
+                        enabled: true,
                         client_id: DISCORD_CLIENT_ID.to_string(),
                         show_track, show_artist: true, show_cover: true, show_status,
-                        current_activity: None, last_playback: None,
+                        last_playback: None,
                     };
                     let playback = DiscordPlayback {
                         title: "Track".into(), artist: "Artist".into(),
