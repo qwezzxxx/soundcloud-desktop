@@ -5463,7 +5463,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                 obj.insert("source".to_string(), Value::String("qqmusic".to_string()));
                 obj.insert("trackName".to_string(), Value::String(title.to_string()));
                 obj.insert("artistName".to_string(), Value::String(artist.to_string()));
-                obj.insert("duration".to_string(), json!(duration.or(song_dur).unwrap_or(0.0)));
+                obj.insert("duration".to_string(), serde_json::json!(duration.or(song_dur).unwrap_or(0.0)));
                 return Some(Value::Object(obj));
             }
         }
