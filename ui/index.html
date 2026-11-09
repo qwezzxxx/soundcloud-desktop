@@ -25067,10 +25067,12 @@
       btnBrowserLogin.addEventListener('click', async () => {
         try {
           await api.openBrowserLogin();
+          startAuthWatcher();
           if (loginStatusMsg) {
-            loginStatusMsg.className = 'text-xs text-neutral-400 min-h-[16px]';
-            loginStatusMsg.textContent = 'Следуйте инструкции на открывшейся странице ONYX.';
+            loginStatusMsg.className = 'text-xs text-orange-400 min-h-[16px] animate-pulse';
+            loginStatusMsg.textContent = '⏳ Ожидание авторизации... Завершите вход на странице в браузере';
           }
+          notify('Открыта страница авторизации в браузере...', '🌐');
         } catch (error) {
           console.warn('Could not open SoundCloud in the browser', error);
           if (loginStatusMsg) {
