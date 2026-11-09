@@ -49,7 +49,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: "./src-tauri"
-          args: --bundles appimage
+          args: --bundles appimage --verbose
           tagName: dev-latest
           releaseName: "ONYX (Dev Build - AppImage Only)"
           releaseDraft: false
