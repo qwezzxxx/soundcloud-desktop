@@ -187,10 +187,9 @@ impl DiscordManager {
                     state.connected = true;
 
                     if let Some(act) = state.current_activity.clone() {
-                        drop(state);
-                        self.send_activity_payload(act);
+                        Self::write_activity(&mut state, &act);
                     }
-                    return true;
+                    return state.connected;
                 }
             }
         }
@@ -232,10 +231,9 @@ impl DiscordManager {
                             state.connected = true;
 
                             if let Some(act) = state.current_activity.clone() {
-                                drop(state);
-                                self.send_activity_payload(act);
+                                Self::write_activity(&mut state, &act);
                             }
-                            return true;
+                            return state.connected;
                         }
                     }
                 }
@@ -289,26 +287,22 @@ impl DiscordManager {
                 serde_json::json!(if state.show_status { "ONYX SOUND" } else if state.show_track { title } else { "Music" }),
             );
         }
-        if state.show_status || paused {
-            // Mirror the action shown on the player's play/pause button.
-            assets.insert(
-                "small_image".to_string(),
-                serde_json::json!(if paused { "play" } else { "pause" }),
-            );
-            assets.insert(
-                "small_text".to_string(),
-                serde_json::json!(if *is_playing {
-                    "Воспроизведение"
-                } else if playback.is_buffering {
-                    "Буферизация"
-                } else {
-                    "На паузе"
-                }),
-            );
-        }
-        if !assets.is_empty() {
-            activity["assets"] = Value::Object(assets);
-        }
+        // Mirror the player's button independently of the activity name.
+        assets.insert(
+            "small_image".to_string(),
+            serde_json::json!(if paused { "play" } else { "pause" }),
+        );
+        assets.insert(
+            "small_text".to_string(),
+            serde_json::json!(if paused {
+                "На паузе"
+            } else if playback.is_buffering {
+                "Буферизация"
+            } else {
+                "Воспроизведение"
+            }),
+        );
+        activity["assets"] = Value::Object(assets);
 
         if let Some(timestamps) = playback.timestamps(now) {
             activity["timestamps"] = timestamps;
@@ -343,12 +337,13 @@ impl DiscordManager {
         if !state.enabled || state.current_activity.as_ref() != Some(&activity) {
             return;
         }
+        if state.connected && state.pipe.is_some() {
+            Self::write_activity(&mut state, &activity);
+        }
         if !state.connected || state.pipe.is_none() {
             drop(state);
             self.try_connect();
-            return;
         }
-        Self::write_activity(&mut state, &activity);
     }
 
     fn write_activity(state: &mut DiscordState, activity: &Value) {
@@ -428,7 +423,7 @@ mod tests {
         playback.is_playing = true;
         let resumed = DiscordManager::render_activity(&state, &playback, 1000.0);
         assert_eq!(resumed["state"], "by Artist");
-        assert!(resumed.get("assets").is_none());
+        assert_eq!(resumed["assets"]["small_image"], "pause");
         assert!(resumed.get("timestamps").is_some());
     }
 
@@ -458,10 +453,9 @@ mod tests {
                     if !is_playing {
                         assert_eq!(activity["assets"]["small_image"], "play");
                         assert_eq!(activity["assets"]["small_text"], "На паузе");
-                    } else if show_status {
-                        assert_eq!(activity["assets"]["small_image"], "pause");
                     } else {
-                        assert!(activity["assets"].get("small_image").is_none());
+                        assert_eq!(activity["assets"]["small_image"], "pause");
+                        assert_eq!(activity["assets"]["small_text"], "Воспроизведение");
                     }
                 }
             }

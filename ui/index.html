@@ -7249,7 +7249,7 @@
 
 
 
-                <div class="text-[11px] text-neutral-500">Включено — ONYX SOUND, выключено — название трека. При паузе отображается значок паузы.</div>
+                <div class="text-[11px] text-neutral-500">Включено — ONYX SOUND, выключено — название трека.</div>
 
 
 
@@ -32066,13 +32066,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     // Use media events so Discord follows every control, including hardware keys and lyrics seeks.
     let discordPlaybackTimer;
     let discordPlaybackRequest = Promise.resolve();
-    function queueDiscordPlaybackUpdate() {
+    function queueDiscordPlaybackUpdate(event) {
       clearTimeout(discordPlaybackTimer);
-      discordPlaybackTimer = setTimeout(() => {
+      const send = () => {
         discordPlaybackRequest = discordPlaybackRequest.then(() => {
           if (!getInvoke()) return;
           const track = discordPlaybackTrack;
-          if (!track || audioEngine.ended || audioEngine.error || !audioEngine.currentSrc || !audioEngine.readyState) {
+          if (!track || audioEngine.ended || audioEngine.error || !audioEngine.currentSrc) {
             return api.clearDiscord();
           }
           const isBuffering = !audioEngine.paused && audioEngine.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
@@ -32087,10 +32087,15 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
             rate: audioEngine.playbackRate
           });
         }).catch(console.warn);
-      }, 120);
+      };
+      if (event.type === 'pause' || event.type === 'play' || event.type === 'playing') {
+        send();
+      } else {
+        discordPlaybackTimer = setTimeout(send, 120);
+      }
     }
 
-    for (const event of ['playing', 'pause', 'seeked', 'ratechange', 'durationchange', 'waiting', 'ended', 'emptied', 'error']) {
+    for (const event of ['play', 'playing', 'pause', 'seeked', 'ratechange', 'durationchange', 'waiting', 'ended', 'emptied', 'error']) {
       audioEngine.addEventListener(event, queueDiscordPlaybackUpdate);
     }
 
