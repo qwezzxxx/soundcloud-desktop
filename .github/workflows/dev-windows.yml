@@ -12,6 +12,8 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      ONYX_DEV_BUILD: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,6 +22,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+
+      - name: Test Discord activity settings
+        run: cargo test --release --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml --lib discord
 
       - name: Build ONYX executable
         run: cargo build --release --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml

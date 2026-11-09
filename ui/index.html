@@ -105,7 +105,7 @@
 
 
 
-  <title>ONYX — Music Player</title>
+  <title>ONYX SOUND — Music Player</title>
 
 
 
@@ -4799,7 +4799,7 @@
 
 
 
-        <span class="text-xs font-black text-white tracking-widest select-none uppercase">ONYX</span>
+        <span class="text-xs font-black text-white tracking-widest select-none uppercase">ONYX SOUND</span>
 
 
 
@@ -7097,7 +7097,7 @@
 
 
 
-              <p class="text-[11px] text-neutral-500 mt-1">Оставьте пустым для SoundCloud, либо введите свой Client ID из Discord Developer Portal, чтобы вывести своё название без слова «SoundCloud».</p>
+              <p class="text-[11px] text-neutral-500 mt-1">Оставьте поле пустым для стандартного Client ID или укажите ID своего приложения Discord.</p>
 
 
 
@@ -7241,7 +7241,7 @@
 
 
 
-                <div class="text-xs text-neutral-300">Показывать статус SoundCloud в профиле</div>
+                <div class="text-xs text-neutral-300">Показывать ONYX SOUND в профиле</div>
 
 
 
@@ -7249,7 +7249,7 @@
 
 
 
-                <div class="text-[11px] text-neutral-500">Управляет плашкой SoundCloud. Пауза отображается в карточке трека.</div>
+                <div class="text-[11px] text-neutral-500">Включено — ONYX SOUND, выключено — название трека.</div>
 
 
 
@@ -28252,7 +28252,9 @@
 
 
 
-      if (!eqPresets[presetKey]) return;
+      try {
+        localStorage.setItem('sc_eq_preset', presetKey);
+      } catch (e) {}
 
 
 
@@ -28880,7 +28882,7 @@
 
 
 
-          album: 'ONYX',
+          album: 'ONYX SOUND',
 
 
 
@@ -30594,6 +30596,10 @@
 
 
     wireEqSlider('eq-slider-12k', 'eq-val-12k', () => eq12kNode);
+    try {
+      const savedEqPreset = localStorage.getItem('sc_eq_preset') || 'flat';
+      applyEqPreset(savedEqPreset);
+    } catch(e) {}
 
 
 
@@ -32060,13 +32066,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     // Use media events so Discord follows every control, including hardware keys and lyrics seeks.
     let discordPlaybackTimer;
     let discordPlaybackRequest = Promise.resolve();
-    function queueDiscordPlaybackUpdate() {
+    function queueDiscordPlaybackUpdate(event) {
       clearTimeout(discordPlaybackTimer);
-      discordPlaybackTimer = setTimeout(() => {
+      const send = () => {
         discordPlaybackRequest = discordPlaybackRequest.then(() => {
           if (!getInvoke()) return;
           const track = discordPlaybackTrack;
-          if (!track || audioEngine.ended || audioEngine.error || !audioEngine.currentSrc || !audioEngine.readyState) {
+          if (!track || audioEngine.ended || audioEngine.error || !audioEngine.currentSrc) {
             return api.clearDiscord();
           }
           const isBuffering = !audioEngine.paused && audioEngine.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
@@ -32081,10 +32087,15 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
             rate: audioEngine.playbackRate
           });
         }).catch(console.warn);
-      }, 120);
+      };
+      if (event.type === 'pause' || event.type === 'play' || event.type === 'playing') {
+        send();
+      } else {
+        discordPlaybackTimer = setTimeout(send, 120);
+      }
     }
 
-    for (const event of ['playing', 'pause', 'seeked', 'ratechange', 'durationchange', 'waiting', 'ended', 'emptied', 'error']) {
+    for (const event of ['play', 'playing', 'pause', 'seeked', 'ratechange', 'durationchange', 'waiting', 'ended', 'emptied', 'error']) {
       audioEngine.addEventListener(event, queueDiscordPlaybackUpdate);
     }
 
@@ -35510,6 +35521,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       appConfig.whisper_auto_transcribe = document.getElementById('whisper-auto-toggle')?.checked ?? false;
       appConfig.whisper_precise = document.getElementById('whisper-precise-toggle')?.checked ?? false;
+      appConfig.discord_client_id = document.getElementById('discord-client-id-input')?.value.trim() ?? '';
       appConfig.discord_rpc = document.getElementById('discord-rpc-toggle')?.checked ?? true;
 
 
