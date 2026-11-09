@@ -12,6 +12,8 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      ONYX_DEV_BUILD: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

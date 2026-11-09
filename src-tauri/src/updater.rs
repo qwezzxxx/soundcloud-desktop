@@ -6,6 +6,11 @@ use tauri::AppHandle;
 use tauri_plugin_updater::UpdaterExt;
 
 pub fn start(app: &AppHandle) -> tauri::Result<()> {
+    // Keep development artifacts available for testing across restarts.
+    if option_env!("ONYX_DEV_BUILD") == Some("1") {
+        return Ok(());
+    }
+
     app.plugin(tauri_plugin_updater::Builder::new().build())?;
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
