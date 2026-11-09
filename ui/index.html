@@ -12085,7 +12085,7 @@
 
 
       getLyrics: (title, artist, duration) => api.invoke('get_lyrics', { title, artist, duration }),
-      transcribeTrack: (trackId, streamUrl, precise) => api.invoke('transcribe_track', { trackId, streamUrl, precise }),
+      transcribeTrack: (trackId, streamUrl, precise, title, artist, prompt) => api.invoke('transcribe_track', { trackId, streamUrl, precise, title, artist, prompt }),
 
 
 
@@ -32559,7 +32559,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     function usableCachedLyrics(lyrics) {
       if (!lyrics) return false;
       if (!lyrics.isAi) return true;
-      if (appConfig?.whisper_precise && lyrics.whisperRevision !== 2) return false;
+      if (appConfig?.whisper_precise && (lyrics.whisperRevision || 0) < 2) return false;
       const text = whisperLyricLines(lyrics.syncedLyrics || lyrics.plainLyrics);
       if (!text) return false;
       const lines = stripLyricWordTags(text).replace(/\[\d+:\d+(?:\.\d+)?\]/g, '').split('\n').map(line => line.trim().toLowerCase());
@@ -33193,11 +33193,13 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       try {
         const previous = readTrackLyricsCache(track);
         const originalRequest = matchedOriginalLyrics(previous, track) || requestTrackLyrics(track);
+        const { title, artist } = trackLyricsIdentity(track);
+        const promptCandidate = previous?.plainLyrics || previous?.syncedLyrics || null;
         const recognition = (async () => {
           const stream = explicitStreamUrl || getCachedStreamUrl(track.id) || await requestStreamUrl(track.id);
           const streamUrl = typeof stream === 'object' && stream !== null ? stream.url : stream;
           if (!streamUrl) throw new Error('Не удалось получить аудиопоток трека');
-          return api.transcribeTrack(track.id, streamUrl, precise);
+          return api.transcribeTrack(track.id, streamUrl, precise, title, artist, promptCandidate);
         })().then(data => ({ data }), error => ({ error }));
         const [online, { data, error }] = await Promise.all([originalRequest, recognition]);
         const original = matchedOriginalLyrics(online, track);

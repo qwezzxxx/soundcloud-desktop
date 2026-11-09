@@ -1608,8 +1608,22 @@ impl SoundCloudClient {
 
     fn whisper_has_lyric_words(text: &str) -> bool {
         let label = text.trim().trim_matches(|c: char| c.is_whitespace() || "[]()♪♫".contains(c));
-        label.chars().any(char::is_alphanumeric)
-            && !matches!(label.to_lowercase().as_str(), "music" | "instrumental" | "background music" | "музыка" | "инструментал")
+        if !label.chars().any(char::is_alphanumeric) {
+            return false;
+        }
+        let lower = label.to_lowercase();
+        let is_noise = matches!(
+            lower.as_str(),
+            "music" | "instrumental" | "background music" | "музыка" | "инструментал" | "апплодисменты" | "applause"
+        ) || lower.starts_with("субтитры")
+          || lower.starts_with("subtitles")
+          || lower.contains("community.org")
+          || lower.contains("opensubtitles")
+          || lower.starts_with("перевод")
+          || lower.starts_with("редактор субтитров")
+          || lower.starts_with("thank you for watching")
+          || lower.starts_with("thanks for watching");
+        !is_noise
     }
 
     fn clean_whisper_lrc(lrc: &str) -> String {
@@ -1674,7 +1688,15 @@ impl SoundCloudClient {
         scored > 0 && weak * 2 >= scored
     }
 
-    pub async fn transcribe_audio_stream(&self, track_id: &str, stream_url: &str, precise: bool) -> Result<Value, String> {
+    pub async fn transcribe_audio_stream(
+        &self,
+        track_id: &str,
+        stream_url: &str,
+        precise: bool,
+        title: Option<&str>,
+        artist: Option<&str>,
+        prompt: Option<&str>,
+    ) -> Result<Value, String> {
         let clean_id: String = track_id.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect();
         if clean_id.is_empty() {
             return Err("Invalid track id".to_string());
@@ -1683,9 +1705,13 @@ impl SoundCloudClient {
         // Serialize decoding and check the cache again for queued requests.
         let _job = self.whisper_job.lock().await;
         let cache_dir = self.lyrics_cache_dir();
-        let suffix = if precise { "large-v3-turbo-q5.v2" } else { "v2" };
-        let cache_file = cache_dir.join(format!("{}.{}.lrc", clean_id, suffix));
-        if let Ok(content) = fs::read_to_string(&cache_file) {
+        let suffix_v3 = if precise { "large-v3-turbo-q5.v3" } else { "v3" };
+        let suffix_v2 = if precise { "large-v3-turbo-q5.v2" } else { "v2" };
+        let cache_file_v3 = cache_dir.join(format!("{}.{}.lrc", clean_id, suffix_v3));
+        let cache_file_v2 = cache_dir.join(format!("{}.{}.lrc", clean_id, suffix_v2));
+
+        let cached_content = fs::read_to_string(&cache_file_v3).or_else(|_| fs::read_to_string(&cache_file_v2));
+        if let Ok(content) = cached_content {
             let content = Self::clean_whisper_lrc(&content);
             let plain = Self::whisper_lyrics_result(content, precise);
             let plain_text = plain.get("plainLyrics").and_then(Value::as_str).unwrap_or_default();
@@ -1706,7 +1732,7 @@ impl SoundCloudClient {
         let temp_out_base = temp_dir.path().join("lyrics");
         let temp_lrc = temp_out_base.with_extension("lrc");
 
-        // 2. Convert stream into 16kHz mono WAV using ffmpeg
+        // 2. Convert stream into 16kHz mono WAV using ffmpeg with vocal optimization filter
         let mut ff_cmd = tokio::process::Command::new(&ffmpeg_exe);
         ff_cmd.kill_on_drop(true).args([
             "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
@@ -1719,7 +1745,14 @@ impl SoundCloudClient {
         } else {
             ff_cmd.args(["-t", "360"]);
         }
-        ff_cmd.args(["-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le"]).arg(&temp_wav);
+        // Vocal optimization:
+        // highpass=f=120: cut off deep 808 sub-bass, kick punch rumble
+        // lowpass=f=7500: cut off cymbal/hi-hat sizzle and extreme high frequencies
+        // acompressor: normalize dynamics so quiet verses and loud hooks are balanced
+        ff_cmd.args([
+            "-af", "highpass=f=120,lowpass=f=7500,acompressor=threshold=-18dB:ratio=3:attack=5:release=50",
+            "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le"
+        ]).arg(&temp_wav);
         #[cfg(windows)]
         ff_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
@@ -1738,6 +1771,31 @@ impl SoundCloudClient {
             self.ensure_whisper_model().await?
         };
 
+        // Construct bilingual / context prompt
+        let prompt_arg: Option<String> = {
+            if let Some(p) = prompt.filter(|p| !p.trim().is_empty()) {
+                let snippet: String = p.trim().chars().take(350).collect();
+                Some(snippet)
+            } else {
+                let t = title.unwrap_or("").trim();
+                let a = artist.unwrap_or("").trim();
+                if !t.is_empty() || !a.is_empty() {
+                    let mut s = String::new();
+                    if !a.is_empty() && !t.is_empty() {
+                        s.push_str(&format!("{}: {}. ", a, t));
+                    } else if !t.is_empty() {
+                        s.push_str(&format!("{}. ", t));
+                    } else if !a.is_empty() {
+                        s.push_str(&format!("{}. ", a));
+                    }
+                    s.push_str("Текст песни, lyrics, song.");
+                    Some(s)
+                } else {
+                    None
+                }
+            }
+        };
+
         // 3. Run the installed model first and emit JSON confidence data too.
         let temp_json = temp_out_base.with_extension("json");
         let run_whisper = |model: &Path, output_base: &Path| {
@@ -1745,8 +1803,20 @@ impl SoundCloudClient {
             cmd.kill_on_drop(true)
                 .arg("-m").arg(model)
                 .arg("-f").arg(&temp_wav)
-                .args(["-olrc", "-ojf", "-l", "auto", "-t", "4", "-np"])
+                .args([
+                    "-olrc", "-ojf",
+                    "-l", "auto",
+                    "-t", "4",
+                    "-np",
+                    "-sns",
+                    "-sow",
+                    "-ml", "48",
+                    "--no-speech-thold", "0.65"
+                ])
                 .arg("-of").arg(output_base);
+            if let Some(ref p) = prompt_arg {
+                cmd.arg("--prompt").arg(p);
+            }
             if precise {
                 cmd.args(["-nfa", "-dtw", "large.v3.turbo"]);
             }
@@ -1806,7 +1876,7 @@ impl SoundCloudClient {
         };
         if let Ok(mut staged) = tempfile::NamedTempFile::new_in(&cache_dir) {
             if std::io::Write::write_all(&mut staged, lrc.as_bytes()).is_ok() {
-                let _ = staged.persist(&cache_file);
+                let _ = staged.persist(&cache_file_v3);
             }
         }
         Ok(Self::whisper_lyrics_result(lrc, precise))
@@ -1888,7 +1958,7 @@ impl SoundCloudClient {
             "plainLyrics": plain,
             "isAi": true,
             "whisperPrecise": precise,
-            "whisperRevision": precise.then_some(2)
+            "whisperRevision": precise.then_some(3)
         })
     }
 

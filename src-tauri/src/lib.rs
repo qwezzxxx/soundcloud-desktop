@@ -187,7 +187,15 @@ async fn get_lyrics(title: String, artist: String, duration: Option<f64>, state:
 }
 
 #[tauri::command]
-async fn transcribe_track(track_id: Value, stream_url: String, precise: Option<bool>, state: State<'_, AppState>) -> Result<Value, String> {
+async fn transcribe_track(
+    track_id: Value,
+    stream_url: String,
+    precise: Option<bool>,
+    title: Option<String>,
+    artist: Option<String>,
+    prompt: Option<String>,
+    state: State<'_, AppState>
+) -> Result<Value, String> {
     let id_str = if let Some(n) = track_id.as_i64() {
         n.to_string()
     } else if let Some(s) = track_id.as_str() {
@@ -195,7 +203,14 @@ async fn transcribe_track(track_id: Value, stream_url: String, precise: Option<b
     } else {
         track_id.to_string().trim_matches(&['"', '\''][..]).to_string()
     };
-    state.sc.transcribe_audio_stream(&id_str, &stream_url, precise.unwrap_or(false)).await
+    state.sc.transcribe_audio_stream(
+        &id_str,
+        &stream_url,
+        precise.unwrap_or(false),
+        title.as_deref(),
+        artist.as_deref(),
+        prompt.as_deref(),
+    ).await
 }
 
 #[tauri::command]
