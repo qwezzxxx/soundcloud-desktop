@@ -17160,7 +17160,7 @@
 
 
 
-    let pendingSessionSeek = null;
+    window._pendingSeekTime = 0;
 
 
 
@@ -17429,6 +17429,7 @@
 
     function saveSessionState(sync = false) {
       try {
+        const curTime = audioEngine ? (audioEngine.currentTime || 0) : (window._pendingSeekTime || 0);
         let curTrack = null;
         if (currentQueue && currentTrackIndex >= 0 && currentTrackIndex < currentQueue.length) {
           curTrack = currentQueue[currentTrackIndex];
@@ -17436,9 +17437,6 @@
           curTrack = allTracks.find(t => String(t.id) === String(currentlyPlayingTrackId));
         }
 
-        const curTime = pendingSessionSeek?.trackId === String(curTrack?.id)
-          ? pendingSessionSeek.time
-          : (audioEngine?.currentTime || 0);
         const sessionData = {
           trackIndex: currentTrackIndex,
           trackId: curTrack ? curTrack.id : currentlyPlayingTrackId,
@@ -17613,9 +17611,7 @@
             }
           }
 
-          pendingSessionSeek = session.currentTime > 0
-            ? { trackId: String(track.id), time: session.currentTime }
-            : null;
+          window._pendingSeekTime = session.currentTime || 0;
           try { updatePlayerLikeState(); } catch (_) {}
           updateQueueDrawer();
           renderLikedTable();
@@ -17769,7 +17765,6 @@
         currentlyPlayingTrackId = track.id;
         discordPlaybackTrack = null;
         const requestId = ++currentPlayRequestId;
-        if (pendingSessionSeek?.trackId !== String(track.id)) pendingSessionSeek = null;
 
         // Wave tracking
         if (isWaveActive) {
@@ -17842,17 +17837,13 @@
             streamInfo = await requestStreamUrl(track.id);
             if (streamInfo) cacheStreamUrl(track.id, streamInfo);
           } catch (resolveErr) {
-            if (requestId !== currentPlayRequestId) return;
+            setPlayerLoading(false);
             const msg = resolveErr && resolveErr.message ? resolveErr.message : String(resolveErr || '');
             logD(`getStreamUrl failed for ${track.id}: ${msg}`);
-            if (/\bHTTP (401|429)\b/.test(msg)) {
-              setPlayerLoading(false);
-              isPlaying = false;
-              syncPlayPauseState(false);
-              notify(`⚠️ ${msg}`, '❌');
-              return;
+            if (requestId === currentPlayRequestId) {
+              notify(`⚠️ ${msg || 'Не удалось получить поток трека'}`, '❌');
+              handleTrackPlaybackFailure(track, 'resolveError', { noRetry: true });
             }
-            handleTrackPlaybackFailure(track, 'resolveError', { noRetry: true });
             return;
           }
         }
@@ -17870,15 +17861,14 @@
         }
 
         const handlePlaybackStart = () => {
-          if (requestId !== currentPlayRequestId) return;
-          if (pendingSessionSeek?.trackId === String(track.id)) {
+          if (window._pendingSeekTime && window._pendingSeekTime > 0) {
             try {
-              audioEngine.currentTime = pendingSessionSeek.time;
+              audioEngine.currentTime = window._pendingSeekTime;
             } catch (_) {}
-            pendingSessionSeek = null;
+            window._pendingSeekTime = 0;
           }
           saveSessionState();
-          startAutomaticKaraoke(track, streamUrl);
+          if (requestId === currentPlayRequestId) startAutomaticKaraoke(track, streamUrl);
         };
 
         discordPlaybackTrack = track;
