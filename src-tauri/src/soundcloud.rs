@@ -1607,9 +1607,39 @@ impl SoundCloudClient {
     }
 
     fn whisper_has_lyric_words(text: &str) -> bool {
-        let label = text.trim().trim_matches(|c: char| c.is_whitespace() || "[]()♪♫".contains(c));
-        label.chars().any(char::is_alphanumeric)
-            && !matches!(label.to_lowercase().as_str(), "music" | "instrumental" | "background music" | "музыка" | "инструментал")
+        let label = text.trim().trim_matches(|c: char| c.is_whitespace() || "[]()♪♫«»\"'".contains(c));
+        if !label.chars().any(char::is_alphanumeric) {
+            return false;
+        }
+        let lower = label.to_lowercase();
+        let is_noise = matches!(
+            lower.as_str(),
+            "music" | "instrumental" | "background music" | "музыка" | "инструментал" | "апплодисменты" | "applause"
+        ) || lower.contains("субтитр")
+          || lower.contains("subtitl")
+          || lower.contains("dimator")
+          || lower.contains("дима торжок")
+          || lower.contains("диматор")
+          || lower.contains("корректор")
+          || lower.contains("подогнал")
+          || lower.contains("симон")
+          || lower.contains("семкин")
+          || lower.contains("семецкая")
+          || lower.contains("синецкая")
+          || lower.contains("сухиашвили")
+          || lower.contains("кулакова")
+          || lower.contains("егорова")
+          || lower.contains("community.org")
+          || lower.contains("opensubtitles")
+          || lower.contains("amara.org")
+          || lower.contains("редактор")
+          || lower.contains("перевод")
+          || lower.contains("подписывайтесь")
+          || lower.contains("ставьте лайк")
+          || lower.contains("приятного просмотра")
+          || lower.contains("thank you for watching")
+          || lower.contains("thanks for watching");
+        !is_noise
     }
 
     fn clean_whisper_lrc(lrc: &str) -> String {
@@ -1674,7 +1704,15 @@ impl SoundCloudClient {
         scored > 0 && weak * 2 >= scored
     }
 
-    pub async fn transcribe_audio_stream(&self, track_id: &str, stream_url: &str, precise: bool) -> Result<Value, String> {
+    pub async fn transcribe_audio_stream(
+        &self,
+        track_id: &str,
+        stream_url: &str,
+        precise: bool,
+        title: Option<&str>,
+        artist: Option<&str>,
+        prompt: Option<&str>,
+    ) -> Result<Value, String> {
         let clean_id: String = track_id.chars().filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-').collect();
         if clean_id.is_empty() {
             return Err("Invalid track id".to_string());
@@ -1683,9 +1721,13 @@ impl SoundCloudClient {
         // Serialize decoding and check the cache again for queued requests.
         let _job = self.whisper_job.lock().await;
         let cache_dir = self.lyrics_cache_dir();
-        let suffix = if precise { "large-v3-turbo-q5.v2" } else { "v2" };
-        let cache_file = cache_dir.join(format!("{}.{}.lrc", clean_id, suffix));
-        if let Ok(content) = fs::read_to_string(&cache_file) {
+        let suffix_v3 = if precise { "large-v3-turbo-q5.v3" } else { "v3" };
+        let suffix_v2 = if precise { "large-v3-turbo-q5.v2" } else { "v2" };
+        let cache_file_v3 = cache_dir.join(format!("{}.{}.lrc", clean_id, suffix_v3));
+        let cache_file_v2 = cache_dir.join(format!("{}.{}.lrc", clean_id, suffix_v2));
+
+        let cached_content = fs::read_to_string(&cache_file_v3).or_else(|_| fs::read_to_string(&cache_file_v2));
+        if let Ok(content) = cached_content {
             let content = Self::clean_whisper_lrc(&content);
             let plain = Self::whisper_lyrics_result(content, precise);
             let plain_text = plain.get("plainLyrics").and_then(Value::as_str).unwrap_or_default();
@@ -1706,7 +1748,7 @@ impl SoundCloudClient {
         let temp_out_base = temp_dir.path().join("lyrics");
         let temp_lrc = temp_out_base.with_extension("lrc");
 
-        // 2. Convert stream into 16kHz mono WAV using ffmpeg
+        // 2. Convert stream into 16kHz mono WAV using ffmpeg with vocal optimization filter
         let mut ff_cmd = tokio::process::Command::new(&ffmpeg_exe);
         ff_cmd.kill_on_drop(true).args([
             "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
@@ -1719,7 +1761,14 @@ impl SoundCloudClient {
         } else {
             ff_cmd.args(["-t", "360"]);
         }
-        ff_cmd.args(["-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le"]).arg(&temp_wav);
+        // Vocal optimization:
+        // highpass=f=120: cut off deep 808 sub-bass, kick punch rumble
+        // lowpass=f=7500: cut off cymbal/hi-hat sizzle and extreme high frequencies
+        // acompressor: normalize dynamics so quiet verses and loud hooks are balanced
+        ff_cmd.args([
+            "-af", "highpass=f=120,lowpass=f=7500,acompressor=threshold=-18dB:ratio=3:attack=5:release=50",
+            "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le"
+        ]).arg(&temp_wav);
         #[cfg(windows)]
         ff_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
@@ -1738,6 +1787,31 @@ impl SoundCloudClient {
             self.ensure_whisper_model().await?
         };
 
+        // Construct bilingual / context prompt
+        let prompt_arg: Option<String> = {
+            if let Some(p) = prompt.filter(|p| !p.trim().is_empty()) {
+                let snippet: String = p.trim().chars().take(350).collect();
+                Some(snippet)
+            } else {
+                let t = title.unwrap_or("").trim();
+                let a = artist.unwrap_or("").trim();
+                if !t.is_empty() || !a.is_empty() {
+                    let mut s = String::new();
+                    if !a.is_empty() && !t.is_empty() {
+                        s.push_str(&format!("{}: {}. ", a, t));
+                    } else if !t.is_empty() {
+                        s.push_str(&format!("{}. ", t));
+                    } else if !a.is_empty() {
+                        s.push_str(&format!("{}. ", a));
+                    }
+                    s.push_str("Текст песни, lyrics, song.");
+                    Some(s)
+                } else {
+                    None
+                }
+            }
+        };
+
         // 3. Run the installed model first and emit JSON confidence data too.
         let temp_json = temp_out_base.with_extension("json");
         let run_whisper = |model: &Path, output_base: &Path| {
@@ -1745,8 +1819,20 @@ impl SoundCloudClient {
             cmd.kill_on_drop(true)
                 .arg("-m").arg(model)
                 .arg("-f").arg(&temp_wav)
-                .args(["-olrc", "-ojf", "-l", "auto", "-t", "4", "-np"])
+                .args([
+                    "-olrc", "-ojf",
+                    "-l", "auto",
+                    "-t", "4",
+                    "-np",
+                    "-sns",
+                    "-sow",
+                    "-ml", "48",
+                    "--no-speech-thold", "0.65"
+                ])
                 .arg("-of").arg(output_base);
+            if let Some(ref p) = prompt_arg {
+                cmd.arg("--prompt").arg(p);
+            }
             if precise {
                 cmd.args(["-nfa", "-dtw", "large.v3.turbo"]);
             }
@@ -1799,14 +1885,22 @@ impl SoundCloudClient {
             return Err("В треке не обнаружено разборчивого текста".to_string());
         }
 
-        let lrc = if precise {
+        let lrc = if let Some(ref plain_text) = prompt.filter(|p| p.trim().len() > 30) {
+            if let Some(aligned) = Self::align_plain_lyrics_to_timestamps(plain_text, &clean_lrc) {
+                aligned
+            } else if precise {
+                Self::whisper_word_lrc(&temp_json).unwrap_or(clean_lrc)
+            } else {
+                clean_lrc
+            }
+        } else if precise {
             Self::whisper_word_lrc(&temp_json).unwrap_or(clean_lrc)
         } else {
             clean_lrc
         };
         if let Ok(mut staged) = tempfile::NamedTempFile::new_in(&cache_dir) {
             if std::io::Write::write_all(&mut staged, lrc.as_bytes()).is_ok() {
-                let _ = staged.persist(&cache_file);
+                let _ = staged.persist(&cache_file_v3);
             }
         }
         Ok(Self::whisper_lyrics_result(lrc, precise))
@@ -1859,6 +1953,121 @@ impl SoundCloudClient {
         (!lines.is_empty()).then(|| lines.join("\n"))
     }
 
+    fn align_plain_lyrics_to_timestamps(plain_lyrics: &str, whisper_lrc: &str) -> Option<String> {
+        let official_lines: Vec<&str> = plain_lyrics.lines()
+            .map(str::trim)
+            .filter(|l| {
+                if l.is_empty() { return false; }
+                if l.starts_with('[') && l.ends_with(']') { return false; }
+                if l.starts_with('(') && l.ends_with(')') && l.to_lowercase().contains("instrumental") { return false; }
+                l.chars().any(char::is_alphanumeric)
+            })
+            .collect();
+
+        if official_lines.is_empty() {
+            return None;
+        }
+
+        let mut whisper_segments: Vec<(&str, &str, u64)> = Vec::new();
+        for line in whisper_lrc.lines() {
+            let line = line.trim();
+            if let Some((tag, text)) = line.split_once(']') {
+                let tag = tag.trim_start_matches('[');
+                if let Some((min_str, sec_str)) = tag.split_once(':') {
+                    if let (Ok(min), Ok(sec)) = (min_str.parse::<u64>(), sec_str.parse::<f64>()) {
+                        let ms = min * 60_000 + (sec * 1000.0) as u64;
+                        let text = text.trim();
+                        let clean_text = text.split('<').next().unwrap_or(text).trim();
+                        if !clean_text.is_empty() {
+                            whisper_segments.push((tag, clean_text, ms));
+                        }
+                    }
+                }
+            }
+        }
+
+        if whisper_segments.is_empty() {
+            return None;
+        }
+
+        let normalize_words = |s: &str| -> Vec<String> {
+            s.to_lowercase()
+                .split(|c: char| !c.is_alphanumeric())
+                .filter(|w| !w.is_empty())
+                .map(String::from)
+                .collect()
+        };
+
+        let word_overlap = |a: &[String], b: &[String]| -> f32 {
+            if a.is_empty() || b.is_empty() { return 0.0; }
+            let mut matches = 0;
+            for w in a {
+                if b.contains(w) { matches += 1; }
+            }
+            (2.0 * matches as f32) / (a.len() + b.len()) as f32
+        };
+
+        let official_words: Vec<Vec<String>> = official_lines.iter().map(|l| normalize_words(l)).collect();
+        let whisper_words: Vec<Vec<String>> = whisper_segments.iter().map(|(_, t, _)| normalize_words(t)).collect();
+
+        let mut matched_indices: Vec<Option<usize>> = vec![None; official_lines.len()];
+        let mut last_whisper_idx = 0;
+        let mut match_count = 0;
+
+        for (off_idx, off_w) in official_words.iter().enumerate() {
+            if off_w.is_empty() { continue; }
+            let mut best_score = 0.28;
+            let mut best_idx = None;
+
+            let max_search = (last_whisper_idx + 8).min(whisper_segments.len());
+            for w_idx in last_whisper_idx..max_search {
+                let score = word_overlap(off_w, &whisper_words[w_idx]);
+                if score > best_score {
+                    best_score = score;
+                    best_idx = Some(w_idx);
+                }
+            }
+
+            if let Some(idx) = best_idx {
+                matched_indices[off_idx] = Some(idx);
+                last_whisper_idx = idx;
+                match_count += 1;
+            }
+        }
+
+        if match_count == 0 || match_count * 4 < official_lines.len().min(8) {
+            return None;
+        }
+
+        let mut final_lrc = Vec::new();
+        let mut anchor_time = whisper_segments[matched_indices.iter().flatten().next().copied().unwrap_or(0)].2;
+
+        for (i, &line) in official_lines.iter().enumerate() {
+            let timestamp_ms = if let Some(w_idx) = matched_indices[i] {
+                anchor_time = whisper_segments[w_idx].2;
+                anchor_time
+            } else {
+                let next_anchor = matched_indices.iter().enumerate()
+                    .skip(i + 1)
+                    .find_map(|(next_i, opt)| opt.map(|w_idx| (next_i, whisper_segments[w_idx].2)));
+
+                if let Some((next_i, next_time)) = next_anchor {
+                    let step = (next_time.saturating_sub(anchor_time)) / ((next_i - i + 1) as u64);
+                    anchor_time + step
+                } else {
+                    anchor_time + 3000
+                }
+            };
+
+            let mins = timestamp_ms / 60_000;
+            let secs = (timestamp_ms % 60_000) / 1000;
+            let centis = (timestamp_ms % 1000) / 10;
+            final_lrc.push(format!("[{:02}:{:02}.{:02}]{}", mins, secs, centis, line));
+        }
+
+        Some(final_lrc.join("\n"))
+    }
+
     fn whisper_lyrics_result(lrc: String, precise: bool) -> Value {
         let plain = lrc.lines()
             .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
@@ -1888,7 +2097,7 @@ impl SoundCloudClient {
             "plainLyrics": plain,
             "isAi": true,
             "whisperPrecise": precise,
-            "whisperRevision": precise.then_some(2)
+            "whisperRevision": precise.then_some(3)
         })
     }
 
@@ -5168,8 +5377,16 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             Self::fetch_genius_lyrics(&http_g, &g_title, &g_artist).await
         };
 
-        // Run LRCLIB and Genius concurrently!
-        let (lrclib_res, genius_res) = tokio::join!(lrclib_task, genius_task);
+        // 3. Parallel Task C: QQ Music (Tencent global synced lyrics database)
+        let http_q = self.http.clone();
+        let q_title = clean_title.clone();
+        let q_artist = clean_artist.clone();
+        let qq_task = async move {
+            Self::fetch_qq_lyrics(&http_q, &q_title, &q_artist, dur_val).await
+        };
+
+        // Run LRCLIB, QQ Music, and Genius concurrently!
+        let (lrclib_res, qq_res, genius_res) = tokio::join!(lrclib_task, qq_task, genius_task);
 
         // 1. If LRCLIB found synced lyrics, prioritize it!
         if let Some(ref lrc_data) = lrclib_res {
@@ -5178,7 +5395,14 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             }
         }
 
-        // 2. If Genius found lyrics, return it immediately
+        // 2. If QQ Music found synced lyrics, prioritize it!
+        if let Some(ref qq_data) = qq_res {
+            if qq_data.get("syncedLyrics").and_then(|s| s.as_str()).map(|s| s.trim().len() > 15).unwrap_or(false) {
+                return Ok(qq_data.clone());
+            }
+        }
+
+        // 3. If Genius found lyrics, return it immediately
         if let Some(genius_lyrics) = genius_res {
             let mut obj = serde_json::Map::new();
             obj.insert("plainLyrics".to_string(), Value::String(genius_lyrics));
@@ -5189,12 +5413,77 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             return Ok(Value::Object(obj));
         }
 
-        // 3. If LRCLIB found plain lyrics, return it
+        // 4. If LRCLIB found plain lyrics, return it
         if let Some(lrc_data) = lrclib_res {
             return Ok(lrc_data);
         }
 
+        // 5. If QQ Music found plain lyrics, return it
+        if let Some(qq_data) = qq_res {
+            return Ok(qq_data);
+        }
+
         Err("Lyrics not found".to_string())
+    }
+
+    pub async fn fetch_qq_lyrics(http: &reqwest::Client, title: &str, artist: &str, duration: Option<f64>) -> Option<Value> {
+        let query = format!("{} {}", artist, title).trim().to_string();
+        if query.is_empty() { return None; }
+
+        let search_url = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp";
+        let res = tokio::time::timeout(
+            std::time::Duration::from_millis(2500),
+            http.get(search_url)
+                .query(&[("w", query.as_str()), ("format", "json"), ("p", "1"), ("n", "5")])
+                .header("Referer", "https://y.qq.com")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .send()
+        ).await.ok()?.ok()?;
+
+        if !res.status().is_success() { return None; }
+        let data: Value = res.json().await.ok()?;
+        let songs = data.get("data")?.get("song")?.get("list")?.as_array()?;
+
+        for song in songs {
+            let songmid = song.get("songmid")?.as_str()?;
+            let song_dur = song.get("interval").and_then(Value::as_f64);
+            if let (Some(target_dur), Some(cand_dur)) = (duration, song_dur) {
+                if (target_dur - cand_dur).abs() > 6.0 {
+                    continue;
+                }
+            }
+
+            let lyric_url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg";
+            let lyr_res = tokio::time::timeout(
+                std::time::Duration::from_millis(2500),
+                http.get(lyric_url)
+                    .query(&[("songmid", songmid), ("format", "json"), ("nobase64", "1")])
+                    .header("Referer", "https://y.qq.com")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .send()
+            ).await.ok()?.ok()?;
+
+            if !lyr_res.status().is_success() { continue; }
+            let lyr_data: Value = lyr_res.json().await.ok()?;
+            let lyric = lyr_data.get("lyric").and_then(Value::as_str)?;
+            if lyric.trim().len() > 20 && lyric.contains('[') {
+                let plain = lyric.lines()
+                    .map(|l| if let Some(idx) = l.find(']') { l[idx + 1..].trim() } else { l.trim() })
+                    .filter(|l| !l.is_empty() && !l.starts_with("[ti:") && !l.starts_with("[ar:") && !l.starts_with("[al:") && !l.starts_with("[by:") && !l.starts_with("[offset:"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                let mut obj = serde_json::Map::new();
+                obj.insert("syncedLyrics".to_string(), Value::String(lyric.to_string()));
+                obj.insert("plainLyrics".to_string(), Value::String(plain));
+                obj.insert("source".to_string(), Value::String("qqmusic".to_string()));
+                obj.insert("trackName".to_string(), Value::String(title.to_string()));
+                obj.insert("artistName".to_string(), Value::String(artist.to_string()));
+                obj.insert("duration".to_string(), serde_json::json!(duration.or(song_dur).unwrap_or(0.0)));
+                return Some(Value::Object(obj));
+            }
+        }
+        None
     }
 
     pub async fn fetch_genius_lyrics(http: &reqwest::Client, title: &str, artist: &str) -> Option<String> {
