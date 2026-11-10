@@ -3941,173 +3941,9 @@
       color: var(--accent-contrast, #ffffff) !important;
     }
 
-    /* Profile Card Theme Adaptations (Distinct for each theme) */
-    .profile-header-card {
-      background-color: var(--card-bg) !important;
-      border-color: var(--panel-border, rgba(255, 255, 255, 0.08)) !important;
-      transition: all 0.35s ease;
-    }
-
-    /* 1. Wine Glow Profile */
-    body.theme-wine .profile-header-card {
-      background: radial-gradient(circle at 80% 20%, rgba(225, 29, 72, 0.20) 0%, rgba(22, 20, 28, 0.88) 65%) !important;
-      border-color: rgba(225, 29, 72, 0.25) !important;
-      box-shadow: 0 10px 30px rgba(136, 19, 55, 0.20) !important;
-    }
-    body.theme-wine .profile-stat-badge {
-      background-color: rgba(225, 29, 72, 0.10) !important;
-      border-color: rgba(225, 29, 72, 0.20) !important;
-    }
-    body.theme-wine .profile-action-btn {
-      background-color: rgba(225, 29, 72, 0.12) !important;
-      border-color: rgba(225, 29, 72, 0.25) !important;
-    }
-
-    /* 2. OLED Pure Black Profile */
-    body.theme-oled .profile-header-card {
-      background-color: #030303 !important;
-      background-image: none !important;
-      border-color: rgba(255, 255, 255, 0.12) !important;
-      box-shadow: none !important;
-    }
-    body.theme-oled .profile-stat-badge {
-      background-color: #0c0c0e !important;
-      border-color: rgba(255, 255, 255, 0.08) !important;
-    }
-    body.theme-oled .profile-action-btn {
-      background-color: #0e0e12 !important;
-      border-color: rgba(255, 255, 255, 0.12) !important;
-    }
-
-    /* 3. Clean Light Theme Profile */
-    body.theme-light .profile-header-card {
-      background: rgba(255, 255, 255, 0.98) !important;
-      border-color: rgba(226, 232, 240, 0.90) !important;
-      box-shadow: 0 10px 35px -5px rgba(15, 23, 42, 0.07), 0 0 0 1px rgba(226, 232, 240, 0.6) !important;
-    }
-    body.theme-light #tab-profile h1,
-    body.theme-light #profile-name-text {
-      color: #0f172a !important;
-    }
-    body.theme-light #tab-profile p,
-    body.theme-light #profile-status-sub {
+    body.theme-light #tab-profile p {
       color: #64748b !important;
     }
-    body.theme-light .profile-stat-badge {
-      background-color: #f1f5f9 !important;
-      border-color: #e2e8f0 !important;
-    }
-    body.theme-light .profile-stat-badge span,
-    body.theme-light .profile-stat-badge span.text-white,
-    body.theme-light .profile-stat-badge #profile-likes-stat,
-    body.theme-light .profile-stat-badge #profile-following-stat,
-    body.theme-light .profile-stat-badge #profile-playlists-stat,
-    body.theme-light .profile-stat-badge #profile-tracks-stat {
-      color: #0f172a !important;
-    }
-    body.theme-light .profile-stat-badge span.text-neutral-400 {
-      color: #64748b !important;
-    }
-    body.theme-light .profile-action-btn {
-      background-color: #f1f5f9 !important;
-      border-color: #cbd5e1 !important;
-      color: #0f172a !important;
-    }
-    body.theme-light .profile-action-btn span {
-      color: #0f172a !important;
-    }
-    body.theme-light .profile-action-btn:hover {
-      background-color: #e2e8f0 !important;
-      color: #020617 !important;
-    }
-    body.theme-light #profile-logout-btn {
-      background-color: #fff1f2 !important;
-      border-color: #fecdd3 !important;
-      color: #e11d48 !important;
-    }
-    body.theme-light #profile-logout-btn:hover {
-      background-color: #ffe4e6 !important;
-      color: #be123c !important;
-    }
-    body.theme-light #profile-avatar-big {
-      background-color: #f8fafc !important;
-      border-color: #cbd5e1 !important;
-    }
-
-    /* 4. Cyber Cyan Theme Profile */
-    body.theme-cyan .profile-header-card {
-      background: linear-gradient(135deg, rgba(6, 10, 22, 0.88) 0%, rgba(13, 20, 40, 0.88) 100%) !important;
-      border-color: rgba(0, 245, 255, 0.35) !important;
-      box-shadow: 0 10px 30px rgba(0, 245, 255, 0.15) !important;
-    }
-    body.theme-cyan .profile-stat-badge {
-      background-color: rgba(0, 245, 255, 0.08) !important;
-      border-color: rgba(0, 245, 255, 0.20) !important;
-    }
-    body.theme-cyan .profile-action-btn {
-      background-color: rgba(0, 245, 255, 0.10) !important;
-      border-color: rgba(0, 245, 255, 0.30) !important;
-    }
-
-    /* 5. Flame Theme Profile */
-    body.theme-flame .profile-header-card {
-      background: radial-gradient(circle at 80% 20%, rgba(255, 85, 0, 0.18) 0%, rgba(20, 16, 18, 0.88) 65%) !important;
-      border-color: rgba(255, 85, 0, 0.25) !important;
-      box-shadow: 0 10px 30px rgba(255, 85, 0, 0.15) !important;
-    }
-    body.theme-flame .profile-stat-badge {
-      background-color: rgba(255, 85, 0, 0.08) !important;
-      border-color: rgba(255, 85, 0, 0.20) !important;
-    }
-    body.theme-flame .profile-action-btn {
-      background-color: rgba(255, 85, 0, 0.10) !important;
-      border-color: rgba(255, 85, 0, 0.25) !important;
-    }
-
-    /* 6. Emerald Theme Profile */
-    body.theme-emerald .profile-header-card {
-      background: radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.18) 0%, rgba(18, 26, 22, 0.88) 65%) !important;
-      border-color: rgba(16, 185, 129, 0.25) !important;
-      box-shadow: 0 10px 30px rgba(16, 185, 129, 0.15) !important;
-    }
-    body.theme-emerald .profile-stat-badge {
-      background-color: rgba(16, 185, 129, 0.08) !important;
-      border-color: rgba(16, 185, 129, 0.20) !important;
-    }
-
-    /* 7. Amethyst Theme Profile */
-    body.theme-amethyst .profile-header-card {
-      background: radial-gradient(circle at 80% 20%, rgba(168, 85, 247, 0.18) 0%, rgba(22, 18, 32, 0.88) 65%) !important;
-      border-color: rgba(168, 85, 247, 0.25) !important;
-      box-shadow: 0 10px 30px rgba(168, 85, 247, 0.15) !important;
-    }
-    body.theme-amethyst .profile-stat-badge {
-      background-color: rgba(168, 85, 247, 0.08) !important;
-      border-color: rgba(168, 85, 247, 0.20) !important;
-    }
-
-    /* 8. Sunset Theme Profile */
-    body.theme-sunset .profile-header-card {
-      background: radial-gradient(circle at 80% 20%, rgba(249, 115, 22, 0.18) 0%, rgba(24, 18, 22, 0.88) 65%) !important;
-      border-color: rgba(249, 115, 22, 0.25) !important;
-      box-shadow: 0 10px 30px rgba(249, 115, 22, 0.15) !important;
-    }
-    body.theme-sunset .profile-stat-badge {
-      background-color: rgba(249, 115, 22, 0.08) !important;
-      border-color: rgba(249, 115, 22, 0.20) !important;
-    }
-
-    /* 9. Midnight Theme Profile */
-    body.theme-midnight .profile-header-card {
-      background: radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.18) 0%, rgba(16, 20, 34, 0.88) 65%) !important;
-      border-color: rgba(59, 130, 246, 0.25) !important;
-      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.15) !important;
-    }
-    body.theme-midnight .profile-stat-badge {
-      background-color: rgba(59, 130, 246, 0.08) !important;
-      border-color: rgba(59, 130, 246, 0.20) !important;
-    }
-
 
     /* Button contrast & text clarity in light mode */
     body.theme-light .btn-primary,
@@ -4176,11 +4012,6 @@
     }
     #progress-bar-fill, #immersive-progress-fill {
       transition: background-color 0.3s ease !important;
-    }
-    .profile-header-card {
-      transition: background 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-                  border-color 0.4s ease,
-                  box-shadow 0.4s ease !important;
     }
 
     /* Theme preset selector buttons in Settings */
@@ -4275,6 +4106,7 @@
 
 
 
+  <link rel="stylesheet" href="profile.css">
 </head>
 
 
@@ -8205,567 +8037,81 @@
 
 
 
-        <!-- Profile Hero Glass Card (Cohesive Obsidian Glass) -->
-
-
-
-
-
-
-
-        <div class="card-glass profile-header-card rounded-3xl p-6 sm:p-8 relative overflow-hidden w-full border border-white/5 shadow-2xl">
-
-
-
-
-
-
-
-          <!-- Ambient blurred reflection of user avatar -->
-
-
-
-
-
-
-
-          <div id="profile-ambient-bg" class="absolute inset-0 bg-cover bg-center opacity-25 filter blur-3xl scale-125 pointer-events-none transition-all duration-700"></div>
-
-
-
-
-
-
-
-          <div class="absolute inset-0 bg-gradient-to-r from-black/20 via-black/10 to-transparent pointer-events-none"></div>
-
-
-
-
-
-
-
-          <div id="profile-glow-blob" class="absolute -right-20 -top-20 w-80 h-80 rounded-full blur-3xl pointer-events-none opacity-25" style="background-color: var(--accent);"></div>
-
-
-
-
-
-
-
-          <div class="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-6">
-
-
-
-
-
-
-
-            <!-- Big Avatar with illuminated ring -->
-
-
-
-
-
-
-
-            <div class="relative group shrink-0">
-
-
-
-
-
-
-
-              <div id="profile-avatar-big" class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-neutral-900 border border-white/20 p-0.5 shadow-2xl flex items-center justify-center overflow-hidden">
-
-
-
-
-
-
-
-                <svg class="w-12 h-12 text-neutral-400" viewBox="0 0 24 24" fill="currentColor">
-
-
-
-
-
-
-
-                  <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd" />
-
-
-
-
-
-
-
-                </svg>
-
-
-
-
-
-
-
-              </div>
-
-
-
-
-
-
-
+        <section class="profile-header-card" aria-labelledby="profile-name-text">
+          <div class="profile-identity">
+            <svg class="profile-cover" viewBox="0 0 540 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <path id="profile-cover-line" class="profile-cover-line" d="M0 70 H210 L232 58 244 82 262 36 280 106 298 57 314 86 329 63 346 70 H560"/>
+              </defs>
+              <circle class="profile-cover-sun" cx="417" cy="68" r="50" fill="currentColor" opacity=".24"/>
+              <g fill="none" stroke="currentColor">
+                <use href="#profile-cover-line" y="-60" opacity=".42"/>
+                <use href="#profile-cover-line" y="-50" opacity=".42"/>
+                <use href="#profile-cover-line" y="-40" opacity=".9"/>
+                <use href="#profile-cover-line" y="-30" opacity=".42"/>
+                <use href="#profile-cover-line" y="-20" opacity=".42"/>
+                <use href="#profile-cover-line" y="-10" opacity=".42"/>
+                <use href="#profile-cover-line" y="0" opacity=".9"/>
+                <use href="#profile-cover-line" y="10" opacity=".42"/>
+                <use href="#profile-cover-line" y="20" opacity=".42"/>
+                <use href="#profile-cover-line" y="30" opacity=".42"/>
+                <use href="#profile-cover-line" y="40" opacity=".9"/>
+                <use href="#profile-cover-line" y="50" opacity=".42"/>
+                <use href="#profile-cover-line" y="60" opacity=".42"/>
+              </g>
+            </svg>
+            <div id="profile-avatar-big">
+              <svg class="w-1/2 h-1/2" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"> <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd" /> </svg>
             </div>
-
-
-
-
-
-
-
-            <!-- Identity and Stats -->
-
-
-
-
-
-
-
-            <div class="space-y-4 flex-1 text-center md:text-left">
-
-
-
-
-
-
-
-              <div>
-
-
-
-
-
-
-
-                <h1 id="profile-name-text" class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">SoundCloud User</h1>
-
-
-
-
-
-
-
-                <p id="profile-status-sub" class="text-xs text-neutral-400 mt-1">Профиль пользователя ONYX</p>
-
-
-
-
-
-
-
-              </div>
-
-
-
-
-
-
-
-              <!-- Sleek Stat Badges -->
-
-
-
-
-
-
-
-              <div class="flex flex-wrap items-center justify-center md:justify-start gap-2.5 pt-1">
-
-
-
-
-
-
-
-                <button id="profile-stat-likes-card" class="profile-stat-badge px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/10 border border-white/5 hover:border-white/15 transition-all flex items-center gap-2 text-xs cursor-pointer group" title="Перейти к лайкам">
-
-
-
-
-
-
-
-                  <svg class="w-3.5 h-3.5 text-rose-400 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-
-
-
-
-
-
-
-                  <span class="font-bold text-white" id="profile-likes-stat">0</span>
-
-
-
-
-
-
-
-                  <span class="text-neutral-400 group-hover:text-neutral-200">любимых</span>
-
-
-
-
-
-
-
-                </button>
-
-
-
-
-
-
-
-                <div class="px-4 py-2 rounded-xl bg-white/[0.04] border border-white/5 flex items-center gap-2 text-xs">
-
-
-
-
-
-
-
-                  <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-
-
-
-
-
-
-
-                  <span class="font-bold text-white" id="profile-following-stat">0</span>
-
-
-
-
-
-
-
-                  <span class="text-neutral-400">подписок</span>
-
-
-
-
-
-
-
-                </div>
-
-
-
-
-
-
-
-                <div class="profile-stat-badge px-4 py-2 rounded-xl bg-white/[0.04] border border-white/5 flex items-center gap-2 text-xs">
-                  <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
-
-
-
-
-
-
-
-                  <span class="font-bold text-white" id="profile-playlists-stat">0</span>
-
-
-
-
-
-
-
-                  <span class="text-neutral-400">плейлистов</span>
-
-
-
-
-
-
-
-                </div>
-
-
-
-
-
-
-
-                <div class="profile-stat-badge px-4 py-2 rounded-xl bg-white/[0.04] border border-white/5 flex items-center gap-2 text-xs">
-                  <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/></svg>
-
-
-
-
-
-
-
-                  <span class="font-bold text-white" id="profile-tracks-stat">0</span>
-
-
-
-
-
-
-
-                  <span class="text-neutral-400">в медиатеке</span>
-
-
-
-
-
-
-
-                </div>
-
-
-
-
-
-
-
-              </div>
-
-
-
-
-
-
-
-            </div>
-
-
-
-
-
-
-
+            <h1 id="profile-name-text">SoundCloud User</h1>
           </div>
-
-
-
-
-
-
-
-          <!-- Actions Toolbar -->
-
-
-
-
-
-
-
-          <div class="mt-6 pt-5 border-t border-white/5 flex flex-wrap items-center justify-between gap-3 relative z-10">
-
-
-
-
-
-
-
-            <div class="flex flex-wrap items-center gap-2.5">
-
-
-
-
-
-
-
-              <button id="profile-login-btn" class="hidden px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer border border-white/10">
-
-
-
-
-
-
-
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
-
-
-
-
-
-
-
-                <span>Войти в аккаунт</span>
-
-
-
-
-
-
-
-              </button>
-
-
-
-
-
-
-
-              <button id="profile-open-web-btn" class="profile-action-btn px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-semibold flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer border border-white/10">
-
-
-
-
-
-
-
-                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
-
-
-
-
-
-
-
-                <span>soundcloud.com</span>
-
-
-
-
-
-
-
-              </button>
-
-
-
-
-
-
-
-              <button id="profile-to-likes-btn" class="profile-action-btn px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-semibold flex items-center gap-2 border border-white/10 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer">
-
-
-
-
-
-
-
-                <svg class="w-3.5 h-3.5 text-rose-400 fill-current" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-
-
-
-
-
-
-
-                <span>Любимые</span>
-
-
-
-
-
-
-
-              </button>
-
-
-
-
-
-
-
-              <button id="profile-to-settings-btn" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-2 border border-white/10 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer">
-
-
-
-
-
-
-
-                <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-
-
-
-
-
-
-
-                <span>Настройки</span>
-
-
-
-
-
-
-
-              </button>
-
-
-
-
-
-
-
-            </div>
-
-
-
-
-
-
-
-            <button id="profile-logout-btn" class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-medium flex items-center gap-1.5 border border-rose-500/20 transition-all cursor-pointer">
-
-
-
-
-
-
-
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-
-
-
-
-
-
-
-              <span>Выйти</span>
-
-
-
-
-
-
-
+          <div class="profile-stats">
+            <button type="button" id="profile-stat-likes-card" title="Перейти к лайкам" class="profile-stat">
+              <svg class="w-3.5 h-3.5" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              <span class="profile-stat-value" id="profile-likes-stat">0</span>
+              <span class="profile-stat-label">Любимые</span>
             </button>
-
-
-
-
-
-
-
+            <div class="profile-stat">
+              <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+              <span class="profile-stat-value" id="profile-following-stat">0</span>
+              <span class="profile-stat-label">Подписки</span>
+            </div>
+            <div class="profile-stat">
+              <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+              <span class="profile-stat-value" id="profile-playlists-stat">0</span>
+              <span class="profile-stat-label">Плейлисты</span>
+            </div>
+            <div class="profile-stat">
+              <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/></svg>
+              <span class="profile-stat-value" id="profile-tracks-stat">0</span>
+              <span class="profile-stat-label">В медиатеке</span>
+            </div>
           </div>
-
-
-
-
-
-
-
-        </div>
-
-
-
-
-
-
+          <div class="profile-actions">
+            <div class="profile-action-group">
+              <button type="button" id="profile-login-btn" class="profile-action profile-action-primary">
+                <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+                <span>Войти в аккаунт</span>
+              </button>
+              <button type="button" id="profile-to-likes-btn" class="profile-action profile-action-primary">
+                <svg class="w-3.5 h-3.5" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                <span>Любимые</span>
+              </button>
+              <button type="button" id="profile-open-web-btn" class="profile-action">
+                <svg class="w-3.5 h-3.5" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+                <span>soundcloud.com</span>
+              </button>
+              <button type="button" id="profile-to-settings-btn" class="profile-action">
+                <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>Настройки</span>
+              </button>
+            </div>
+            <button type="button" id="profile-logout-btn" class="profile-action profile-logout" hidden>
+              <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+              <span>Выйти</span>
+            </button>
+          </div>
+        </section>
 
         <!-- Section: Избранные треки из профиля -->
 
@@ -23316,78 +22662,6 @@
 
 
 
-      const profAmbientBg = document.getElementById('profile-ambient-bg');
-
-
-
-
-
-
-
-      if (profAmbientBg) {
-
-
-
-
-
-
-
-        if (avatarUrl) {
-
-
-
-
-
-
-
-          profAmbientBg.style.backgroundImage = `url('${avatarUrl}')`;
-
-
-
-
-
-
-
-          profAmbientBg.style.opacity = '0.28';
-
-
-
-
-
-
-
-        } else {
-
-
-
-
-
-
-
-          profAmbientBg.style.backgroundImage = 'none';
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
-      }
-
-
-
-
-
-
-
       // 6. Profile Buttons visibility
 
 
@@ -23404,7 +22678,7 @@
 
 
 
-      if (profLoginBtn) profLoginBtn.style.display = isLoggedIn ? 'none' : 'inline-flex';
+      if (profLoginBtn) profLoginBtn.hidden = isLoggedIn;
 
 
 
@@ -23420,7 +22694,7 @@
 
 
 
-      if (profLogoutBtn) profLogoutBtn.style.display = isLoggedIn ? 'inline-flex' : 'none';
+      if (profLogoutBtn) profLogoutBtn.hidden = !isLoggedIn;
 
 
 
@@ -23628,15 +22902,7 @@
 
 
 
-          profileAvatarEl.className = "w-24 h-24 rounded-full bg-neutral-900 border-2 border-white/20 flex items-center justify-center shadow-2xl shrink-0 overflow-hidden";
-
-
-
-
-
-
-
-          profileAvatarEl.innerHTML = `<img src="${escapeMarkup(avatarUrl)}" class="w-full h-full object-cover rounded-full" alt="${escapeMarkup(username)}">`;
+          profileAvatarEl.innerHTML = `<img src="${escapeMarkup(avatarUrl)}" class="w-full h-full object-cover" alt="${escapeMarkup(username)}">`;
 
 
 
@@ -23740,15 +23006,7 @@
 
 
 
-          profileAvatarEl.className = "w-24 h-24 rounded-full bg-neutral-800/80 border-2 border-white/10 flex items-center justify-center shadow-2xl shrink-0 overflow-hidden";
-
-
-
-
-
-
-
-          profileAvatarEl.innerHTML = defaultAvatarHtml("w-12 h-12");
+          profileAvatarEl.innerHTML = defaultAvatarHtml();
 
 
 
