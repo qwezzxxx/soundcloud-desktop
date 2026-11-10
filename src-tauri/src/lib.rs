@@ -294,6 +294,11 @@ async fn get_system_playlist(urn: String, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
+async fn get_user_playlists(state: State<'_, AppState>) -> Result<Vec<Value>, String> {
+    state.sc.get_user_playlists().await
+}
+
+#[tauri::command]
 async fn get_related_tracks(track_id: Value, state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
     state.sc.get_related_tracks(track_id).await
 }
@@ -863,6 +868,7 @@ pub fn run() {
             resolve_tracks,
             get_mixed_selections,
             get_system_playlist,
+            get_user_playlists,
             get_related_tracks,
             open_browser_login,
             open_in_app_login,
