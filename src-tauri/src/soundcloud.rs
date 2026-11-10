@@ -457,6 +457,21 @@ mod likes_tests {
         fs::remove_file(folder.join("likes-state.json")).unwrap();
         fs::remove_dir(folder).unwrap();
     }
+
+    #[test]
+    fn expired_jwt_token_is_detected_and_user_extracted() {
+        // Sample token with exp=1000 (way in the past) and sub="soundcloud:users:1234567"
+        let header = "eyJhbGciOiJSUzI1NiIsInR5cCI6ImF0K0pXVCJ9";
+        let payload = "eyJzdWIiOiJzb3VuZGNsb3VkOnVzZXJzOjEyMzQ1NjciLCJleHAiOjEwMDB9";
+        let fake_jwt = format!("{}.{}.fake_signature", header, payload);
+
+        assert!(SoundCloudClient::is_token_expired(&fake_jwt));
+        assert_eq!(SoundCloudClient::extract_user_id_from_token(&fake_jwt).as_deref(), Some("1234567"));
+
+        // Non-JWT token is not considered expired by format
+        assert!(!SoundCloudClient::is_token_expired("2-29384-12345"));
+        assert_eq!(SoundCloudClient::extract_user_id_from_token("2-29384-12345"), None);
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -710,10 +725,74 @@ impl SoundCloudClient {
 
 
 
+    fn decode_base64url(s: &str) -> Option<Vec<u8>> {
+        let mut table = [255u8; 256];
+        for (i, &b) in b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".iter().enumerate() {
+            table[b as usize] = i as u8;
+        }
+        table[b'+' as usize] = 62;
+        table[b'/' as usize] = 63;
+
+        let clean = s.trim_end_matches('=');
+        let mut bytes = Vec::with_capacity(clean.len() * 3 / 4);
+        let mut buf = 0u32;
+        let mut bits = 0;
+        for &b in clean.as_bytes() {
+            let val = table[b as usize];
+            if val == 255 { return None; }
+            buf = (buf << 6) | (val as u32);
+            bits += 6;
+            if bits >= 8 {
+                bits -= 8;
+                bytes.push((buf >> bits) as u8);
+            }
+        }
+        Some(bytes)
+    }
+
+    pub fn is_token_expired(token: &str) -> bool {
+        let clean = token.trim().strip_prefix("OAuth ").or_else(|| token.trim().strip_prefix("Bearer ")).unwrap_or(token.trim());
+        let mut parts = clean.split('.');
+        let _header = parts.next();
+        if let Some(payload_b64) = parts.next() {
+            if parts.next().is_some() {
+                if let Some(bytes) = Self::decode_base64url(payload_b64) {
+                    if let Ok(val) = serde_json::from_slice::<Value>(&bytes) {
+                        if let Some(exp) = val.get("exp").and_then(|v| v.as_i64()) {
+                            let now = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_secs() as i64)
+                                .unwrap_or(0);
+                            return now >= exp;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    pub fn extract_user_id_from_token(token: &str) -> Option<String> {
+        let clean = token.trim().strip_prefix("OAuth ").or_else(|| token.trim().strip_prefix("Bearer ")).unwrap_or(token.trim());
+        let mut parts = clean.split('.');
+        let _header = parts.next();
+        let payload_b64 = parts.next()?;
+        if parts.next().is_none() { return None; }
+        let bytes = Self::decode_base64url(payload_b64)?;
+        let val: Value = serde_json::from_slice(&bytes).ok()?;
+        let sub = val.get("sub").and_then(|v| v.as_str())?;
+        let uid = sub.rsplit(':').next()?;
+        if !uid.is_empty() && uid.chars().all(|c| c.is_ascii_digit()) {
+            Some(uid.to_string())
+        } else {
+            None
+        }
+    }
+
     fn auth_header(&self, cfg: &AppConfig) -> Option<String> {
         cfg.oauth_token.as_ref().and_then(|t| {
             let trimmed = t.trim().trim_matches(&['"', '\''][..]).trim();
-            if trimmed.is_empty() {
+            if trimmed.is_empty() || Self::is_token_expired(trimmed) {
                 None
             } else if trimmed.starts_with("OAuth ") || trimmed.starts_with("Bearer ") {
                 let parts: Vec<&str> = trimmed.splitn(2, ' ').collect();
@@ -1095,181 +1174,77 @@ impl SoundCloudClient {
 
 
         let (url, has_auth) = if let Some(ref _t) = token_opt {
-
-
-
             (format!("https://api-v2.soundcloud.com/me?client_id={}", client_id), true)
-
-
-
         } else if let Some(ref uid) = cfg.user_id {
-
-
-
             let uid_str = if let Some(n) = uid.as_i64() {
-
-
-
                 n.to_string()
-
-
-
             } else if let Some(s) = uid.as_str() {
-
-
-
                 s.to_string()
-
-
-
             } else {
-
-
-
                 uid.to_string().trim_matches('"').to_string()
-
-
-
             };
 
-
-
             if uid_str.is_empty() {
-
-
-
                 return Err("No user configured".to_string());
-
-
-
             }
-
-
 
             (format!("https://api-v2.soundcloud.com/users/{}?client_id={}", uid_str, client_id), false)
-
-
-
+        } else if let Some(ref raw_tok) = cfg.oauth_token {
+            if let Some(uid_str) = Self::extract_user_id_from_token(raw_tok) {
+                (format!("https://api-v2.soundcloud.com/users/{}?client_id={}", uid_str, client_id), false)
+            } else {
+                return Err("No oauth token or user configured".to_string());
+            }
         } else {
-
-
-
             return Err("No oauth token or user configured".to_string());
-
-
-
         };
 
-
-
-
-
-
-
         let mut req = self
-
-
-
             .http
-
-
-
             .get(&url)
-
-
-
             .header("User-Agent", USER_AGENT)
-
-
-
             .header("Accept", "application/json");
 
-
-
-
-
-
-
         if has_auth {
-
-
-
             if let Some(tok) = token_opt {
-
-
-
                 req = req.header("Authorization", tok);
-
-
-
             }
-
-
-
         }
 
-
-
-
-
-
-
-        let res = req
-
-
-
+        let mut res = req
             .send()
-
-
-
             .await
-
-
-
             .map_err(|e| e.to_string())?;
 
+        if res.status() == reqwest::StatusCode::UNAUTHORIZED && has_auth {
+            // /me rejected with 401: fall back to public /users/{id}
+            let fallback_uid = cfg.user_id.as_ref().and_then(|u| {
+                if let Some(n) = u.as_i64() { Some(n.to_string()) }
+                else if let Some(s) = u.as_str() { Some(s.to_string()) }
+                else { None }
+            }).or_else(|| cfg.oauth_token.as_ref().and_then(|t| Self::extract_user_id_from_token(t)));
 
-
-
-
-
+            if let Some(uid_str) = fallback_uid {
+                let fallback_url = format!("https://api-v2.soundcloud.com/users/{}?client_id={}", uid_str, client_id);
+                if let Ok(r) = self.http.get(&fallback_url).header("User-Agent", USER_AGENT).header("Accept", "application/json").send().await {
+                    if r.status().is_success() {
+                        res = r;
+                    }
+                }
+            }
+        }
 
         if res.status().is_success() {
-
-
-
             let data: Value = res.json().await.map_err(|e| e.to_string())?;
-
-
-
             let mut updated_cfg = cfg.clone();
-
-
-
             updated_cfg.user_id = data.get("id").cloned();
-
-
-
             updated_cfg.user_profile = Some(data.clone());
-
-
-
             let _ = self.save_config(&updated_cfg);
-
-
-
             Ok(data)
-
-
-
+        } else if let Some(ref prof) = cfg.user_profile {
+            Ok(prof.clone())
         } else {
-
-
-
             Err(format!("Profile request failed: HTTP {}", res.status()))
-
-
-
         }
 
 
@@ -2412,7 +2387,7 @@ impl SoundCloudClient {
             (self.load_config(), *revision)
         };
         let client_id = self.get_client_id().await;
-        let token_opt = self.auth_header(&cfg);
+        let mut token_opt = self.auth_header(&cfg);
 
         // 1. Determine or auto-resolve numeric user ID
         let mut active_user_id = if let Some(ref uid) = cfg.user_id {
@@ -2427,6 +2402,8 @@ impl SoundCloudClient {
             prof.get("id")
                 .and_then(|v| v.as_i64().map(|n| n.to_string()).or_else(|| v.as_str().map(|s| s.to_string())))
                 .unwrap_or_default()
+        } else if let Some(ref raw_tok) = cfg.oauth_token {
+            Self::extract_user_id_from_token(raw_tok).unwrap_or_default()
         } else {
             String::new()
         };
@@ -2482,10 +2459,25 @@ impl SoundCloudClient {
                     req = req.header("Authorization", tok);
                 }
 
-                let res = match req.send().await {
+                let mut res = match req.send().await {
                     Ok(r) => r,
                     Err(_) => continue 'endpoints,
                 };
+
+                if res.status() == reqwest::StatusCode::UNAUTHORIZED && token_opt.is_some() {
+                    // Token rejected with 401: drop token and retry public endpoint without Authorization
+                    token_opt = None;
+                    if !url.contains("/me/") && !url.contains("/me?") {
+                        let retry_req = self.http.get(&url)
+                            .header("User-Agent", USER_AGENT)
+                            .header("Accept", "application/json")
+                            .header("Origin", "https://soundcloud.com")
+                            .header("Referer", "https://soundcloud.com/");
+                        if let Ok(r) = retry_req.send().await {
+                            res = r;
+                        }
+                    }
+                }
 
                 if !res.status().is_success() {
                     continue 'endpoints;
@@ -2540,11 +2532,12 @@ impl SoundCloudClient {
         let current_cfg = self.load_config();
         let account = Self::likes_account(&current_cfg);
         let mut cache = self.load_likes_cache(&current_cfg);
-        if fetched && active_user_id == account && current_cfg.oauth_token == cfg.oauth_token {
-            cache.update_remote(all_tracks, &account, complete, *revision == revision_at_start);
+        let save_account = if !account.is_empty() { account.clone() } else { active_user_id.clone() };
+        if fetched && (active_user_id == account || account.is_empty()) && current_cfg.oauth_token == cfg.oauth_token {
+            cache.update_remote(all_tracks, &save_account, complete, *revision == revision_at_start);
             self.save_likes_cache(&cache)?;
         }
-        Ok(cache.visible_tracks(&account))
+        Ok(cache.visible_tracks(&save_account))
     }
 
     pub fn find_yt_dlp() -> std::path::PathBuf {
