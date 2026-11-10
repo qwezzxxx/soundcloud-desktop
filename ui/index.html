@@ -1908,6 +1908,15 @@
       background-color: #64748b !important;
     }
 
+    .liked-songs-cover {
+      color: #f5f5f5;
+      background: color-mix(in srgb, currentColor 8%, transparent);
+      border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    }
+    .theme-light .liked-songs-cover {
+      color: #0f172a;
+    }
+
     /* Table & Tracks */
     body.theme-light th {
       color: #64748b !important;
@@ -5982,38 +5991,10 @@
 
 
 
-          <div class="w-36 h-36 rounded-2xl bg-gradient-to-br from-indigo-700 via-purple-600 to-rose-500 flex items-center justify-center shrink-0 shadow-2xl">
-
-
-
-
-
-
-
-            <svg class="w-16 h-16 text-white fill-current" viewBox="0 0 20 20">
-
-
-
-
-
-
-
-              <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"/>
-
-
-
-
-
-
-
+          <div class="liked-songs-cover w-36 h-36 rounded-2xl flex items-center justify-center shrink-0" aria-hidden="true">
+            <svg class="w-12 h-12 fill-current" viewBox="0 0 24 24">
+              <path d="M12 21.2 3.7 13a5.35 5.35 0 0 1 7.57-7.57l.73.73.73-.73A5.35 5.35 0 0 1 20.3 13Z"/>
             </svg>
-
-
-
-
-
-
-
           </div>
 
 
