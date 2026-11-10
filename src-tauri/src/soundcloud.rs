@@ -2910,6 +2910,27 @@ impl SoundCloudClient {
 
 
 
+    async fn playback_request(
+        &self,
+        url: &str,
+        auth: &mut Option<&str>,
+    ) -> Result<reqwest::Response, reqwest::Error> {
+        let request = || {
+            self.http.get(url)
+                .header("Origin", "https://soundcloud.com")
+                .header("Referer", "https://soundcloud.com/")
+        };
+        if let Some(header) = *auth {
+            let response = request().header("Authorization", header).send().await?;
+            if response.status() != reqwest::StatusCode::UNAUTHORIZED {
+                return Ok(response);
+            }
+            // An expired session must not block playback of public tracks.
+            *auth = None;
+        }
+        request().send().await
+    }
+
     pub async fn resolve_stream_url(&self, track_id: Value) -> Result<String, String> {
 
 
@@ -3167,112 +3188,42 @@ impl SoundCloudClient {
 
 
 
-        let fallback_client_ids = vec![client_id.as_str(), DEFAULT_CLIENT_ID];
-
-
-
+        let mut client_ids = std::collections::VecDeque::from([client_id]);
+        if client_ids.front().is_some_and(|id| id != DEFAULT_CLIENT_ID) {
+            client_ids.push_back(DEFAULT_CLIENT_ID.to_string());
+        }
+        let mut refreshed_client_id = false;
+        let session_auth = self.auth_header(&cfg);
+        let mut auth = session_auth.as_deref();
         let mut last_err = "No track found".to_string();
 
-
-
-
-
-
-
         if !id_str.is_empty() {
-
-
-
-            for &cid in &fallback_client_ids {
-
-
-
+            while let Some(cid) = client_ids.pop_front() {
                 let url = format!("https://api-v2.soundcloud.com/tracks/{}?client_id={}", id_str, cid);
-
-
-
-
-
-
-
-                let mut req = self.http.get(&url)
-
-
-
-                    .header("User-Agent", USER_AGENT)
-
-
-
-                    .header("Origin", "https://soundcloud.com")
-
-
-
-                    .header("Referer", "https://soundcloud.com/");
-
-
-
-                if let Some(auth) = self.auth_header(&cfg) {
-
-
-
-                    req = req.header("Authorization", auth);
-
-
-
-                }
-
-
-
-
-
-
-
-                let res = match req.send().await {
-
-
-
-                    Ok(r) => r,
-
-
-
+                let res = match self.playback_request(&url, &mut auth).await {
+                    Ok(res) => res,
                     Err(e) => {
-
-
-
                         last_err = e.to_string();
-
-
-
                         continue;
-
-
-
                     }
-
-
-
                 };
-
-
-
-
-
-
 
                 if !res.status().is_success() {
                     let st = res.status().as_u16();
                     last_err = format!("HTTP {}", st);
-                    if st == 401 || st == 403 {
-                        let _ = self.refresh_dynamic_client_id().await;
+                    if st == 429 {
+                        return Err(format!("SoundCloud: не удалось получить аудиопоток ({last_err})"));
+                    }
+                    if (st == 401 || st == 403) && !refreshed_client_id {
+                        refreshed_client_id = true;
+                        if let Some(id) = self.refresh_dynamic_client_id().await {
+                            if id != cid && !client_ids.contains(&id) {
+                                client_ids.push_front(id);
+                            }
+                        }
                     }
                     continue;
                 }
-
-
-
-
-
-
 
                 let track: Value = match res.json().await {
 
@@ -3458,38 +3409,10 @@ impl SoundCloudClient {
 
 
 
-                                let mut s_req = self.http.get(&full_stream_req)
-
-
-
-                                    .header("User-Agent", USER_AGENT)
-
-
-
-                                    .header("Origin", "https://soundcloud.com")
-
-
-
-                                    .header("Referer", "https://soundcloud.com/");
-
-
-
-                                if let Some(auth) = self.auth_header(&cfg) {
-
-
-
-                                    s_req = s_req.header("Authorization", auth);
-
-
-
-                                }
-
-
-
-                                if let Ok(s_res) = s_req.send().await {
-
-
-
+                                if let Ok(s_res) = self.playback_request(&full_stream_req, &mut auth).await {
+                                    if s_res.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                                        return Err("SoundCloud: слишком много запросов к аудиопотоку (HTTP 429)".to_string());
+                                    }
                                     if s_res.status().is_success() {
 
 
