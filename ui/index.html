@@ -4176,7 +4176,7 @@
       height: 16px;
       flex: none;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.18);
+      background-color: #52525b;
       transition: background-color 150ms;
     }
     .normalization-switch::after {
@@ -4187,11 +4187,15 @@
       width: 12px;
       height: 12px;
       border-radius: 50%;
-      background: white;
+      background-color: #fff;
       transition: transform 150ms;
     }
-    #normalization-toggle:checked + .normalization-switch { background: var(--accent); }
-    #normalization-toggle:checked + .normalization-switch::after { transform: translateX(16px); }
+    body.theme-light .normalization-switch { background-color: #64748b; }
+    #normalization-toggle:checked + .normalization-switch { background-color: var(--accent); }
+    #normalization-toggle:checked + .normalization-switch::after {
+      background-color: var(--accent-contrast, #fff);
+      transform: translateX(16px);
+    }
     #normalization-toggle:focus-visible + .normalization-switch { outline: 2px solid var(--accent); outline-offset: 2px; }
     #normalization-toggle:disabled + .normalization-switch { opacity: 0.4; cursor: default; }
 </style>
