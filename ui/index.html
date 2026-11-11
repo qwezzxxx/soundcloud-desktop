@@ -4170,6 +4170,30 @@
       filter: brightness(1.12) !important;
       transform: scale(1.06) !important;
     }
+    .normalization-switch {
+      position: relative;
+      width: 32px;
+      height: 16px;
+      flex: none;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.18);
+      transition: background-color 150ms;
+    }
+    .normalization-switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 150ms;
+    }
+    #normalization-toggle:checked + .normalization-switch { background: var(--accent); }
+    #normalization-toggle:checked + .normalization-switch::after { transform: translateX(16px); }
+    #normalization-toggle:focus-visible + .normalization-switch { outline: 2px solid var(--accent); outline-offset: 2px; }
+    #normalization-toggle:disabled + .normalization-switch { opacity: 0.4; cursor: default; }
 </style>
 
 
@@ -10862,7 +10886,7 @@
 
 
 
-        <input id="normalization-toggle" type="checkbox" checked class="sr-only peer">
+        <input id="normalization-toggle" type="checkbox" class="sr-only" role="switch" aria-label="Нормализация громкости">
 
 
 
@@ -10870,7 +10894,7 @@
 
 
 
-        <div class="w-8 h-4 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[var(--accent)]"></div>
+        <span class="normalization-switch" aria-hidden="true"></span>
 
 
 
@@ -26849,6 +26873,10 @@
 
 
     let compressorNode = null;
+    let normalizationEnabled = false;
+    try {
+      normalizationEnabled = !isPlatformLinux && localStorage.getItem('sc_audio_normalization') === 'true';
+    } catch (_) {}
 
 
 
@@ -27116,7 +27144,7 @@
 
 
 
-        // Dynamics Compressor (Default off threshold 0dB to not squash EQ)
+        // Smooth out volume peaks when normalization is enabled.
 
 
 
@@ -27132,7 +27160,7 @@
 
 
 
-        compressorNode.threshold.value = 0;
+        compressorNode.threshold.value = normalizationEnabled ? -20 : 0;
 
 
 
@@ -27148,7 +27176,7 @@
 
 
 
-        compressorNode.ratio.value = 1;
+        compressorNode.ratio.value = normalizationEnabled ? 4 : 1;
 
 
 
@@ -27276,7 +27304,7 @@
 
 
 
-        // Direct audio path: EQ60 -> EQ250 -> EQ1k -> EQ4k -> EQ12k -> Analyser -> Speakers
+        // Audio path: EQ -> compressor -> analyser -> speakers
 
 
 
@@ -27316,7 +27344,8 @@
 
 
 
-        eq12kNode.connect(analyserNode);
+        eq12kNode.connect(compressorNode);
+        compressorNode.connect(analyserNode);
 
 
 
@@ -27715,85 +27744,16 @@
 
 
     function toggleAudioNormalization(enabled) {
-
-
-
-
-
-
-
-      initAudioPipeline();
-
-
-
-
-
-
-
+      normalizationEnabled = enabled;
+      try {
+        localStorage.setItem('sc_audio_normalization', String(enabled));
+      } catch (_) {}
       if (!compressorNode || !audioCtx) return;
-
-
-
-
-
-
-
-      if (enabled) {
-
-
-
-
-
-
-
-        compressorNode.threshold.setTargetAtTime(-20, audioCtx.currentTime, 0.05);
-
-
-
-
-
-
-
-        compressorNode.ratio.setTargetAtTime(4, audioCtx.currentTime, 0.05);
-
-
-
-
-
-
-
-      } else {
-
-
-
-
-
-
-
-        compressorNode.threshold.setTargetAtTime(0, audioCtx.currentTime, 0.05);
-
-
-
-
-
-
-
-        compressorNode.ratio.setTargetAtTime(1, audioCtx.currentTime, 0.05);
-
-
-
-
-
-
-
-      }
-
-
-
-
-
-
-
+      const now = audioCtx.currentTime;
+      compressorNode.threshold.cancelScheduledValues(now);
+      compressorNode.ratio.cancelScheduledValues(now);
+      compressorNode.threshold.setTargetAtTime(enabled ? -20 : 0, now, 0.05);
+      compressorNode.ratio.setTargetAtTime(enabled ? 4 : 1, now, 0.05);
     }
 
 
@@ -29692,37 +29652,10 @@
     applyEqPreset(savedEqPreset, customEqGains);
 
     if (normToggle) {
-
-
-
-
-
-
-
-      normToggle.addEventListener('change', (e) => {
-
-
-
-
-
-
-
-        toggleAudioNormalization(e.target.checked);
-
-
-
-
-
-
-
-      });
-
-
-
-
-
-
-
+      normToggle.checked = normalizationEnabled;
+      normToggle.disabled = isPlatformLinux;
+      if (isPlatformLinux) normToggle.parentElement.title = 'Нормализация недоступна в Linux';
+      normToggle.addEventListener('change', () => toggleAudioNormalization(normToggle.checked));
     }
 
 
