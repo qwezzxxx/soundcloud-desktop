@@ -5333,7 +5333,27 @@
 
 
         </div>
-        <!-- Empty State (When logged out / 0 tracks in library) -->
+
+        <!-- 4. Playlists Section (Внизу главной страницы) -->
+        <div id="home-playlists-section" class="space-y-3 pt-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="flex items-center gap-2.5">
+                <h2 class="text-sm font-bold text-white tracking-wide">Плейлисты SoundCloud</h2>
+                <span class="px-2 py-0.5 rounded-full bg-white/10 text-neutral-300 text-[11px] font-bold font-mono" id="home-playlists-badge">5</span>
+              </div>
+              <p class="text-[11px] text-neutral-400 mt-0.5">Лайкнутые плейлисты из вашего аккаунта SoundCloud</p>
+            </div>
+            <button id="home-playlists-sync-btn" title="Синхронизировать плейлисты" class="w-8 h-8 rounded-xl card-glass flex items-center justify-center text-neutral-400 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95">
+              <svg id="home-playlists-sync-icon" class="w-4 h-4 text-rose-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            </button>
+          </div>
+
+          <p id="home-playlists-status" role="status" class="hidden text-xs text-neutral-400 mb-2"></p>
+          <div id="home-playlists-grid" class="grid grid-cols-5 gap-3">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
         <div id="home-empty-state" class="hidden flex flex-col items-center justify-center py-20 text-center select-none">
           <div class="w-16 h-16 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center text-3xl mb-4 text-neutral-500 shadow-xl">
             🎵
@@ -11496,6 +11516,8 @@
 
 
       syncLikes: () => api.invoke('sync_likes'),
+      getUserPlaylists: () => api.invoke('get_user_playlists'),
+      getPlaylistTracks: (playlistId) => api.invoke('get_playlist_tracks', { playlistId }),
 
 
 
@@ -12534,6 +12556,8 @@
 
 
     document.getElementById('home-view-all-likes').addEventListener('click', () => switchTab('tab-library'));
+    const homePlSyncBtn = document.getElementById('home-playlists-sync-btn');
+    if (homePlSyncBtn) homePlSyncBtn.addEventListener('click', () => syncHomePlaylists());
 
 
 
@@ -22427,6 +22451,104 @@
           });
         }
       }
+
+      const userId = currentUser?.id ?? null;
+      if (userId !== homePlaylistsUserId) {
+        homePlaylistsUserId = userId;
+        userSoundCloudPlaylists = [];
+        syncHomePlaylists();
+      }
+      renderHomePlaylists();
+    }
+
+    let userSoundCloudPlaylists = [];
+    let homePlaylistsUserId = null;
+    let homePlaylistsRequest = 0;
+    let homePlaylistPlayRequest = 0;
+
+    async function syncHomePlaylists() {
+      const request = ++homePlaylistsRequest;
+      const syncIcon = document.getElementById('home-playlists-sync-icon');
+      const status = document.getElementById('home-playlists-status');
+      let message = '';
+      syncIcon?.classList.add('animate-spin');
+
+      try {
+        if (status) {
+          status.textContent = 'Загрузка плейлистов…';
+          status.classList.remove('hidden');
+        }
+        if (typeof api?.getUserPlaylists !== 'function') {
+          throw new Error('Синхронизация плейлистов доступна в приложении ONYX');
+        }
+        const playlists = await api.getUserPlaylists();
+        if (request !== homePlaylistsRequest) return;
+        userSoundCloudPlaylists = playlists;
+        if (!playlists.length) message = 'В SoundCloud пока нет лайкнутых плейлистов';
+      } catch (err) {
+        message = String(err);
+      } finally {
+        if (request === homePlaylistsRequest) {
+          syncIcon?.classList.remove('animate-spin');
+          if (status) {
+            status.textContent = message;
+            status.classList.toggle('hidden', !message);
+          }
+          renderHomePlaylists();
+        }
+      }
+    }
+
+    function renderHomePlaylists() {
+      const pGrid = document.getElementById('home-playlists-grid');
+      const pBadge = document.getElementById('home-playlists-badge');
+      if (!pGrid) return;
+      pGrid.innerHTML = '';
+
+      if (pBadge) pBadge.textContent = userSoundCloudPlaylists.length;
+
+      userSoundCloudPlaylists.forEach(p => {
+        const card = document.createElement('div');
+        card.className = "card-glass p-3 rounded-2xl cursor-pointer group flex flex-col justify-between hover:bg-white/[0.08] transition-all";
+        const coverSrc = escapeMarkup(p.cover || DEFAULT_COVER);
+
+        card.innerHTML = `
+          <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
+            <img src="${coverSrc}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+            <div class="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors flex items-center justify-center">
+              <div class="station-play-badge card-play-btn w-10 h-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:scale-100 scale-90 shadow-xl transition-all cursor-pointer" style="background-color: var(--accent); color: var(--accent-contrast, #fff);">
+                <svg class="w-5 h-5 ml-0.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-white group-hover:text-rose-400 transition-colors line-clamp-2 leading-snug min-h-[32px]">${escapeMarkup(p.title)}</div>
+            <div class="text-[11px] text-neutral-400 truncate mt-0.5">${escapeMarkup(p.author)}</div>
+          </div>
+          <div class="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-neutral-500">
+            <span>${p.track_count || (p.tracks ? p.tracks.length : 0)} треков</span>
+            <span class="font-mono text-[10px] text-neutral-400">${p.duration_str || ''}</span>
+          </div>
+        `;
+
+        card.addEventListener('click', async () => {
+          const request = ++homePlaylistPlayRequest;
+          const playback = currentPlayRequestId;
+          const userId = homePlaylistsUserId;
+          const isCurrent = () => request === homePlaylistPlayRequest
+            && playback === currentPlayRequestId && userId === homePlaylistsUserId;
+          try {
+            const tracks = await api.getPlaylistTracks(Number(p.id));
+            if (!isCurrent()) return;
+            if (tracks.length) playTrack(0, tracks);
+            else notify('В плейлисте нет доступных треков');
+          } catch (err) {
+            if (isCurrent()) notify(`Не удалось загрузить плейлист: ${err}`);
+          }
+        });
+
+        pGrid.appendChild(card);
+      });
     }
 
 
