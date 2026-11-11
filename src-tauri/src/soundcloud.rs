@@ -1639,6 +1639,16 @@ impl SoundCloudClient {
             .map(Self::whisper_line_text)
             .filter(|line| Self::whisper_has_lyric_words(line))
             .collect::<Vec<_>>();
+        let normalized = lines.iter()
+            .map(|line| line.split(|c: char| !c.is_alphanumeric())
+                .filter(|word| !word.is_empty()).collect::<Vec<_>>().join(" ").to_lowercase())
+            .collect::<Vec<_>>();
+        if normalized.iter().any(|line| line.starts_with("this is a production of the u s department of"))
+            || (2..=3).any(|period| normalized.len() >= period * 4
+                && normalized.iter().skip(period).zip(&normalized).all(|(line, previous)| line == previous))
+        {
+            return true;
+        }
         let words = lines.iter()
             .flat_map(|line| line.split_whitespace())
             .filter(|word| word.chars().any(char::is_alphanumeric))
@@ -1652,9 +1662,8 @@ impl SoundCloudClient {
             let mut run = 0;
             let mut longest = 0;
             let mut count = 0;
-            for line in &lines {
-                let line = line.trim();
-                run = if line.eq_ignore_ascii_case(previous) { run + 1 } else { 1 };
+            for line in &normalized {
+                run = if line == previous { run + 1 } else { 1 };
                 longest = longest.max(run);
                 previous = line;
                 count += 1;

@@ -31546,7 +31546,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       if (appConfig?.whisper_precise && (lyrics.whisperRevision || 0) < 2) return false;
       const text = whisperLyricLines(lyrics.syncedLyrics || lyrics.plainLyrics);
       if (!text) return false;
-      const lines = stripLyricWordTags(text).replace(/\[\d+:\d+(?:\.\d+)?\]/g, '').split('\n').map(line => line.trim().toLowerCase());
+      const lines = stripLyricWordTags(text).replace(/\[\d+:\d+(?:\.\d+)?\]/g, '').split('\n')
+        .map(line => line.toLowerCase().match(/[\p{L}\p{N}]+/gu)?.join(' ') || '');
+      if (lines.some(line => line.startsWith('this is a production of the u s department of'))) return false;
+      if ([2, 3].some(period => lines.length >= period * 4
+        && lines.slice(period).every((line, index) => line === lines[index]))) return false;
       let run = 0;
       let longest = 0;
       for (let i = 0; i < lines.length; i++) {
