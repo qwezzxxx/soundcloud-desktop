@@ -22093,8 +22093,8 @@
         `;
 
         card.addEventListener('click', () => {
-          const trs = (p.tracks && p.tracks.length > 0) ? p.tracks : allTracks.slice(0, p.track_count || 20);
-          playTrack(0, trs);
+          if (p.tracks?.length) playTrack(0, p.tracks);
+          else notify('В плейлисте нет доступных треков');
         });
 
         pGrid.appendChild(card);

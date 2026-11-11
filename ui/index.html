@@ -11517,6 +11517,7 @@
 
       syncLikes: () => api.invoke('sync_likes'),
       getUserPlaylists: () => api.invoke('get_user_playlists'),
+      getPlaylistTracks: (playlistId) => api.invoke('get_playlist_tracks', { playlistId }),
 
 
 
@@ -22463,6 +22464,7 @@
     let userSoundCloudPlaylists = [];
     let homePlaylistsUserId = null;
     let homePlaylistsRequest = 0;
+    let homePlaylistPlayRequest = 0;
 
     async function syncHomePlaylists() {
       const request = ++homePlaylistsRequest;
@@ -22529,9 +22531,20 @@
           </div>
         `;
 
-        card.addEventListener('click', () => {
-          const trs = (p.tracks && p.tracks.length > 0) ? p.tracks : allTracks.slice(0, p.track_count || 20);
-          playTrack(0, trs);
+        card.addEventListener('click', async () => {
+          const request = ++homePlaylistPlayRequest;
+          const playback = currentPlayRequestId;
+          const userId = homePlaylistsUserId;
+          const isCurrent = () => request === homePlaylistPlayRequest
+            && playback === currentPlayRequestId && userId === homePlaylistsUserId;
+          try {
+            const tracks = await api.getPlaylistTracks(Number(p.id));
+            if (!isCurrent()) return;
+            if (tracks.length) playTrack(0, tracks);
+            else notify('В плейлисте нет доступных треков');
+          } catch (err) {
+            if (isCurrent()) notify(`Не удалось загрузить плейлист: ${err}`);
+          }
         });
 
         pGrid.appendChild(card);

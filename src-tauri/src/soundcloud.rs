@@ -4586,29 +4586,16 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
+        let auth = self.auth_header(&cfg);
         let mut req = self.http.get(&url);
-
-
-
-        if let Some(auth) = self.auth_header(&cfg) {
-
-
-
-            req = req.header("Authorization", auth);
-
-
-
+        if let Some(token) = &auth {
+            req = req.header("Authorization", token);
         }
 
-
-
-
-
-
-
-        let res = req.send().await.map_err(|e| e.to_string())?;
-
-
+        let mut res = req.send().await.map_err(|e| e.to_string())?;
+        if res.status() == reqwest::StatusCode::UNAUTHORIZED && auth.is_some() {
+            res = self.http.get(&url).send().await.map_err(|e| e.to_string())?;
+        }
 
         if res.status().is_success() {
 
@@ -4973,6 +4960,52 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         } else {
             Err(format!("System playlist fetch failed: HTTP {}", res.status()))
         }
+    }
+
+    pub async fn get_playlist_tracks(&self, playlist_id: u64) -> Result<Vec<FormattedTrack>, String> {
+        let cfg = self.load_config();
+        let client_id = self.get_client_id().await;
+        let url = format!(
+            "https://api-v2.soundcloud.com/playlists/{}?client_id={}&representation=full",
+            playlist_id, client_id
+        );
+        let request = || self.http.get(&url).header("User-Agent", USER_AGENT);
+        let auth = self.auth_header(&cfg);
+        let mut req = request();
+        if let Some(token) = &auth {
+            req = req.header("Authorization", token);
+        }
+        let mut res = req.send().await.map_err(|_| "SoundCloud недоступен".to_string())?;
+        if res.status() == reqwest::StatusCode::UNAUTHORIZED && auth.is_some() {
+            res = request().send().await.map_err(|_| "SoundCloud недоступен".to_string())?;
+        }
+        if !res.status().is_success() {
+            return Err(format!("SoundCloud вернул HTTP {}", res.status()));
+        }
+
+        let playlist: Value = res.json().await.map_err(|_| "Некорректный ответ SoundCloud".to_string())?;
+        let tracks = playlist.get("tracks").and_then(Value::as_array)
+            .ok_or_else(|| "SoundCloud не вернул треки плейлиста".to_string())?;
+        let mut missing_ids = Vec::new();
+        let mut by_id = std::collections::HashMap::new();
+        for track in tracks {
+            if let Some(id) = track.get("id") {
+                if track.get("title").and_then(Value::as_str).is_some() {
+                    by_id.insert(id.to_string(), Self::format_track(track, false));
+                } else {
+                    missing_ids.push(id.clone());
+                }
+            }
+        }
+        for batch in missing_ids.chunks(50) {
+            for track in self.resolve_tracks(batch.to_vec()).await? {
+                by_id.insert(track.id.to_string(), track);
+            }
+        }
+
+        Ok(tracks.iter()
+            .filter_map(|track| by_id.get(&track.get("id")?.to_string()).cloned())
+            .collect())
     }
 
     pub async fn get_user_playlists(&self) -> Result<Vec<Value>, String> {
