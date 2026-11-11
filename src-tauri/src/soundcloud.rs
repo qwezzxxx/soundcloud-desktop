@@ -4978,9 +4978,9 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
     pub async fn get_user_playlists(&self) -> Result<Vec<Value>, String> {
         let cfg = self.load_config();
         let client_id = self.get_client_id().await;
-        let mut token_opt = self.auth_header(&cfg);
+        let token_opt = self.auth_header(&cfg);
 
-        let active_user_id = if let Some(ref uid) = cfg.user_id {
+        let mut active_user_id = if let Some(ref uid) = cfg.user_id {
             if let Some(n) = uid.as_i64() {
                 n.to_string()
             } else if let Some(s) = uid.as_str() {
@@ -4998,104 +4998,88 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
             String::new()
         };
 
-        if active_user_id.is_empty() {
-            return Ok(Vec::new());
+        if active_user_id.parse::<i64>().is_err() && token_opt.is_some() {
+            active_user_id = self.ensure_active_user().await?.0.to_string();
+        }
+        if active_user_id.parse::<i64>().is_err() {
+            return Err("Подключите аккаунт SoundCloud".to_string());
         }
 
         let mut results = Vec::new();
         let mut seen_ids = std::collections::HashSet::new();
 
-        let endpoints = vec![
-            format!("https://api-v2.soundcloud.com/users/{}/playlist_likes?client_id={}&limit=20&linked_partitioning=1", active_user_id, client_id),
-        ];
+        let url = format!(
+            "https://api-v2.soundcloud.com/users/{}/playlist_likes?client_id={}&limit=50&linked_partitioning=1",
+            active_user_id, client_id
+        );
+        let request = || self.http.get(&url)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/json")
+            .header("Origin", "https://soundcloud.com")
+            .header("Referer", "https://soundcloud.com/");
 
-        for url in endpoints {
-            let mut req = self.http.get(&url)
-                .header("User-Agent", USER_AGENT)
-                .header("Accept", "application/json")
-                .header("Origin", "https://soundcloud.com")
-                .header("Referer", "https://soundcloud.com/");
+        let mut req = request();
+        if let Some(ref token) = token_opt {
+            req = req.header("Authorization", token);
+        }
+        let mut res = req.send().await.map_err(|_| "SoundCloud недоступен".to_string())?;
+        if res.status() == reqwest::StatusCode::UNAUTHORIZED && token_opt.is_some() {
+            res = request().send().await.map_err(|_| "SoundCloud недоступен".to_string())?;
+        }
+        if !res.status().is_success() {
+            return Err(format!("SoundCloud вернул HTTP {}", res.status()));
+        }
+        let body: Value = res.json().await.map_err(|_| "Некорректный ответ SoundCloud".to_string())?;
 
-            if let Some(ref tok) = token_opt {
-                req = req.header("Authorization", tok);
-            }
+        let collection = body.get("collection").and_then(|v| v.as_array())
+            .or_else(|| body.as_array());
 
-            let mut res = match req.send().await {
-                Ok(r) => r,
-                Err(_) => continue,
-            };
+        if let Some(items) = collection {
+            for item in items {
+                let p = if item.get("playlist").is_some() {
+                    item.get("playlist").unwrap()
+                } else {
+                    item
+                };
 
-            if res.status() == reqwest::StatusCode::UNAUTHORIZED && token_opt.is_some() {
-                token_opt = None;
-                let retry = self.http.get(&url)
-                    .header("User-Agent", USER_AGENT)
-                    .header("Accept", "application/json")
-                    .header("Origin", "https://soundcloud.com")
-                    .header("Referer", "https://soundcloud.com/");
-                if let Ok(r) = retry.send().await {
-                    res = r;
-                }
-            }
+                let pid = p.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                if pid > 0 && !seen_ids.contains(&pid) {
+                    seen_ids.insert(pid);
 
-            if !res.status().is_success() {
-                continue;
-            }
-
-            let body: Value = match res.json().await {
-                Ok(j) => j,
-                Err(_) => continue,
-            };
-
-            let collection = body.get("collection").and_then(|v| v.as_array())
-                .or_else(|| body.as_array());
-
-            if let Some(items) = collection {
-                for item in items {
-                    let p = if item.get("playlist").is_some() {
-                        item.get("playlist").unwrap()
+                    let title = p.get("title").and_then(|v| v.as_str()).unwrap_or("SoundCloud Playlist");
+                    let artwork = p.get("artwork_url").and_then(|v| v.as_str())
+                        .or_else(|| p.get("user").and_then(|u| u.get("avatar_url")).and_then(|v| v.as_str()))
+                        .unwrap_or("");
+                    let cover = artwork.replace("-large.", "-t500x500.");
+                    let author = p.get("user").and_then(|u| u.get("username").or_else(|| u.get("permalink"))).and_then(|v| v.as_str()).unwrap_or("SoundCloud");
+                    let track_count = p.get("track_count").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let dur_ms = p.get("duration").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let hours = dur_ms / 3600000;
+                    let mins = (dur_ms % 3600000) / 60000;
+                    let duration_str = if hours > 0 {
+                        format!("{} ч {} мин", hours, mins)
                     } else {
-                        item
+                        format!("{} мин", mins)
                     };
 
-                    let pid = p.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-                    if pid > 0 && !seen_ids.contains(&pid) {
-                        seen_ids.insert(pid);
-
-                        let title = p.get("title").and_then(|v| v.as_str()).unwrap_or("SoundCloud Playlist");
-                        let artwork = p.get("artwork_url").and_then(|v| v.as_str())
-                            .or_else(|| p.get("user").and_then(|u| u.get("avatar_url")).and_then(|v| v.as_str()))
-                            .unwrap_or("");
-                        let cover = artwork.replace("-large.", "-t500x500.");
-                        let author = p.get("user").and_then(|u| u.get("username").or_else(|| u.get("permalink"))).and_then(|v| v.as_str()).unwrap_or("SoundCloud");
-                        let track_count = p.get("track_count").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let dur_ms = p.get("duration").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let hours = dur_ms / 3600000;
-                        let mins = (dur_ms % 3600000) / 60000;
-                        let duration_str = if hours > 0 {
-                            format!("{} ч {} мин", hours, mins)
-                        } else {
-                            format!("{} мин", mins)
-                        };
-
-                        let tracks_arr = p.get("tracks").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-                        let mut formatted_tracks = Vec::new();
-                        for t in tracks_arr {
-                            if t.get("title").is_some() {
-                                formatted_tracks.push(Self::format_track(&t, false));
-                            }
+                    let tracks_arr = p.get("tracks").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                    let mut formatted_tracks = Vec::new();
+                    for t in tracks_arr {
+                        if t.get("title").is_some() {
+                            formatted_tracks.push(Self::format_track(&t, false));
                         }
-
-                        results.push(serde_json::json!({
-                            "id": pid.to_string(),
-                            "title": title,
-                            "author": author,
-                            "desc": p.get("description").and_then(|v| v.as_str()).unwrap_or(""),
-                            "cover": cover,
-                            "track_count": if track_count > 0 { track_count } else { formatted_tracks.len() as u64 },
-                            "duration_str": duration_str,
-                            "tracks": formatted_tracks
-                        }));
                     }
+
+                    results.push(serde_json::json!({
+                        "id": pid.to_string(),
+                        "title": title,
+                        "author": author,
+                        "desc": p.get("description").and_then(|v| v.as_str()).unwrap_or(""),
+                        "cover": cover,
+                        "track_count": if track_count > 0 { track_count } else { formatted_tracks.len() as u64 },
+                        "duration_str": duration_str,
+                        "tracks": formatted_tracks
+                    }));
                 }
             }
         }

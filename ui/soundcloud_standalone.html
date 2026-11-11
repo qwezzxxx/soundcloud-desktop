@@ -5277,6 +5277,7 @@
             </button>
           </div>
 
+          <p id="home-playlists-status" role="status" class="hidden text-xs text-neutral-400 mb-2"></p>
           <div id="home-playlists-grid" class="grid grid-cols-5 gap-3">
             <!-- Dynamically populated -->
           </div>
@@ -22013,30 +22014,49 @@
         }
       }
 
-      // 4. Render Playlists section at bottom of Home tab
+      const userId = currentUser?.id ?? null;
+      if (userId !== homePlaylistsUserId) {
+        homePlaylistsUserId = userId;
+        userSoundCloudPlaylists = [];
+        syncHomePlaylists();
+      }
       renderHomePlaylists();
     }
 
     let userSoundCloudPlaylists = [];
+    let homePlaylistsUserId = null;
+    let homePlaylistsRequest = 0;
 
     async function syncHomePlaylists() {
+      const request = ++homePlaylistsRequest;
       const syncIcon = document.getElementById('home-playlists-sync-icon');
-      if (syncIcon) syncIcon.classList.add('animate-spin');
+      const status = document.getElementById('home-playlists-status');
+      let message = '';
+      syncIcon?.classList.add('animate-spin');
 
       try {
-        if (api && typeof api.getUserPlaylists === 'function') {
-          const res = await api.getUserPlaylists().catch(() => null);
-          if (Array.isArray(res)) {
-            userSoundCloudPlaylists = res;
-          }
+        if (status) {
+          status.textContent = 'Загрузка плейлистов…';
+          status.classList.remove('hidden');
         }
+        if (typeof api?.getUserPlaylists !== 'function') {
+          throw new Error('Синхронизация плейлистов доступна в приложении ONYX');
+        }
+        const playlists = await api.getUserPlaylists();
+        if (request !== homePlaylistsRequest) return;
+        userSoundCloudPlaylists = playlists;
+        if (!playlists.length) message = 'В SoundCloud пока нет лайкнутых плейлистов';
       } catch (err) {
-        console.warn('syncHomePlaylists error:', err);
+        message = String(err);
       } finally {
-        if (syncIcon) {
-          setTimeout(() => syncIcon.classList.remove('animate-spin'), 600);
+        if (request === homePlaylistsRequest) {
+          syncIcon?.classList.remove('animate-spin');
+          if (status) {
+            status.textContent = message;
+            status.classList.toggle('hidden', !message);
+          }
+          renderHomePlaylists();
         }
-        renderHomePlaylists();
       }
     }
 
