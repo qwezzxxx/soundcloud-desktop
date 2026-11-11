@@ -5007,7 +5007,6 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
         let endpoints = vec![
             format!("https://api-v2.soundcloud.com/users/{}/playlist_likes?client_id={}&limit=20&linked_partitioning=1", active_user_id, client_id),
-            format!("https://api-v2.soundcloud.com/users/{}/playlists?client_id={}&limit=20", active_user_id, client_id),
         ];
 
         for url in endpoints {

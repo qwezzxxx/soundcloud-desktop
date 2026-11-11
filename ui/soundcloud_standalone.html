@@ -5270,7 +5270,7 @@
                 <h2 class="text-sm font-bold text-white tracking-wide">Плейлисты SoundCloud</h2>
                 <span class="px-2 py-0.5 rounded-full bg-white/10 text-neutral-300 text-[11px] font-bold font-mono" id="home-playlists-badge">5</span>
               </div>
-              <p class="text-[11px] text-neutral-400 mt-0.5">Лайкнутые и созданные плейлисты из вашего аккаунта SoundCloud</p>
+              <p class="text-[11px] text-neutral-400 mt-0.5">Лайкнутые плейлисты из вашего аккаунта SoundCloud</p>
             </div>
             <button id="home-playlists-sync-btn" title="Синхронизировать плейлисты" class="w-8 h-8 rounded-xl card-glass flex items-center justify-center text-neutral-400 hover:text-white transition-all cursor-pointer shadow-sm active:scale-95">
               <svg id="home-playlists-sync-icon" class="w-4 h-4 text-rose-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -22014,7 +22014,7 @@
       }
 
       // 4. Render Playlists section at bottom of Home tab
-      renderHomePlaylists(availableTracks);
+      renderHomePlaylists();
     }
 
     let userSoundCloudPlaylists = [];
@@ -22026,7 +22026,7 @@
       try {
         if (api && typeof api.getUserPlaylists === 'function') {
           const res = await api.getUserPlaylists().catch(() => null);
-          if (Array.isArray(res) && res.length > 0) {
+          if (Array.isArray(res)) {
             userSoundCloudPlaylists = res;
           }
         }
@@ -22036,84 +22036,19 @@
         if (syncIcon) {
           setTimeout(() => syncIcon.classList.remove('animate-spin'), 600);
         }
-        renderHomePlaylists(allTracks);
+        renderHomePlaylists();
       }
     }
 
-    function renderHomePlaylists(availableTracks) {
+    function renderHomePlaylists() {
       const pGrid = document.getElementById('home-playlists-grid');
       const pBadge = document.getElementById('home-playlists-badge');
       if (!pGrid) return;
       pGrid.innerHTML = '';
 
-      const validTracks = (availableTracks && availableTracks.length > 0) ? availableTracks : (allTracks || []);
-      const totalLikesTime = validTracks.reduce((acc, t) => acc + (t.duration_ms || 180000), 0);
-      const totalLikesMins = Math.floor(totalLikesTime / 60000);
-      const likesHours = Math.floor(totalLikesMins / 60);
-      const likesMins = totalLikesMins % 60;
-      const likesDurStr = likesHours > 0 ? `${likesHours} ч ${likesMins} мин` : `${likesMins} мин`;
+      if (pBadge) pBadge.textContent = userSoundCloudPlaylists.length;
 
-      // 1. First card is ALWAYS "Мне нравится (Liked Tracks)"
-      const defaultLikedPlaylist = {
-        id: 'liked_songs',
-        isSystem: true,
-        title: 'Мне нравится (Liked Tracks)',
-        author: (currentUser && (currentUser.username || currentUser.permalink)) || 'sqweaz',
-        cover: validTracks[0]?.cover || DEFAULT_COVER,
-        track_count: validTracks.length,
-        duration_str: likesDurStr,
-        tracks: validTracks
-      };
-
-      let displayPlaylists = [defaultLikedPlaylist];
-
-      if (userSoundCloudPlaylists && userSoundCloudPlaylists.length > 0) {
-        displayPlaylists.push(...userSoundCloudPlaylists);
-      } else {
-        // Real sample SoundCloud playlists from Image 1 if user hasn't liked external playlists yet
-        displayPlaylists.push(
-          {
-            id: '2255223698',
-            title: 'New Underground Music',
-            author: 'RAP',
-            cover: 'https://i1.sndcdn.com/artworks-FHrzIX2GXnEiTaFl-4EZRnQ-t500x500.jpg',
-            track_count: 19,
-            duration_str: '56 мин',
-            tracks: validTracks.slice(0, 19)
-          },
-          {
-            id: '1294287130',
-            title: 'Underground rap',
-            author: 'unjase',
-            cover: 'https://i1.sndcdn.com/artworks-FHrzIX2GXnEiTaFl-4EZRnQ-t500x500.jpg',
-            track_count: 20,
-            duration_str: '55 мин',
-            tracks: validTracks.slice(5, 25)
-          },
-          {
-            id: '1871853584',
-            title: 'Underground rap',
-            author: 'Daniel Newhouse',
-            cover: 'https://i1.sndcdn.com/artworks-FHrzIX2GXnEiTaFl-4EZRnQ-t500x500.jpg',
-            track_count: 20,
-            duration_str: '1 ч 1 мин',
-            tracks: validTracks.slice(10, 30)
-          },
-          {
-            id: '1961050749',
-            title: 'HARDEST Underground Rap...',
-            author: 'Seven',
-            cover: 'https://i1.sndcdn.com/artworks-FHrzIX2GXnEiTaFl-4EZRnQ-t500x500.jpg',
-            track_count: 20,
-            duration_str: '54 мин',
-            tracks: validTracks.slice(15, 35)
-          }
-        );
-      }
-
-      if (pBadge) pBadge.textContent = displayPlaylists.length;
-
-      displayPlaylists.slice(0, 5).forEach(p => {
+      userSoundCloudPlaylists.forEach(p => {
         const card = document.createElement('div');
         card.className = "card-glass p-3 rounded-2xl cursor-pointer group flex flex-col justify-between hover:bg-white/[0.08] transition-all";
         const coverSrc = escapeMarkup(p.cover || DEFAULT_COVER);
@@ -22137,17 +22072,9 @@
           </div>
         `;
 
-        card.addEventListener('click', (e) => {
-          if (p.isSystem) {
-            if (e.target.closest('.card-play-btn')) {
-              playTrack(0, allTracks);
-            } else {
-              switchTab('tab-library');
-            }
-          } else {
-            const trs = (p.tracks && p.tracks.length > 0) ? p.tracks : allTracks.slice(0, p.track_count || 20);
-            playTrack(0, trs);
-          }
+        card.addEventListener('click', () => {
+          const trs = (p.tracks && p.tracks.length > 0) ? p.tracks : allTracks.slice(0, p.track_count || 20);
+          playTrack(0, trs);
         });
 
         pGrid.appendChild(card);
