@@ -17085,7 +17085,11 @@
 
     async function prefetchLyricsForTrack(track) {
       if (!track || !track.id) return;
-      const cacheKey = `${track.id || ''}_${track.title || ''}_${track.artist || ''}`;
+      if (automaticKaraokeEnabled(track)) {
+        await startAutomaticKaraoke(track);
+        return;
+      }
+      const cacheKey = trackLyricsKey(track);
       if (usableCachedLyrics(lyricsCache.get(cacheKey))) return;
       const cached = readTrackLyricsCache(track);
       if (cached) {
@@ -31489,38 +31493,16 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       return lyrics;
     }
 
-    function lyricsDifferSubstantially(transcribed, original) {
-      const words = lyrics => (lyrics.plainLyrics || lyrics.syncedLyrics || '')
-        .normalize('NFKC').toLowerCase().replace(/ё/g, 'е')
-        .replace(/\[[^\]\n]*\]|<\d+:\d+(?:\.\d+)?>/g, ' ')
-        .match(/[\p{L}\p{N}]+/gu) || [];
-      const actual = words(transcribed);
-      const expected = words(original);
-      if (expected.length < 12) return false;
-      const overlap = (a, b) => {
-        const remaining = new Map();
-        for (const word of a) remaining.set(word, (remaining.get(word) || 0) + 1);
-        let shared = 0;
-        for (const word of b) {
-          const count = remaining.get(word);
-          if (count) {
-            shared++;
-            remaining.set(word, count - 1);
-          }
-        }
-        return 2 * shared / (a.length + b.length);
-      };
-      const pairs = tokens => tokens.slice(1).map((word, index) => `${tokens[index]} ${word}`);
-      return overlap(actual, expected) < 0.60 || overlap(pairs(actual), pairs(expected)) < 0.30;
+    function automaticKaraokeEnabled(track) {
+      return Boolean(appConfig && appConfig.whisper_auto_transcribe !== false && track.id);
     }
 
     function startAutomaticKaraoke(track, streamUrl = null) {
-      if (!appConfig || appConfig.whisper_auto_transcribe === false || !track.id) return;
-      if (localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
+      if (!automaticKaraokeEnabled(track) || localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
       const cached = readTrackLyricsCache(track);
       const mode = appConfig.whisper_precise ? 'precise' : 'fast';
-      if (cached?.lyricsCompared === mode || matchedOriginalLyrics(cached, track)?.instrumental) return;
-      void startWhisperTranscription(track, streamUrl, true).catch(() => {});
+      if (cached?.whisperAttempted === mode || (cached?.isAi && cached.lyricsCompared === mode)) return;
+      return startWhisperTranscription(track, streamUrl, true);
     }
 
     function whisperLyricLines(lrc) {
@@ -31546,7 +31528,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         run = lines[i] === lines[i - 1] ? run + 1 : 1;
         longest = Math.max(longest, run);
       }
-      return !((longest >= 8 && longest * 2 >= lines.length) || (longest >= 4 && longest * 4 >= lines.length * 3));
+      return !((longest === lines.length && longest >= 3) || (longest >= 8 && longest * 2 >= lines.length) || (longest >= 4 && longest * 4 >= lines.length * 3));
     }
 
 
@@ -31775,6 +31757,14 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+      const pendingRecognition = startAutomaticKaraoke(track);
+      if (pendingRecognition) {
+        if (!isBackground && lyricsContainer) {
+          lyricsContainer.textContent = 'Whisper распознаёт текст…';
+        }
+        await pendingRecognition;
+        if (currentFetchId !== lyricsFetchCounter || localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
+      }
       // 2. Instant In-Memory Cache (0 ms)
 
 
@@ -31917,7 +31907,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
       const compared = lyricsCache.get(cacheKey);
-      if (compared?.lyricsCompared && usableCachedLyrics(compared)) lyricsData = compared;
+      if (compared?.whisperAttempted && usableCachedLyrics(compared)) lyricsData = compared;
       if (lyricsData) {
 
 
@@ -32095,7 +32085,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       if (emptyBtn) emptyBtn.addEventListener('click', () => promptCustomLyrics(track));
 
-      if (!isBackground) startAutomaticKaraoke(track);
 
 
 
@@ -32129,20 +32118,27 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
     }
 
-    const activeWhisperJobIds = new Set();
-    async function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null, automatic = false) {
+    const activeWhisperJobs = new Map();
+    function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null, automatic = false) {
       const track = explicitTrack || (currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex]);
       if (!track || !track.id) return;
       const precise = Boolean(appConfig?.whisper_precise);
       const jobKey = `${track.id}:${precise}`;
-      if (activeWhisperJobIds.has(jobKey)) return;
-      activeWhisperJobIds.add(jobKey);
+      const pending = activeWhisperJobs.get(jobKey);
+      if (pending) return pending;
+      const job = runWhisperTranscription(track, explicitStreamUrl, automatic, precise)
+        .finally(() => activeWhisperJobs.delete(jobKey));
+      activeWhisperJobs.set(jobKey, job);
+      return job;
+    }
 
+    async function runWhisperTranscription(track, explicitStreamUrl, automatic, precise) {
       const requestFetchId = lyricsFetchCounter;
       const targetTrackId = String(track.id);
-      const statusLine = document.getElementById('whisper-status-line');
-      const btn = document.getElementById('btn-whisper-transcribe');
-      const plainBtn = document.getElementById('btn-plain-whisper-transcribe');
+      const showStatus = !automatic || String(currentlyPlayingTrackId) === targetTrackId;
+      const statusLine = showStatus ? document.getElementById('whisper-status-line') : null;
+      const btn = showStatus ? document.getElementById('btn-whisper-transcribe') : null;
+      const plainBtn = showStatus ? document.getElementById('btn-plain-whisper-transcribe') : null;
       const lyricsContainer = document.getElementById('immersive-lyrics-content');
 
       if (btn) {
@@ -32168,65 +32164,35 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       if (!automatic) notify(precise ? 'Точное караоке: Whisper large-v3-turbo' : 'Запущен локальный Whisper AI...', '✨');
 
       try {
-        const previous = readTrackLyricsCache(track);
-        let online = matchedOriginalLyrics(previous, track);
-        if (!online) {
-          try {
-            const fetched = await Promise.race([
-              requestTrackLyrics(track),
-              new Promise(r => setTimeout(() => r(null), 1200))
-            ]);
-            online = matchedOriginalLyrics(fetched, track);
-          } catch (_) {}
-        }
-
-        if (online?.syncedLyrics && usableCachedLyrics(online)) {
-          const mode = precise ? 'precise' : 'fast';
-          const result = { ...online, lyricsCompared: mode };
-          lyricsCache.set(trackLyricsKey(track), result);
-          storeTrackLyrics(track, result);
-          const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
-          if (!activeId || activeId === targetTrackId) {
-            renderTrackLyrics(result, track, lyricsContainer);
-            const syncBadge = document.getElementById('lyrics-synced-badge');
-            syncBadge?.classList.toggle('hidden', !currentParsedLyrics.length);
-          }
-          if (!automatic) notify('Найдено официальное караоке ✨', '🎤');
-          return;
-        }
-
         const { title, artist } = trackLyricsIdentity(track);
-        const promptCandidate = online?.plainLyrics || previous?.plainLyrics || previous?.syncedLyrics || null;
-        const recognition = (async () => {
+        let selected;
+        try {
           const stream = explicitStreamUrl || getCachedStreamUrl(track.id) || await requestStreamUrl(track.id);
           const streamUrl = typeof stream === 'object' && stream !== null ? stream.url : stream;
           if (!streamUrl) throw new Error('Не удалось получить аудиопоток трека');
-          return api.transcribeTrack(track.id, streamUrl, precise, title, artist, promptCandidate);
-        })().then(data => ({ data }), error => ({ error }));
-        const [delayedOnline, { data, error }] = await Promise.all([
-          online ? Promise.resolve(online) : requestTrackLyrics(track).then(res => matchedOriginalLyrics(res, track)).catch(() => null),
-          recognition
-        ]);
-        const original = delayedOnline || online;
-        const recognized = data?.syncedLyrics && usableCachedLyrics(data) ? data : null;
-        const useOriginal = original && (original.instrumental || !recognized || lyricsDifferSubstantially(recognized, original));
-        const selected = useOriginal ? original : recognized;
-        if (!selected) throw error || new Error('Текст не распознан');
+          const data = await api.transcribeTrack(track.id, streamUrl, precise, title, artist, null);
+          if (!data?.syncedLyrics || !usableCachedLyrics(data)) throw new Error('Текст не распознан');
+          selected = data;
+        } catch (error) {
+          selected = matchedOriginalLyrics(readTrackLyricsCache(track), track)
+            || matchedOriginalLyrics(await requestTrackLyrics(track), track);
+          if (!selected) throw error;
+        }
         if (!usableCachedLyrics(selected)) return;
         if (localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
         const mode = precise ? 'precise' : 'fast';
-        const result = { ...selected, lyricsCompared: mode };
+        const result = { ...selected, whisperAttempted: mode };
         const cached = lyricsCache.get(trackLyricsKey(track));
-        if (!precise && (cached?.lyricsCompared === 'precise' || cached?.whisperPrecise)) return;
+        if (!precise && (cached?.whisperAttempted === 'precise' || cached?.whisperPrecise)) return;
         lyricsCache.set(trackLyricsKey(track), result);
         storeTrackLyrics(track, result);
 
         const activeId = currentlyPlayingTrackId ? String(currentlyPlayingTrackId) : null;
-        if (activeId ? activeId !== targetTrackId : requestFetchId !== lyricsFetchCounter) return;
+        if (activeId ? activeId !== targetTrackId : automatic || requestFetchId !== lyricsFetchCounter) return;
         renderTrackLyrics(result, track, lyricsContainer);
         const syncBadge = document.getElementById('lyrics-synced-badge');
         syncBadge?.classList.toggle('hidden', !currentParsedLyrics.length);
-        if (!automatic) notify(useOriginal ? 'Показан найденный текст песни' : 'Караоке готово', '🎤');
+        if (!automatic) notify(selected.isAi ? 'Караоке готово' : 'Показан найденный текст песни', '🎤');
       } catch (err) {
         console.error('Whisper transcribe error:', err);
         const msg = err && err.message ? err.message : String(err || '');
@@ -32235,7 +32201,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           statusLine.textContent = `❌ ${msg}`;
         }
       } finally {
-        activeWhisperJobIds.delete(jobKey);
         if (btn) {
           btn.disabled = false;
           btn.classList.remove('opacity-75');

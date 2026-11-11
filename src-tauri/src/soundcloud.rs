@@ -1617,25 +1617,30 @@ impl SoundCloudClient {
         !is_noise
     }
 
+    fn whisper_line_text(line: &str) -> String {
+        let text = line.split_once(']').map(|(_, text)| text).unwrap_or(line);
+        let mut parts = text.split('<');
+        let mut plain = parts.next().unwrap_or_default().to_string();
+        for part in parts {
+            plain.push_str(part.split_once('>').map(|(_, word)| word).unwrap_or(part));
+        }
+        plain
+    }
+
     fn clean_whisper_lrc(lrc: &str) -> String {
-        lrc.lines().filter(|line| {
-            let text = line.split_once(']').map(|(_, text)| text).unwrap_or(line);
-            let mut parts = text.split('<');
-            let mut plain = parts.next().unwrap_or_default().to_string();
-            for part in parts {
-                plain.push_str(part.split_once('>').map(|(_, word)| word).unwrap_or(part));
-            }
-            Self::whisper_has_lyric_words(&plain)
-        }).collect::<Vec<_>>().join("\n")
+        lrc.lines()
+            .filter(|line| Self::whisper_has_lyric_words(&Self::whisper_line_text(line)))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     fn whisper_output_is_low_quality(lrc: &str, json_path: &Path, precise: bool) -> bool {
         let lines = lrc.lines()
-            .map(|line| line.split_once(']').map(|(_, text)| text).unwrap_or(line))
-            .map(str::trim)
-            .filter(|line| Self::whisper_has_lyric_words(line));
-        let words = lines.clone()
-            .flat_map(str::split_whitespace)
+            .map(Self::whisper_line_text)
+            .filter(|line| Self::whisper_has_lyric_words(line))
+            .collect::<Vec<_>>();
+        let words = lines.iter()
+            .flat_map(|line| line.split_whitespace())
             .filter(|word| word.chars().any(char::is_alphanumeric))
             .count();
         if words < 3 {
@@ -1647,13 +1652,17 @@ impl SoundCloudClient {
             let mut run = 0;
             let mut longest = 0;
             let mut count = 0;
-            for line in lines {
-                run = if line == previous { run + 1 } else { 1 };
+            for line in &lines {
+                let line = line.trim();
+                run = if line.eq_ignore_ascii_case(previous) { run + 1 } else { 1 };
                 longest = longest.max(run);
                 previous = line;
                 count += 1;
             }
-            if (longest >= 8 && longest * 2 >= count) || (longest >= 4 && longest * 4 >= count * 3) {
+            if (longest == count && longest >= 3)
+                || (longest >= 8 && longest * 2 >= count)
+                || (longest >= 4 && longest * 4 >= count * 3)
+            {
                 return true;
             }
         }
