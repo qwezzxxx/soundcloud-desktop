@@ -17086,7 +17086,7 @@
     async function prefetchLyricsForTrack(track) {
       if (!track || !track.id) return;
       if (automaticKaraokeEnabled(track)) {
-        await startAutomaticKaraoke(track);
+        if (activeWhisperJobs.size === 0) await startAutomaticKaraoke(track);
         return;
       }
       const cacheKey = trackLyricsKey(track);
@@ -31758,13 +31758,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
       const pendingRecognition = startAutomaticKaraoke(track);
-      if (pendingRecognition) {
-        if (!isBackground && lyricsContainer) {
-          lyricsContainer.textContent = 'Whisper распознаёт текст…';
-        }
-        await pendingRecognition;
-        if (currentFetchId !== lyricsFetchCounter || localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
-      }
       // 2. Instant In-Memory Cache (0 ms)
 
 
@@ -31906,8 +31899,8 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      const compared = lyricsCache.get(cacheKey);
-      if (compared?.whisperAttempted && usableCachedLyrics(compared)) lyricsData = compared;
+      const recognized = lyricsCache.get(cacheKey);
+      if (recognized?.whisperAttempted && usableCachedLyrics(recognized)) lyricsData = recognized;
       if (lyricsData) {
 
 
@@ -32004,6 +31997,16 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+      if (pendingRecognition) {
+        lyricsContainer.textContent = 'Whisper распознаёт текст…';
+        await pendingRecognition;
+        if (currentFetchId !== lyricsFetchCounter || localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
+        const result = readTrackLyricsCache(track);
+        if (result) {
+          renderTrackLyrics(result, track, lyricsContainer);
+          return;
+        }
+      }
       // No lyrics found - clean minimal card
 
 
