@@ -11472,13 +11472,8 @@
 
 
       getLyrics: (title, artist, duration) => api.invoke('get_lyrics', { title, artist, duration }),
-      transcribeTrack: async (trackId, streamUrl, precise, title, artist, prompt) => {
-        try {
-          return await api.invoke('transcribe_track', { trackId, streamUrl, precise, title, artist, prompt });
-        } catch (_) {
-          return await api.invoke('transcribe_track', { trackId, streamUrl, precise });
-        }
-      },
+      transcribeTrack: (trackId, streamUrl, precise, title, artist, prompt) =>
+        api.invoke('transcribe_track', { trackId, streamUrl, precise, title, artist, prompt }),
 
 
 
@@ -32026,9 +32021,15 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
+      let recognitionError = null;
       if (pendingRecognition) {
-        lyricsContainer.textContent = 'Whisper распознаёт текст…';
-        await pendingRecognition;
+        lyricsContainer.innerHTML = '<p data-whisper-wait role="status"></p>';
+        const status = lyricsContainer.querySelector('[data-whisper-wait]');
+        status.dataset.whisperTrack = String(track.id);
+        status.textContent = runningWhisperTrack === String(track.id)
+          ? 'Whisper обрабатывает аудио…'
+          : 'Трек ждёт своей очереди на распознавание…';
+        recognitionError = await pendingRecognition;
         if (currentFetchId !== lyricsFetchCounter || localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;
         const result = readTrackLyricsCache(track);
         if (result) {
@@ -32080,7 +32081,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-            Для этого трека пока нет текста в базе. Вы можете добавить синхронизированный текст караоке вручную:
+            ${escapeMarkup(recognitionError || 'Для этого трека пока нет текста в базе. Можно добавить текст караоке вручную.')}
 
 
 
@@ -32151,6 +32152,25 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
     const activeWhisperJobs = new Map();
+    let runningWhisperTrack = null;
+    let queuedWhisperJob = null;
+
+    function runQueuedWhisperJob(job) {
+      runningWhisperTrack = String(job.track.id);
+      const status = document.querySelector('[data-whisper-wait]');
+      if (status?.dataset.whisperTrack === runningWhisperTrack) {
+        status.textContent = 'Whisper обрабатывает аудио…';
+      }
+      runWhisperTranscription(job.track, job.streamUrl, job.automatic, job.precise)
+        .then(job.resolve, error => job.resolve(String(error?.message || error)))
+        .finally(() => {
+          activeWhisperJobs.delete(job.key);
+          runningWhisperTrack = null;
+          const next = queuedWhisperJob;
+          queuedWhisperJob = null;
+          if (next) runQueuedWhisperJob(next);
+        });
+    }
     function startWhisperTranscription(explicitTrack = null, explicitStreamUrl = null, automatic = false) {
       const track = explicitTrack || (currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex]);
       if (!track || !track.id) return;
@@ -32158,10 +32178,20 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       const jobKey = `${track.id}:${precise}`;
       const pending = activeWhisperJobs.get(jobKey);
       if (pending) return pending;
-      const job = runWhisperTranscription(track, explicitStreamUrl, automatic, precise)
-        .finally(() => activeWhisperJobs.delete(jobKey));
-      activeWhisperJobs.set(jobKey, job);
-      return job;
+      let resolve;
+      const promise = new Promise(done => { resolve = done; });
+      const job = { key: jobKey, track, streamUrl: explicitStreamUrl, automatic, precise, resolve };
+      activeWhisperJobs.set(jobKey, promise);
+      if (runningWhisperTrack === null) {
+        runQueuedWhisperJob(job);
+      } else {
+        if (queuedWhisperJob) {
+          activeWhisperJobs.delete(queuedWhisperJob.key);
+          queuedWhisperJob.resolve(null);
+        }
+        queuedWhisperJob = job;
+      }
+      return promise;
     }
 
     async function runWhisperTranscription(track, explicitStreamUrl, automatic, precise) {
@@ -32237,6 +32267,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         if (statusLine) {
           statusLine.textContent = `❌ ${msg}`;
         }
+        return msg;
       } finally {
         if (btn) {
           btn.disabled = false;
