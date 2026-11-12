@@ -23,6 +23,7 @@ urlencoding = "2.1"
 getrandom = "0.3"
 dirs = "5.0"
 tempfile = "3"
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

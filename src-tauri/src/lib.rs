@@ -775,6 +775,15 @@ pub fn run() {
     let state = AppState { sc, discord };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_skip_taskbar(false);
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(state)
         .setup(move |app| {
             #[cfg(all(windows, target_arch = "x86_64"))]
