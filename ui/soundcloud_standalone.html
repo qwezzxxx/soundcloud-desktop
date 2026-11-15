@@ -3619,6 +3619,14 @@
     #immersive-eq-btn > svg { scale: 1.25; }
     #immersive-volume-btn > svg { scale: 1.1; }
 
+    #immersive-player-view > #queue-drawer {
+      top: 64px;
+      bottom: 16px;
+      z-index: 60;
+      max-width: calc(100% - 16px);
+      border-radius: 16px 0 0 16px;
+    }
+
     .karaoke-controls {
       display: grid;
       grid-template-columns: repeat(9, minmax(0, 1fr));
@@ -10045,7 +10053,12 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
               </button>
-<button id="immersive-shuffle-btn" onclick="toggleShuffle(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Перемешать" style="pointer-events: auto !important;">
+<button id="immersive-queue-btn" type="button" onclick="toggleQueueDrawer(true)" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Очередь воспроизведения" aria-label="Очередь воспроизведения" aria-controls="queue-drawer">
+              <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1"/>
+              </svg>
+            </button>
+            <button id="immersive-shuffle-btn" onclick="toggleShuffle(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Перемешать" style="pointer-events: auto !important;">
                 <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
             <path d="m18 2 4 4-4 4"/>
@@ -11896,6 +11909,8 @@
 
 
     const queueDrawer = document.getElementById('queue-drawer');
+    const queueDrawerParent = queueDrawer.parentNode;
+    const queueDrawerNextSibling = queueDrawer.nextSibling;
 
 
 
@@ -18814,10 +18829,17 @@
 
 
 
-    toggleQueueBtn.addEventListener('click', () => {
+    function toggleQueueDrawer(inKaraoke = false) {
+      const parent = inKaraoke ? document.getElementById('immersive-player-view') : queueDrawerParent;
+      if (queueDrawer.parentNode !== parent) {
+        queueDrawer.classList.add('translate-x-full');
+        parent.insertBefore(queueDrawer, inKaraoke ? null : queueDrawerNextSibling);
+      }
       if (queueDrawer.classList.contains('translate-x-full')) updateQueueDrawer();
       queueDrawer.classList.toggle('translate-x-full');
-    });
+    }
+
+    toggleQueueBtn.addEventListener('click', () => toggleQueueDrawer());
 
 
 
@@ -29997,6 +30019,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     function closeImmersiveView() {
+      if (queueDrawer.parentNode !== queueDrawerParent) {
+        queueDrawer.classList.add('translate-x-full');
+        queueDrawerParent.insertBefore(queueDrawer, queueDrawerNextSibling);
+      }
       document.getElementById('eq-popover')?.classList.add('hidden');
 
 
