@@ -168,7 +168,7 @@ impl DiscordManager {
             assets.insert("large_image".to_string(), serde_json::json!(cover));
             assets.insert(
                 "large_text".to_string(),
-                serde_json::json!("Через ONYX"),
+                serde_json::json!("В плеере ONYX"),
             );
         }
         // Mirror the player's button independently of the activity name.
