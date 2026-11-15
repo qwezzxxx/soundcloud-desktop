@@ -9988,9 +9988,9 @@
 
 
         <!-- Playback Controls (Play/Pause strictly centered under duration, balanced wings) -->
-          <div class="relative z-20 w-full max-w-md px-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-2 pt-1 select-none" style="pointer-events: auto !important;">
+          <div class="relative z-20 w-full max-w-[464px] px-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-2 pt-1 select-none" style="pointer-events: auto !important;">
             <!-- Left Wing: Like Button -->
-            <div class="flex items-center justify-start min-w-0">
+            <div class="flex items-center justify-start gap-2 min-w-0">
               <button id="immersive-like-btn" onclick="toggleCurrentTrackLike()" class="p-2 text-neutral-400 hover:text-white transition-all hover:scale-110 active:scale-90 cursor-pointer" title="Нравится" style="pointer-events: auto !important;">
                 <svg id="immersive-like-svg" class="w-5 h-5 pointer-events-none transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
@@ -10038,7 +10038,7 @@
             </div>
 
             <!-- Right Wing: Compact Volume Slider -->
-            <div class="flex items-center justify-end gap-1.5 min-w-0" style="pointer-events: auto !important;">
+            <div class="flex items-center justify-end gap-1 min-w-0" style="pointer-events: auto !important;">
               <button id="immersive-volume-btn" onclick="toggleMute()" class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Громкость" style="pointer-events: auto !important;">
                 <svg id="immersive-volume-icon" class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
               </button>
