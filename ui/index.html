@@ -21973,7 +21973,7 @@
     window.setWaveMood = setWaveMood;
 
     async function toggleWavePlayback() {
-      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length > 35) {
+      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0) {
         await startWave(true);
       } else {
         togglePlay();
