@@ -3703,6 +3703,7 @@
     }
 
     .karaoke-volume-panel {
+      position: relative;
       display: grid;
       place-items: center;
       width: 40px;
@@ -3711,9 +3712,11 @@
     }
 
     .karaoke-volume-panel #immersive-volume-slider {
-      grid-area: 1 / 1;
-      justify-self: center;
-      transform: rotate(-90deg);
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      margin: 0;
+      transform: translate(-50%, -50%) rotate(-90deg);
     }
 
     #immersive-volume-slider {
