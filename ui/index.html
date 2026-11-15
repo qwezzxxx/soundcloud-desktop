@@ -10184,6 +10184,9 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
               </button>
+              <button id="immersive-eq-btn" type="button" class="p-2 shrink-0 rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Эквалайзер" aria-label="Эквалайзер" aria-controls="eq-popover" style="pointer-events: auto !important;">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+              </button>
             </div>
 
             <!-- Center: Symmetrical Playback Controls (Play/Pause strictly centered under duration) -->
@@ -29267,6 +29270,7 @@
 
 
     const eqToggleBtn = document.getElementById('eq-btn');
+    const immersiveEqBtn = document.getElementById('immersive-eq-btn');
 
 
 
@@ -29298,47 +29302,19 @@
 
 
 
-    if (eqToggleBtn) {
-
-
-
-
-
-
-
-      eqToggleBtn.addEventListener('click', (e) => {
-
-
-
-
-
-
-
-        e.stopPropagation();
-
-
-
-
-
-
-
-        if (eqPopover) eqPopover.classList.toggle('hidden');
-
-
-
-
-
-
-
-      });
-
-
-
-
-
-
-
+    function toggleEqPopover(event) {
+      event.stopPropagation();
+      if (eqPopover && !eqPopover.classList.toggle('hidden')) {
+        const fromKaraoke = event.currentTarget === immersiveEqBtn;
+        const anchor = event.currentTarget.getBoundingClientRect();
+        eqPopover.style.left = fromKaraoke ? Math.max(12, Math.min(anchor.left, window.innerWidth - eqPopover.offsetWidth - 12)) + 'px' : '';
+        eqPopover.style.right = fromKaraoke ? 'auto' : '';
+        eqPopover.style.bottom = fromKaraoke ? Math.max(12, window.innerHeight - anchor.top + 8) + 'px' : '';
+      }
     }
+
+    eqToggleBtn?.addEventListener('click', toggleEqPopover);
+    immersiveEqBtn?.addEventListener('click', toggleEqPopover);
 
 
 
@@ -29402,7 +29378,7 @@
 
 
 
-        if (!eqPopover.contains(e.target) && e.target !== eqToggleBtn && !eqToggleBtn.contains(e.target)) {
+        if (!eqPopover.contains(e.target) && !eqToggleBtn?.contains(e.target) && !immersiveEqBtn?.contains(e.target)) {
 
 
 
@@ -30118,6 +30094,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     function closeImmersiveView() {
+      document.getElementById('eq-popover')?.classList.add('hidden');
 
 
 
