@@ -3615,6 +3615,101 @@
 
 
 
+    #immersive-like-btn > svg { scale: 0.8; }
+    #immersive-eq-btn > svg { scale: 1.25; }
+    #immersive-volume-btn > svg { scale: 1.1; }
+
+    #queue-drawer {
+      background: var(--panel-bg) !important;
+      border-color: var(--panel-border);
+      backdrop-filter: blur(var(--glass-blur, 16px));
+    }
+
+    #queue-drawer .queue-heading {
+      border-color: var(--panel-border);
+    }
+
+    #queue-drawer .queue-current {
+      background: var(--card-bg);
+      border: 1px solid var(--panel-border);
+    }
+
+    #queue-next-list > div:hover {
+      background: var(--card-bg);
+    }
+
+    #immersive-player-view > #queue-drawer {
+      top: 72px;
+      right: 16px;
+      bottom: 24px;
+      z-index: 60;
+      width: 320px;
+      max-width: calc(100% - 32px);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      background: var(--panel-bg) !important;
+      backdrop-filter: blur(32px) saturate(0.8);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.24);
+    }
+
+    #immersive-player-view > #queue-drawer.translate-x-full {
+      transform: translateX(calc(100% + 24px));
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    #immersive-player-view #queue-next-list > div {
+      padding: 10px 8px;
+      border-radius: 10px;
+    }
+
+    .karaoke-controls {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      align-items: center;
+      justify-items: center;
+    }
+
+    .karaoke-controls #immersive-shuffle-btn {
+      grid-column: 3;
+    }
+
+    .karaoke-volume-popover {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      translate: -50% 0;
+      padding-bottom: 6px;
+      visibility: hidden;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+    }
+
+    .karaoke-volume:hover .karaoke-volume-popover,
+    .karaoke-volume:focus-within .karaoke-volume-popover {
+      visibility: visible;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .karaoke-volume-panel {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 132px;
+      background-color: var(--surface, #17141d);
+    }
+
+    .karaoke-volume-panel #immersive-volume-slider {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      margin: 0;
+      transform: translate(-50%, -50%) rotate(-90deg);
+    }
+
     #immersive-volume-slider {
 
 
@@ -3623,7 +3718,11 @@
 
 
 
-      width: 58px !important;
+      width: 112px !important;
+      height: 28px !important;
+      background-size: 100% 4px !important;
+      background-repeat: no-repeat !important;
+      background-position: center !important;
 
 
 
@@ -3640,7 +3739,7 @@
 
 
     body.theme-light #volume-slider, body.theme-light #immersive-volume-slider {
-      background: linear-gradient(to right, var(--accent, #0f172a) 0%, var(--accent, #0f172a) var(--vol-percent, 80%), rgba(15, 23, 42, 0.15) var(--vol-percent, 80%), rgba(15, 23, 42, 0.15) 100%) !important;
+      background-image: linear-gradient(to right, var(--accent, #0f172a) 0%, var(--accent, #0f172a) var(--vol-percent, 80%), rgba(15, 23, 42, 0.15) var(--vol-percent, 80%), rgba(15, 23, 42, 0.15) 100%) !important;
       accent-color: var(--accent, #0f172a) !important;
     }
     body.theme-light #volume-slider::-webkit-slider-thumb, 
@@ -8278,7 +8377,7 @@
 
 
 
-        <div class="flex items-center justify-between pb-3 border-b border-white/5">
+        <div class="queue-heading flex items-center justify-between pb-3 border-b border-white/5">
 
 
 
@@ -8326,7 +8425,7 @@
 
 
 
-          <div class="p-2 rounded-xl bg-white/5 flex items-center gap-3">
+          <div class="queue-current p-2 rounded-xl flex items-center gap-3">
 
 
 
@@ -8866,7 +8965,7 @@
 
 
 
-            <svg id="play-icon" class="w-4 h-4 fill-black text-black ml-0.5 pointer-events-none" viewBox="0 0 24 24">
+            <svg id="play-icon" class="w-4 h-4 fill-black text-black pointer-events-none" viewBox="0 0 24 24">
 
 
 
@@ -8874,7 +8973,7 @@
 
 
 
-              <path d="M7 5.5v13a.5.5 0 0 0 .76.43l10-6.5a.5.5 0 0 0 0-.86l-10-6.5A.5.5 0 0 0 7 5.5z"/>
+              <path transform="translate(1.375 0)" d="M7 5.5v13a.5.5 0 0 0 .76.43l10-6.5a.5.5 0 0 0 0-.86l-10-6.5A.5.5 0 0 0 7 5.5z"/>
 
 
 
@@ -9053,7 +9152,7 @@
 
 
 
-        <button id="shuffle-btn" onclick="toggleShuffle(); this.blur();" class="hover:text-white transition-colors cursor-pointer p-1" title="Перемешать">
+        <button id="shuffle-btn" style="transform: translateX(-6px);" onclick="toggleShuffle(); this.blur();" class="hover:text-white transition-colors cursor-pointer p-1" title="Перемешать">
           <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
             <path d="m18 2 4 4-4 4"/>
@@ -9983,20 +10082,19 @@
 
 
 
-        <!-- Playback Controls (Play/Pause strictly centered under duration, balanced wings) -->
-          <div class="relative z-20 w-full max-w-md px-4 grid grid-cols-[1fr_auto_1fr] items-center pt-1 select-none" style="pointer-events: auto !important;">
-            <!-- Left Wing: Like Button -->
-            <div class="flex items-center justify-start min-w-0">
-              <button id="immersive-like-btn" onclick="toggleCurrentTrackLike()" class="p-2 text-neutral-400 hover:text-white transition-all hover:scale-110 active:scale-90 cursor-pointer" title="Нравится" style="pointer-events: auto !important;">
+        <!-- Karaoke playback controls -->
+          <div class="karaoke-controls relative z-20 w-full max-w-[464px] px-2 pt-1 select-none" style="pointer-events: auto !important;">
+            <button id="immersive-like-btn" onclick="toggleCurrentTrackLike()" class="p-2 text-neutral-400 hover:text-white transition-all hover:scale-110 active:scale-90 cursor-pointer" title="Нравится" style="pointer-events: auto !important;">
                 <svg id="immersive-like-svg" class="w-5 h-5 pointer-events-none transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
               </button>
-            </div>
-
-            <!-- Center: Symmetrical Playback Controls (Play/Pause strictly centered under duration) -->
-            <div class="flex items-center justify-center gap-3 shrink-0" style="pointer-events: auto !important;">
-              <button id="immersive-shuffle-btn" onclick="toggleShuffle(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Перемешать" style="pointer-events: auto !important;">
+<button id="immersive-queue-btn" type="button" onclick="toggleQueueDrawer(true)" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Очередь воспроизведения" aria-label="Очередь воспроизведения" aria-controls="queue-drawer">
+              <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1"/>
+              </svg>
+            </button>
+            <button id="immersive-shuffle-btn" onclick="toggleShuffle(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Перемешать" style="pointer-events: auto !important;">
                 <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
             <path d="m18 2 4 4-4 4"/>
@@ -10005,22 +10103,22 @@
             <path d="m18 14 4 4-4 4"/>
           </svg>
               </button>
-              <button id="immersive-prev-btn" onclick="playPrevTrack()" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer active:scale-90" title="Предыдущий трек" style="pointer-events: auto !important;">
+            <button id="immersive-prev-btn" onclick="playPrevTrack()" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer active:scale-90" title="Предыдущий трек" style="pointer-events: auto !important;">
                 <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 20 20"><path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z"/></svg>
               </button>
-              <button id="immersive-play-btn" onclick="togglePlay()" class="w-10 h-10 rounded-full flex items-center justify-center bg-white text-black font-bold shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0" title="Воспроизведение / Пауза" style="pointer-events: auto !important;">
-                <svg id="immersive-play-icon" class="w-4 h-4 fill-black pointer-events-none ml-0.5" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/>
+            <button id="immersive-play-btn" onclick="togglePlay()" class="w-10 h-10 rounded-full flex items-center justify-center bg-white text-black font-bold shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0" title="Воспроизведение / Пауза" style="pointer-events: auto !important;">
+                <svg id="immersive-play-icon" class="w-4 h-4 fill-black pointer-events-none" viewBox="0 0 24 24">
+                  <path transform="translate(1.375 0)" d="M7 5.5v13a.5.5 0 0 0 .76.43l10-6.5a.5.5 0 0 0 0-.86l-10-6.5A.5.5 0 0 0 7 5.5z"/>
                 </svg>
                 <svg id="immersive-pause-icon" class="w-4 h-4 fill-black hidden pointer-events-none" viewBox="0 0 24 24">
                   <rect x="6" y="4" width="4" height="16" rx="1.5"/>
                   <rect x="14" y="4" width="4" height="16" rx="1.5"/>
                 </svg>
               </button>
-              <button id="immersive-next-btn" onclick="playNextTrack()" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer active:scale-90" title="Следующий трек" style="pointer-events: auto !important;">
+            <button id="immersive-next-btn" onclick="playNextTrack()" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer active:scale-90" title="Следующий трек" style="pointer-events: auto !important;">
                 <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 20 20"><path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4A1 1 0 0010 6v2.798L4.555 5.168z"/></svg>
               </button>
-              <button id="immersive-repeat-btn" onclick="toggleRepeat(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Повтор" style="pointer-events: auto !important;">
+            <button id="immersive-repeat-btn" onclick="toggleRepeat(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Повтор" style="pointer-events: auto !important;">
                 <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m17 2 4 4-4 4"/>
             <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
@@ -10028,14 +10126,18 @@
             <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
           </svg>
               </button>
-            </div>
-
-            <!-- Right Wing: Compact Volume Slider -->
-            <div class="flex items-center justify-end gap-1.5 min-w-0" style="pointer-events: auto !important;">
-              <button id="immersive-volume-btn" onclick="toggleMute()" class="p-1.5 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Громкость" style="pointer-events: auto !important;">
+            <button id="immersive-eq-btn" type="button" class="p-2 shrink-0 rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Эквалайзер" aria-label="Эквалайзер" aria-controls="eq-popover" style="pointer-events: auto !important;">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+              </button>
+            <div class="karaoke-volume relative grid h-10 w-10 place-items-center">
+              <button id="immersive-volume-btn" onclick="toggleMute()" class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Громкость" style="pointer-events: auto !important;">
                 <svg id="immersive-volume-icon" class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
               </button>
-              <input id="immersive-volume-slider" type="range" min="0" max="100" value="80" oninput="setVolume(parseInt(this.value))" onchange="saveVolumeConfig()" class="w-14 sm:w-16 h-1 cursor-pointer custom-range-slider" title="Громкость" style="pointer-events: auto !important;">
+              <div class="karaoke-volume-popover">
+                <div class="karaoke-volume-panel card-glass border border-white/10 rounded-full shadow-xl">
+                  <input id="immersive-volume-slider" type="range" min="0" max="100" value="80" oninput="setVolume(parseInt(this.value))" onchange="saveVolumeConfig()" class="min-w-0 cursor-pointer custom-range-slider focus-visible:ring-2 focus-visible:ring-white/50" title="Громкость" style="pointer-events: auto !important;">
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -11618,6 +11720,7 @@
     let repeatMode = "off"; // "off" | "all" | "one" (from upstream donor)
     let originalQueue = null; // Preserves un-shuffled playlist order
     const shufflePlayedTrackIds = new Set();
+    let shuffleUpcomingTracks = [];
 
 
 
@@ -11843,6 +11946,8 @@
 
 
     const queueDrawer = document.getElementById('queue-drawer');
+    const queueDrawerParent = queueDrawer.parentNode;
+    const queueDrawerNextSibling = queueDrawer.nextSibling;
 
 
 
@@ -16688,6 +16793,7 @@
         if (session.isShuffle !== undefined) {
           isShuffle = Boolean(session.isShuffle);
           shufflePlayedTrackIds.clear();
+        shuffleUpcomingTracks = [];
           if (isShuffle && Array.isArray(session.shufflePlayedTrackIds)) {
             session.shufflePlayedTrackIds.forEach(id => shufflePlayedTrackIds.add(String(id)));
           }
@@ -16818,6 +16924,7 @@
             originalQueue = [...newQueue];
             currentQueue = [...newQueue];
             shufflePlayedTrackIds.clear();
+        shuffleUpcomingTracks = [];
             for (let i = 0; i <= index && i < newQueue.length; i++) {
               if (newQueue[i]?.id != null) shufflePlayedTrackIds.add(String(newQueue[i].id));
             }
@@ -16825,6 +16932,7 @@
             currentQueue = [...newQueue];
             originalQueue = null;
             shufflePlayedTrackIds.clear();
+        shuffleUpcomingTracks = [];
           }
         }
 
@@ -17116,6 +17224,33 @@
 
 
         // Upstream Fisher-Yates shuffle algorithm
+    function getShuffleUpcomingIndices() {
+      const candidates = currentQueue.filter((track, index) =>
+        index !== currentTrackIndex && track?.id != null && !shufflePlayedTrackIds.has(String(track.id)));
+      const available = new Set(candidates);
+      shuffleUpcomingTracks = shuffleUpcomingTracks.filter(track => available.has(track));
+      const planned = new Set(shuffleUpcomingTracks);
+      shuffleUpcomingTracks.push(...shuffleArray(candidates.filter(track => !planned.has(track))));
+      const ordered = [];
+      const seenIds = new Set();
+      let previous = currentQueue[currentTrackIndex];
+      while (shuffleUpcomingTracks.length) {
+        const artist = currentStationUrn === 'my_wave' ? waveArtistKey(previous) : '';
+        const different = artist ? shuffleUpcomingTracks.findIndex(track => {
+          const nextArtist = waveArtistKey(track);
+          return nextArtist && nextArtist !== artist;
+        }) : -1;
+        const [track] = shuffleUpcomingTracks.splice(different >= 0 ? different : 0, 1);
+        if (seenIds.has(String(track.id))) continue;
+        seenIds.add(String(track.id));
+        ordered.push(track);
+        previous = track;
+      }
+      shuffleUpcomingTracks = ordered;
+      const indices = new Map(currentQueue.map((track, index) => [track, index]));
+      return ordered.map(track => indices.get(track));
+    }
+
     function shuffleArray(arr) {
       const originalOrder = arr.slice();
       for (let i = arr.length - 1; i > 0; i--) {
@@ -17131,15 +17266,9 @@
     function playNextTrack() {
       if (!currentQueue || currentQueue.length === 0) return;
       if (isShuffle) {
-        const candidates = [];
-        currentQueue.forEach((track, index) => {
-          if (index !== currentTrackIndex && track?.id != null && !shufflePlayedTrackIds.has(String(track.id))) {
-            candidates.push(index);
-          }
-        });
-        if (candidates.length > 0) {
-          const nextIdx = candidates[Math.floor(Math.random() * candidates.length)];
-          playTrack(nextIdx);
+        const upcoming = getShuffleUpcomingIndices();
+        if (upcoming.length > 0) {
+          playTrack(upcoming[0]);
           return;
         }
         if (isWaveActive && typeof checkWaveReplenish === 'function') checkWaveReplenish();
@@ -18615,6 +18744,7 @@
           originalQueue = [...currentQueue];
         }
         shufflePlayedTrackIds.clear();
+        shuffleUpcomingTracks = [];
         if (currentQueue) {
           currentQueue.slice(0, currentTrackIndex + 1).forEach(track => {
             if (track?.id != null) shufflePlayedTrackIds.add(String(track.id));
@@ -18630,6 +18760,7 @@
           originalQueue = null;
         }
         shufflePlayedTrackIds.clear();
+        shuffleUpcomingTracks = [];
         notify("Перемешивание выключено", "➡️");
       }
       syncShuffleRepeatStyles();
@@ -18761,10 +18892,17 @@
 
 
 
-    toggleQueueBtn.addEventListener('click', () => {
+    function toggleQueueDrawer(inKaraoke = false) {
+      const parent = inKaraoke ? document.getElementById('immersive-player-view') : queueDrawerParent;
+      if (queueDrawer.parentNode !== parent) {
+        queueDrawer.classList.add('translate-x-full');
+        parent.insertBefore(queueDrawer, inKaraoke ? null : queueDrawerNextSibling);
+      }
       if (queueDrawer.classList.contains('translate-x-full')) updateQueueDrawer();
       queueDrawer.classList.toggle('translate-x-full');
-    });
+    }
+
+    toggleQueueBtn.addEventListener('click', () => toggleQueueDrawer());
 
 
 
@@ -18794,6 +18932,7 @@
       queueList.innerHTML = '';
 
       if (!current) {
+        if (queueCount) queueCount.textContent = '';
         currentTitle.textContent = 'Нет текущего трека';
         currentArtist.textContent = 'Очередь пуста';
         currentCover.src = 'logo.png';
@@ -18805,10 +18944,11 @@
       currentArtist.textContent = current.artist || 'Неизвестный исполнитель';
       currentCover.src = current.cover || current.artwork_url || 'logo.png';
 
-      const upcomingCount = isWaveActive
-        ? Math.max(0, currentQueue.length - 1)
-        : Math.max(0, currentQueue.length - currentTrackIndex - 1);
-
+      const upcomingIndices = isShuffle
+        ? getShuffleUpcomingIndices()
+        : Array.from({ length: isWaveActive ? Math.max(0, currentQueue.length - 1) : Math.max(0, currentQueue.length - currentTrackIndex - 1) },
+          (_, offset) => (currentTrackIndex + offset + 1) % currentQueue.length);
+      const upcomingCount = upcomingIndices.length;
       if (queueCount) queueCount.textContent = upcomingCount ? `${upcomingCount}` : '';
 
       if (upcomingCount === 0) {
@@ -18816,10 +18956,7 @@
         return;
       }
 
-      for (let offset = 1; offset <= upcomingCount; offset++) {
-        const idx = isWaveActive
-          ? (currentTrackIndex + offset) % currentQueue.length
-          : currentTrackIndex + offset;
+      for (const idx of upcomingIndices) {
         const track = currentQueue[idx];
         if (!track) continue;
 
@@ -21507,6 +21644,7 @@
       originalQueue = [...currentQueue];
       isShuffle = true;
       shufflePlayedTrackIds.clear();
+        shuffleUpcomingTracks = [];
       if (currentQueue[currentTrackIndex]?.id != null) {
         shufflePlayedTrackIds.add(String(currentQueue[currentTrackIndex].id));
       }
@@ -29051,6 +29189,7 @@
 
 
     const eqToggleBtn = document.getElementById('eq-btn');
+    const immersiveEqBtn = document.getElementById('immersive-eq-btn');
 
 
 
@@ -29082,47 +29221,19 @@
 
 
 
-    if (eqToggleBtn) {
-
-
-
-
-
-
-
-      eqToggleBtn.addEventListener('click', (e) => {
-
-
-
-
-
-
-
-        e.stopPropagation();
-
-
-
-
-
-
-
-        if (eqPopover) eqPopover.classList.toggle('hidden');
-
-
-
-
-
-
-
-      });
-
-
-
-
-
-
-
+    function toggleEqPopover(event) {
+      event.stopPropagation();
+      if (eqPopover && !eqPopover.classList.toggle('hidden')) {
+        const fromKaraoke = event.currentTarget === immersiveEqBtn;
+        const anchor = event.currentTarget.getBoundingClientRect();
+        eqPopover.style.left = fromKaraoke ? Math.max(12, Math.min(anchor.left, window.innerWidth - eqPopover.offsetWidth - 12)) + 'px' : '';
+        eqPopover.style.right = fromKaraoke ? 'auto' : '';
+        eqPopover.style.bottom = fromKaraoke ? Math.max(12, window.innerHeight - anchor.top + 8) + 'px' : '';
+      }
     }
+
+    eqToggleBtn?.addEventListener('click', toggleEqPopover);
+    immersiveEqBtn?.addEventListener('click', toggleEqPopover);
 
 
 
@@ -29186,7 +29297,7 @@
 
 
 
-        if (!eqPopover.contains(e.target) && e.target !== eqToggleBtn && !eqToggleBtn.contains(e.target)) {
+        if (!eqPopover.contains(e.target) && !eqToggleBtn?.contains(e.target) && !immersiveEqBtn?.contains(e.target)) {
 
 
 
@@ -29971,6 +30082,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     function closeImmersiveView() {
+      if (queueDrawer.parentNode !== queueDrawerParent) {
+        queueDrawer.classList.add('translate-x-full');
+        queueDrawerParent.insertBefore(queueDrawer, queueDrawerNextSibling);
+      }
+      document.getElementById('eq-popover')?.classList.add('hidden');
 
 
 
