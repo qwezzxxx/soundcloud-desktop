@@ -3619,6 +3619,25 @@
     #immersive-eq-btn > svg { scale: 1.25; }
     #immersive-volume-btn > svg { scale: 1.1; }
 
+    #queue-drawer {
+      background: var(--panel-bg) !important;
+      border-color: var(--panel-border);
+      backdrop-filter: blur(var(--glass-blur, 16px));
+    }
+
+    #queue-drawer .queue-heading {
+      border-color: var(--panel-border);
+    }
+
+    #queue-drawer .queue-current {
+      background: var(--card-bg);
+      border: 1px solid var(--panel-border);
+    }
+
+    #queue-next-list > div:hover {
+      background: var(--card-bg);
+    }
+
     #immersive-player-view > #queue-drawer {
       top: 72px;
       right: 16px;
@@ -8358,7 +8377,7 @@
 
 
 
-        <div class="flex items-center justify-between pb-3 border-b border-white/5">
+        <div class="queue-heading flex items-center justify-between pb-3 border-b border-white/5">
 
 
 
@@ -8406,7 +8425,7 @@
 
 
 
-          <div class="p-2 rounded-xl bg-white/5 flex items-center gap-3">
+          <div class="queue-current p-2 rounded-xl flex items-center gap-3">
 
 
 
