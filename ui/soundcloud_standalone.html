@@ -3619,6 +3619,17 @@
     #immersive-eq-btn > svg { scale: 1.25; }
     #immersive-volume-btn > svg { scale: 1.1; }
 
+    .karaoke-controls {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      align-items: center;
+      justify-items: center;
+    }
+
+    .karaoke-controls #immersive-shuffle-btn {
+      grid-column: 3;
+    }
+
     .karaoke-volume-popover {
       position: absolute;
       bottom: 100%;
@@ -10028,16 +10039,13 @@
 
 
         <!-- Karaoke playback controls -->
-          <div class="relative z-20 w-full max-w-[464px] px-2 grid grid-cols-8 items-center justify-items-center pt-1 select-none" style="pointer-events: auto !important;">
+          <div class="karaoke-controls relative z-20 w-full max-w-[464px] px-2 pt-1 select-none" style="pointer-events: auto !important;">
             <button id="immersive-like-btn" onclick="toggleCurrentTrackLike()" class="p-2 text-neutral-400 hover:text-white transition-all hover:scale-110 active:scale-90 cursor-pointer" title="Нравится" style="pointer-events: auto !important;">
                 <svg id="immersive-like-svg" class="w-5 h-5 pointer-events-none transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
               </button>
-            <button id="immersive-eq-btn" type="button" class="p-2 shrink-0 rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Эквалайзер" aria-label="Эквалайзер" aria-controls="eq-popover" style="pointer-events: auto !important;">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
-              </button>
-            <button id="immersive-shuffle-btn" onclick="toggleShuffle(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Перемешать" style="pointer-events: auto !important;">
+<button id="immersive-shuffle-btn" onclick="toggleShuffle(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Перемешать" style="pointer-events: auto !important;">
                 <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
             <path d="m18 2 4 4-4 4"/>
@@ -10068,6 +10076,9 @@
             <path d="m7 22-4-4 4-4"/>
             <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
           </svg>
+              </button>
+            <button id="immersive-eq-btn" type="button" class="p-2 shrink-0 rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Эквалайзер" aria-label="Эквалайзер" aria-controls="eq-popover" style="pointer-events: auto !important;">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
               </button>
             <div class="karaoke-volume relative grid h-10 w-10 place-items-center">
               <button id="immersive-volume-btn" onclick="toggleMute()" class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Громкость" style="pointer-events: auto !important;">
