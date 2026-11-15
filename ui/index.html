@@ -22001,6 +22001,32 @@
     }
     window.isWaveTrackRecentlyPlayed = isWaveTrackRecentlyPlayed;
 
+    function orderWaveRecommendations(tracks, limit, precedingTrack) {
+      const artistKey = track => String(track?.artist || '').trim().toLowerCase();
+      const artistCounts = new Map();
+      let previousArtist = artistKey(precedingTrack);
+      if (previousArtist) artistCounts.set(previousArtist, 1);
+      const remaining = tracks.map((track, rank) => ({ track, rank, artist: artistKey(track) }));
+      const ordered = [];
+      while (remaining.length && ordered.length < limit) {
+        let bestIndex = 0;
+        let bestScore = Infinity;
+        remaining.forEach(({ rank, artist }, index) => {
+          const score = rank + 5 * (artistCounts.get(artist) || 0)
+            + (artist && artist === previousArtist ? 8 : 0);
+          if (score < bestScore) {
+            bestScore = score;
+            bestIndex = index;
+          }
+        });
+        const [{ track, artist }] = remaining.splice(bestIndex, 1);
+        ordered.push(track);
+        if (artist) artistCounts.set(artist, (artistCounts.get(artist) || 0) + 1);
+        previousArtist = artist;
+      }
+      return ordered;
+    }
+
     async function startWave(forceNewSeed = false) {
       isWaveActive = true;
       currentStationUrn = "my_wave";
@@ -22019,6 +22045,7 @@
       }
 
       // B) Personalized mixes & featured playlists
+      const likedSeedCount = candidateSeeds.length;
       if (lastMixedData && Array.isArray(lastMixedData) && lastMixedData.length > 0) {
         lastMixedData.forEach(m => {
           if (m.tracks && Array.isArray(m.tracks)) {
@@ -22041,7 +22068,12 @@
       let seed = null;
       if (candidateSeeds.length > 0) {
         shuffleArray(candidateSeeds);
-        seed = candidateSeeds[0];
+        const likedIds = likedSeedCount
+          ? new Set(allTracks.map(track => String(track.id)))
+          : null;
+        seed = mood === 'all' && likedIds
+          ? candidateSeeds.find(track => likedIds.has(String(track.id)))
+          : candidateSeeds[0];
       }
 
       if (!seed) {
@@ -22086,8 +22118,8 @@
         }
 
         // Source 2: Pick a secondary diverse seed for complementary vibe
-        if (candidateSeeds.length > 1) {
-          const secondSeed = candidateSeeds[1];
+        const secondSeed = candidateSeeds.find(track => String(track.id) !== String(seed.id));
+        if (secondSeed) {
           try {
             let secondRelated = null;
             if (api && api.getRelatedTracks) {
@@ -22109,7 +22141,7 @@
 
         // Source 3: Mood-targeted discovery search (ensures fresh, non-repeating discoveries)
         const moodKeywords = MOOD_SEARCH_KEYWORDS[mood] || MOOD_SEARCH_KEYWORDS.all;
-        if (moodKeywords && moodKeywords.length > 0) {
+        if (moodKeywords && moodKeywords.length > 0 && (mood !== 'all' || candidatePool.length < 15)) {
           const randomQuery = moodKeywords[Math.floor(Math.random() * moodKeywords.length)];
           try {
             let searchResults = null;
@@ -22140,11 +22172,7 @@
           });
         }
 
-        // Thoroughly shuffle the candidate pool
-        shuffleArray(candidatePool);
-
-        // Take 25-30 diverse tracks
-        const finalWaveTracks = [seed, ...candidatePool.slice(0, 28)];
+        const finalWaveTracks = [seed, ...orderWaveRecommendations(candidatePool, 28, seed)];
         currentQueue = finalWaveTracks;
         if (isShuffle) originalQueue = [...finalWaveTracks];
         currentTrackIndex = 0;
@@ -22214,8 +22242,7 @@
           }
 
           if (newBatch.length > 0) {
-            shuffleArray(newBatch);
-            const replenishedTracks = newBatch.slice(0, 18);
+            const replenishedTracks = orderWaveRecommendations(newBatch, 18, currentQueue.at(-1));
             currentQueue = [...currentQueue, ...replenishedTracks];
             if (isShuffle && originalQueue) originalQueue = [...originalQueue, ...replenishedTracks];
             updateQueueDrawer();
