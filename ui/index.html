@@ -21862,7 +21862,7 @@
       const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
       const isLight = (currentThemeKey === 'light');
 
-      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0 || currentQueue.length > 35) {
+      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0) {
         container.innerHTML = `
           <div class="text-center py-12 text-xs ${isLight ? 'text-slate-400' : 'text-neutral-500'}">
             Нажмите кнопку запуска, чтобы сгенерировать умную волну по вашему вкусу.
