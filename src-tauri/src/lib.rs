@@ -2,6 +2,8 @@ mod auth_server;
 mod discord;
 mod soundcloud;
 mod multi_providers;
+#[cfg(windows)]
+mod mini_player;
 #[cfg(all(windows, target_arch = "x86_64"))]
 mod updater;
 use multi_providers::MultiProviders;
@@ -812,6 +814,11 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
             if let Some(icon) = app.default_window_icon() {
+                #[cfg(windows)]
+                if let Err(error) = mini_player::create(app.handle()) {
+                    log_debug(format!("[Mini-player] {error}"));
+                }
+
                 let _ = TrayIconBuilder::new()
                     .icon(icon.clone())
                     .tooltip("ONYX")
@@ -834,6 +841,20 @@ pub fn run() {
                         }
                     })
                     .on_tray_icon_event(|tray, event| {
+                        #[cfg(windows)]
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            position,
+                            rect,
+                            ..
+                        } = event
+                        {
+                            if mini_player::show_at_tray(tray.app_handle(), position, rect) {
+                                return;
+                            }
+                        }
+
                         if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
                             let app = tray.app_handle();
                             if let Some(w) = app.get_webview_window("main") {

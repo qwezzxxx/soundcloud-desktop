@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ONYX · Мини-плеер</title>
+<style>
+* { box-sizing: border-box }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+  background: transparent;
+  color: #f5f6f7;
+  font: 14px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+.player {
+  --surface: #1c1e23;
+  --secondary: #acafb8;
+  zoom: 1.2;
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  min-height: 116px;
+  overflow: hidden;
+  border: 1px solid #383b44;
+  border-radius: 15px;
+  background: var(--surface);
+}
+.cover {
+  position: relative;
+  align-self: stretch;
+  overflow: hidden;
+  background: linear-gradient(150deg, #565e71, #282b34 65%, var(--surface));
+}
+.cover img { display: block; width: 100%; height: 100%; object-fit: cover }
+.cover img[hidden] { display: none }
+.cover::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 57%, #1c1e2344 83%, var(--surface));
+  content: "";
+  pointer-events: none;
+}
+.content {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 5px;
+  padding: 9px 12px 8px 5px;
+}
+strong, .artist { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+strong { font-size: 14px; line-height: 17px; font-weight: 650 }
+.artist { color: var(--secondary); font-size: 11px; line-height: 15px }
+.timeline {
+  display: grid;
+  grid-template-columns: minmax(24px, auto) minmax(0, 1fr) minmax(24px, auto);
+  align-items: center;
+  gap: 6px;
+  font: 10px/1 "Segoe UI", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  color: var(--secondary);
+}
+#duration { text-align: right }
+input {
+  appearance: none;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--fill, #e0e3ec) var(--progress, 0%), #494d59 var(--progress, 0%)) center / 100% 2px no-repeat;
+  cursor: pointer;
+}
+input:disabled { opacity: .45; cursor: default }
+input::-webkit-slider-thumb { appearance: none; width: 7px; height: 7px; border-radius: 50%; background: var(--fill, #e0e3ec) }
+input::-moz-range-thumb { width: 7px; height: 7px; border: 0; border-radius: 50%; background: var(--fill, #e0e3ec) }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px }
+.controls { display: flex; align-items: center; gap: 3px }
+button {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #c6c9d1;
+  cursor: pointer;
+}
+button:disabled { opacity: .4; cursor: default }
+button:where(:enabled):hover { background: #ffffff15; color: white }
+.toggle { width: 32px; height: 32px; border-radius: 50%; background: #eceef3; color: #23262e }
+.toggle:where(:enabled):hover { background: #fff; color: #23262e }
+.toggle:where(:enabled):active { background: #cdd2de; color: #23262e }
+.toggle svg { width: 17px; height: 17px }
+.toggle [data-icon="pause"],
+.toggle[data-playing="true"] [data-icon="play"] { display: none }
+.toggle[data-playing="true"] [data-icon="pause"] { display: inline }
+button:focus-visible, input:focus-visible { outline: 2px solid #aabbea; outline-offset: 2px }
+svg { width: 14px; height: 14px; fill: currentColor }
+.volume {
+  width: 97px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 25px;
+  align-items: center;
+  gap: 5px;
+  color: var(--secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.volume input { --fill: #aab1c3 }
+.volume label { display: grid; place-items: center }
+.volume label svg { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round }
+.volume output { text-align: right }
+</style>
+<main class="scene">
+  <section class="player" aria-label="Мини-плеер ONYX">
+    <div class="cover" aria-hidden="true"><img id="cover" alt="" hidden></div>
+    <div class="content">
+      <div class="title"><strong id="song">Нет трека</strong><span class="artist" id="artist"></span></div>
+      <div class="timeline"><span id="elapsed">0:00</span><input id="seek" type="range" min="0" max="0" value="0" disabled aria-label="Перемотка"><span id="duration">0:00</span></div>
+      <div class="toolbar">
+        <div class="controls">
+          <button id="prev" disabled aria-label="Предыдущий трек"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h2v10H2zm3 5 9-5v10z"/></svg></button>
+          <button id="toggle" class="toggle" disabled aria-label="Воспроизвести" data-playing="false">
+            <svg viewBox="0 0 18 18" aria-hidden="true">
+              <path data-icon="play" d="M6.4 3.6a.8.8 0 0 0-1.2.69v9.42a.8.8 0 0 0 1.2.69l8.1-4.71a.8.8 0 0 0 0-1.38z"/>
+              <g data-icon="pause">
+                <rect x="4.5" y="3.5" width="3" height="11" rx="1"/>
+                <rect x="10.5" y="3.5" width="3" height="11" rx="1"/>
+              </g>
+            </svg>
+          </button>
+          <button id="next" disabled aria-label="Следующий трек"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12 3h2v10h-2zM2 3l9 5-9 5z"/></svg></button>
+        </div>
+        <div class="volume">
+          <label for="volume">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l3-2.5v9L5 10H2zM10.5 6a3 3 0 0 1 0 4m1.8-5.5a5 5 0 0 1 0 7"/></svg>
+          </label>
+          <input id="volume" type="range" min="0" max="100" value="0" disabled aria-label="Громкость">
+          <output id="volume-value" for="volume">0%</output>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+const events = window.__TAURI__.event;
+const byId = id => document.getElementById(id);
+const seek = byId('seek');
+const cover = byId('cover');
+const toggle = byId('toggle');
+const prev = byId('prev');
+const next = byId('next');
+const volume = byId('volume');
+let trackId = null;
+let coverUrl = '';
+let scrubbing = false;
+let adjustingVolume = false;
+let refreshTimer;
+
+function send(action, details = {}) {
+  return events.emitTo('main', 'mini-player-control', { action, ...details }).catch(console.warn);
+}
+
+function time(seconds) {
+  const value = Math.max(0, Math.floor(seconds || 0));
+  return Math.floor(value / 60) + ':' + String(value % 60).padStart(2, '0');
+}
+
+function updateProgress(value) {
+  byId('elapsed').textContent = time(value);
+  seek.style.setProperty('--progress', (Number(seek.max) > 0 ? value / seek.max * 100 : 0) + '%');
+}
+
+function showVolume(value) {
+  volume.style.setProperty('--progress', value + '%');
+  byId('volume-value').value = value + '%';
+}
+
+function render({ payload: state }) {
+  if (state.trackId !== trackId) scrubbing = false;
+  trackId = state.trackId;
+  byId('song').textContent = state.title;
+  byId('song').title = state.title;
+  byId('artist').textContent = state.artist;
+  if (state.cover !== coverUrl) {
+    coverUrl = state.cover;
+    cover.hidden = true;
+    if (coverUrl) cover.src = coverUrl;
+    else cover.removeAttribute('src');
+  }
+
+  toggle.disabled = prev.disabled = next.disabled = !trackId;
+  toggle.dataset.playing = String(state.playing);
+  toggle.setAttribute('aria-label', state.playing ? 'Пауза' : 'Воспроизвести');
+  seek.disabled = !trackId || state.duration <= 0;
+  seek.max = state.duration;
+  byId('duration').textContent = time(state.duration);
+  if (!scrubbing) {
+    seek.value = state.position;
+    updateProgress(Number(seek.value));
+  }
+  volume.disabled = false;
+  if (!adjustingVolume) {
+    volume.value = state.volume;
+    showVolume(Number(volume.value));
+  }
+}
+
+cover.onload = () => { cover.hidden = false; };
+cover.onerror = () => { cover.hidden = true; };
+prev.onclick = () => send('previous');
+next.onclick = () => send('next');
+toggle.onclick = () => send('toggle');
+seek.oninput = () => {
+  scrubbing = true;
+  updateProgress(Number(seek.value));
+};
+seek.onchange = () => {
+  scrubbing = false;
+  send('seek', { trackId, position: Number(seek.value) });
+};
+seek.onpointercancel = () => { scrubbing = false; };
+volume.oninput = () => {
+  adjustingVolume = true;
+  const value = Number(volume.value);
+  showVolume(value);
+  send('volume', { value });
+};
+volume.onchange = () => {
+  adjustingVolume = false;
+  send('volume', { value: Number(volume.value), commit: true });
+};
+volume.onpointercancel = () => { adjustingVolume = false; };
+
+function startRefresh() {
+  if (refreshTimer !== undefined) return;
+  send('state');
+  refreshTimer = setInterval(() => send('state'), 500);
+}
+
+window.addEventListener('blur', () => {
+  clearInterval(refreshTimer);
+  refreshTimer = undefined;
+  scrubbing = false;
+  adjustingVolume = false;
+});
+window.addEventListener('keydown', event => {
+  if (event.key === 'Escape') window.__TAURI__.window.getCurrentWindow().hide().catch(console.warn);
+});
+events.listen('mini-player-state', render).then(() => {
+  window.addEventListener('focus', startRefresh);
+  if (document.hasFocus()) startRefresh();
+}).catch(console.warn);
+</script>
+</html>
