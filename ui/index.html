@@ -35403,6 +35403,47 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       })[character]);
     }
 
+    const trayEvents = window.__TAURI__?.event;
+    if (trayEvents) {
+      trayEvents.listen('mini-player-control', async ({ payload }) => {
+        const track = currentQueue[currentTrackIndex];
+        switch (payload?.action) {
+          case 'previous': playPrevTrack(); break;
+          case 'toggle': if (track) togglePlay(); break;
+          case 'next': void playNextTrack(); break;
+          case 'seek':
+            if (track && payload.trackId === String(track.id)
+              && Number.isFinite(payload.position) && Number.isFinite(audioEngine.duration)
+              && audioEngine.duration > 0) {
+              audioEngine.currentTime = Math.max(0, Math.min(audioEngine.duration, payload.position));
+            }
+            break;
+          case 'volume': {
+            if (!Number.isFinite(payload.value)) return;
+            const value = Math.round(Math.max(0, Math.min(100, payload.value)));
+            if (value > 0) lastVolume = value;
+            setVolume(value);
+            if (payload.commit === true && appConfig) api.saveConfig(appConfig).catch(console.warn);
+            break;
+          }
+          case 'state': break;
+          default: return;
+        }
+
+        const current = currentQueue[currentTrackIndex];
+        await trayEvents.emitTo('mini-player', 'mini-player-state', {
+          trackId: current ? String(current.id) : null,
+          title: current?.title || 'Нет трека',
+          artist: current?.artist || '',
+          cover: current?.cover || current?.artwork_url || '',
+          playing: isPlaying,
+          volume: Number(volumeSlider.value),
+          position: audioEngine.currentTime,
+          duration: Number.isFinite(audioEngine.duration) ? audioEngine.duration : 0
+        });
+      }).catch(console.warn);
+    }
+
 </script>
 
 
