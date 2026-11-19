@@ -16350,11 +16350,7 @@
       if (!getInvoke()) return;
 
       try {
-        const reason = await api.toggleLike(change, newLikedState);
-        if (pendingLikeWrites.get(strId) === change) {
-          const detail = reason?.includes('CAPTCHA') ? '' : reason || '';
-          showLikeSyncStatus(detail ? 'Только в ONYX' : '', detail);
-        }
+        await api.toggleLike(change, newLikedState);
       } catch (err) {
         if (pendingLikeWrites.get(strId) === change) {
           pendingLikeWrites.delete(strId);
