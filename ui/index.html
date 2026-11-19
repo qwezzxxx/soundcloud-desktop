@@ -4331,6 +4331,7 @@
 
 
   <audio id="audio-engine" preload="auto"></audio>
+  <audio id="secondary-audio-engine" preload="auto"></audio>
 
 
 
@@ -6890,6 +6891,15 @@
 
 
 
+
+        <div class="card-glass p-5 space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <label for="crossfade-duration" class="text-sm font-bold text-white">Плавный переход</label>
+            <span id="crossfade-duration-value" class="text-xs text-neutral-400 tabular-nums"></span>
+          </div>
+          <input id="crossfade-duration" type="range" min="0" max="10" step="1" value="4"
+            class="custom-range-slider w-full" aria-describedby="crossfade-duration-value">
+        </div>
 
         <!-- Section 2: Discord RPC Section -->
 
@@ -12011,7 +12021,18 @@
 
 
 
-    const audioEngine = document.getElementById('audio-engine');
+    const playbackAudio = [
+      document.getElementById('audio-engine'),
+      document.getElementById('secondary-audio-engine'),
+    ];
+    let audioEngine = playbackAudio[0];
+    function onPlaybackAudio(event, listener) {
+      for (const media of playbackAudio) {
+        media.addEventListener(event, (event) => {
+          if (media === audioEngine) listener(event);
+        });
+      }
+    }
     let discordPlaybackTrack = null;
 
 
@@ -17224,7 +17245,229 @@
       }, 1200);
     }
 
-    async function playTrack(index, newQueue = null, fromWave = false) {
+    const crossfadeInput = document.getElementById('crossfade-duration');
+    const crossfadeValue = document.getElementById('crossfade-duration-value');
+    const crossfadeKey = 'sc_audio_crossfade_seconds';
+    let crossfadeSeconds = 4;
+    try {
+      const saved = localStorage.getItem(crossfadeKey);
+      if (saved !== null && Number.isFinite(Number(saved))) {
+        crossfadeSeconds = Math.max(0, Math.min(10, Math.round(Number(saved))));
+      }
+    } catch (_) {}
+    let preparedNextTrack = null;
+    let activeFade = null;
+    let playbackVolume = 0.64;
+
+    function showCrossfadeDuration() {
+      crossfadeInput.value = crossfadeSeconds;
+      const label = crossfadeSeconds ? crossfadeSeconds + ' сек.' : 'Выкл.';
+      crossfadeValue.textContent = label;
+      crossfadeInput.setAttribute('aria-valuetext', label);
+    }
+    showCrossfadeDuration();
+    crossfadeInput.addEventListener('input', () => {
+      crossfadeSeconds = crossfadeInput.valueAsNumber;
+      showCrossfadeDuration();
+      try { localStorage.setItem(crossfadeKey, String(crossfadeSeconds)); } catch (_) {}
+      if (!crossfadeSeconds) {
+        discardPreparedTrack();
+        finishCrossfade();
+      }
+    });
+
+    function streamDetails(info) {
+      const source = typeof info === 'string' ? info : info?.url;
+      const url = typeof source === 'string' ? source : '';
+      const hls = !!url && (info?.protocol === 'hls' || url.includes('m3u8')) && !url.includes('127.0.0.1:49221');
+      return { url, hls };
+    }
+
+    function attachPlaybackHls(media, url, onFatal, onManifest = null) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 30,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 120,
+        manifestLoadingMaxRetry: 3,
+        manifestLoadingRetryDelay: 500,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 500,
+        levelLoadingMaxRetry: 3
+      });
+      if (onManifest) hls.on(Hls.Events.MANIFEST_PARSED, onManifest);
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        const status = data?.response?.code;
+        logD('HLS ' + (data?.fatal ? 'FATAL' : 'error') + ': type=' + data?.type
+          + ' details=' + data?.details + (status ? ' http=' + status : ''));
+        if (data?.fatal) onFatal(hls, data);
+      });
+      hls.loadSource(url);
+      hls.attachMedia(media);
+      return hls;
+    }
+
+    function handleActiveHlsFailure(track, hls, data) {
+      if (hls !== currentHls) return;
+      currentHls = null;
+      try { hls.destroy(); } catch (_) {}
+      handleTrackPlaybackFailure(track, 'hlsFatal:' + (data.type || 'unknown'));
+    }
+
+    function releasePlaybackMedia(media, hls) {
+      if (hls) {
+        try { hls.destroy(); } catch (_) {}
+      }
+      media.pause();
+      media.removeAttribute('src');
+      media.load();
+    }
+
+    function applyPlaybackVolume() {
+      audioEngine.volume = playbackVolume * (activeFade?.progress ?? 1);
+      if (activeFade) activeFade.outgoing.volume = playbackVolume * (1 - activeFade.progress);
+    }
+
+    function finishCrossfade() {
+      if (!activeFade) return;
+      const { outgoing, hls, timer } = activeFade;
+      activeFade = null;
+      clearInterval(timer);
+      applyPlaybackVolume();
+      releasePlaybackMedia(outgoing, hls);
+    }
+
+    function discardPreparedTrack() {
+      if (!preparedNextTrack) return;
+      const { audio, hls } = preparedNextTrack;
+      preparedNextTrack = null;
+      releasePlaybackMedia(audio, hls);
+    }
+
+    function failPreparedTrack(prepared) {
+      if (preparedNextTrack !== prepared || prepared.failed) return;
+      prepared.failed = true;
+      releasePlaybackMedia(prepared.audio, prepared.hls);
+      prepared.hls = null;
+    }
+
+    function nextQueuedTrackIndex() {
+      if (isShuffle) return getShuffleUpcomingIndices()[0] ?? -1;
+      const next = currentTrackIndex + 1;
+      return next < currentQueue.length ? next : -1;
+    }
+
+    async function prepareNextTrack(track) {
+      const audio = playbackAudio.find(media => media !== audioEngine);
+      const prepared = { audio, track, outgoing: audioEngine, hls: null, url: null, starting: false, failed: false };
+      preparedNextTrack = prepared;
+      audio.volume = 0;
+      try {
+        const info = getCachedStreamUrl(track.id) || await requestStreamUrl(track.id);
+        if (preparedNextTrack !== prepared) return;
+        if (info) cacheStreamUrl(track.id, info);
+        const { url, hls } = streamDetails(info);
+        if (!url) {
+          failPreparedTrack(prepared);
+          return;
+        }
+        prepared.url = url;
+        if (hls && !isPlatformLinux) {
+          if (!window.Hls || !Hls.isSupported()) {
+            failPreparedTrack(prepared);
+            return;
+          }
+          prepared.hls = attachPlaybackHls(audio, url, (instance, data) => {
+            if (audio === audioEngine && currentHls === instance) {
+              handleActiveHlsFailure(track, instance, data);
+            } else {
+              failPreparedTrack(prepared);
+            }
+          });
+        } else {
+          audio.src = url;
+          audio.load();
+        }
+      } catch (_) {
+        failPreparedTrack(prepared);
+      }
+    }
+
+    function maybeCrossfade() {
+      if (activeFade || !crossfadeSeconds || isRepeat || repeatMode === 'one'
+        || audioEngine.paused || audioEngine.seeking || !Number.isFinite(audioEngine.duration)) return;
+      const remaining = audioEngine.duration - audioEngine.currentTime;
+      if (remaining > crossfadeSeconds + 8 || remaining <= 0) return;
+
+      const track = currentQueue[nextQueuedTrackIndex()];
+      if (preparedNextTrack && preparedNextTrack.track !== track) discardPreparedTrack();
+      if (!track?.id || String(track.id) === String(currentlyPlayingTrackId)) return;
+      if (!preparedNextTrack) prepareNextTrack(track);
+      const prepared = preparedNextTrack;
+      if (prepared.failed || prepared.starting || !prepared.url
+        || prepared.audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+      const incomingDuration = prepared.audio.duration;
+      const overlap = Math.min(crossfadeSeconds, audioEngine.duration / 2,
+        Number.isFinite(incomingDuration) ? incomingDuration / 2 : crossfadeSeconds);
+      if (remaining > overlap || remaining < 0.25) return;
+      const { buffered, currentTime } = prepared.audio;
+      let bufferedThroughFade = false;
+      for (let i = 0; i < buffered.length; i++) {
+        if (buffered.start(i) <= currentTime + 0.05 && buffered.end(i) >= currentTime + remaining) {
+          bufferedThroughFade = true;
+          break;
+        }
+      }
+      if (!bufferedThroughFade) return;
+
+      prepared.starting = true;
+      prepared.audio.play().then(() => {
+        if (preparedNextTrack !== prepared) return;
+        const outgoing = prepared.outgoing;
+        const nextIndex = nextQueuedTrackIndex();
+        const duration = Math.min(crossfadeSeconds, outgoing.duration - outgoing.currentTime);
+        if (audioEngine !== outgoing || outgoing.paused || outgoing.seeking || isRepeat || repeatMode === 'one'
+          || currentQueue[nextIndex] !== prepared.track || !(duration >= 0.2)) {
+          discardPreparedTrack();
+          return;
+        }
+        preparedNextTrack = null;
+        playTrack(nextIndex, null, false, { ...prepared, duration });
+      }).catch(() => failPreparedTrack(prepared));
+    }
+
+    function adoptCrossfade(prepared) {
+      const outgoing = audioEngine;
+      const hls = currentHls;
+      const incoming = prepared.audio;
+      const startTime = incoming.currentTime;
+      audioEngine = incoming;
+      currentHls = prepared.hls;
+      const timer = setInterval(() => {
+        const elapsed = incoming.currentTime - startTime;
+        if (outgoing.ended || outgoing.paused || elapsed >= prepared.duration) {
+          finishCrossfade();
+          return;
+        }
+        activeFade.progress = Math.max(0, elapsed / prepared.duration);
+        applyPlaybackVolume();
+      }, 25);
+      activeFade = { outgoing, hls, timer, progress: 0 };
+      applyPlaybackVolume();
+    }
+
+    onPlaybackAudio('seeking', () => {
+      discardPreparedTrack();
+      finishCrossfade();
+    });
+    for (const media of playbackAudio) {
+      media.addEventListener('error', () => {
+        if (preparedNextTrack?.audio === media) failPreparedTrack(preparedNextTrack);
+      });
+    }
+
+    async function playTrack(index, newQueue = null, fromWave = false, prepared = null) {
       try {
         if (newQueue && Array.isArray(newQueue) && newQueue.length > 0) {
           if (!fromWave) {
@@ -17255,6 +17498,9 @@
         currentlyPlayingTrackId = track.id;
         discordPlaybackTrack = null;
         const requestId = ++currentPlayRequestId;
+        finishCrossfade();
+        discardPreparedTrack();
+        if (prepared) adoptCrossfade(prepared);
         if (pendingSessionSeek?.trackId !== String(track.id)) pendingSessionSeek = null;
 
         // Wave tracking
@@ -17300,28 +17546,15 @@
           fetchLyricsForTrack(track);
         }
 
-        // Teardown previous HLS safely
-        if (window.currentHls) {
-          try {
-            window.currentHls.stopLoad();
-            window.currentHls.detachMedia();
-            window.currentHls.destroy();
-          } catch (_) {}
-          window.currentHls = null;
+        if (!prepared) {
+          const previousHls = currentHls;
+          currentHls = null;
+          releasePlaybackMedia(audioEngine, previousHls);
         }
-        try {
-          audioEngine.pause();
-          audioEngine.removeAttribute('src');
-          if (isPlatformLinux) {
-            audioEngine.removeAttribute('crossOrigin');
-            audioEngine.crossOrigin = null;
-          }
-          audioEngine.load();
-        } catch (_) {}
 
         if (!track.id) return;
 
-        let streamInfo = getCachedStreamUrl(track.id);
+        let streamInfo = prepared?.url || getCachedStreamUrl(track.id);
         if (!streamInfo) {
           setPlayerLoading(true);
           try {
@@ -17343,10 +17576,9 @@
           }
         }
         if (requestId !== currentPlayRequestId) return;
-        prefetchNextTrack(currentTrackIndex + 1);
+        prefetchNextTrack(nextQueuedTrackIndex());
 
-        const streamUrl = typeof streamInfo === 'object' && streamInfo !== null ? streamInfo.url : streamInfo;
-        const isHls = ((typeof streamInfo === 'object' && streamInfo !== null && streamInfo.protocol === 'hls') || (streamUrl && streamUrl.includes('m3u8'))) && !streamUrl.includes('127.0.0.1:49221');
+        const { url: streamUrl, hls: isHls } = streamDetails(streamInfo);
 
         if (!streamUrl) {
           setPlayerLoading(false);
@@ -17368,7 +17600,14 @@
         };
 
         discordPlaybackTrack = track;
-        if (isPlatformLinux) {
+
+        if (prepared) {
+          // This element started playing while it was still inactive.
+          for (const event of ['loadedmetadata', 'timeupdate', 'playing']) {
+            audioEngine.dispatchEvent(new Event(event));
+          }
+          handlePlaybackStart();
+        } else if (isPlatformLinux) {
           // WebKitGTK on Linux: Use native GStreamer playback directly.
           // Hls.js with MediaSource causes thread deadlocks in WebKitGTK when switching tracks.
           try {
@@ -17383,37 +17622,13 @@
             }
           });
         } else if (isHls && window.Hls && Hls.isSupported()) {
-          const hls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: false,
-            backBufferLength: 30,
-            maxBufferLength: 30,
-            maxMaxBufferLength: 120,
-            manifestLoadingMaxRetry: 3,
-            manifestLoadingRetryDelay: 500,
-            fragLoadingMaxRetry: 6,
-            fragLoadingRetryDelay: 500,
-            levelLoadingMaxRetry: 3
-          });
-          window.currentHls = hls;
-          hls.loadSource(streamUrl);
-          hls.attachMedia(audioEngine);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          const media = audioEngine;
+          currentHls = attachPlaybackHls(media, streamUrl, (hls, data) => {
             if (requestId !== currentPlayRequestId) return;
-            audioEngine.play().then(handlePlaybackStart).catch(e => console.log('HLS play error:', e.message));
-          });
-          hls.on(Hls.Events.ERROR, (event, data) => {
-            const httpCode = data && data.response ? data.response.code : '';
-            logD(`HLS ${data && data.fatal ? 'FATAL' : 'error'}: type=${data ? data.type : ''} details=${data ? data.details : ''}${httpCode ? ' http=' + httpCode : ''}`);
-            if (!data || !data.fatal || requestId !== currentPlayRequestId) return;
-            // Never feed the raw m3u8 URL to <audio>: Chromium cannot demux HLS on its own
-            // (that produced MEDIA_ERR_SRC_NOT_SUPPORTED / DEMUXER_ERROR_COULD_NOT_PARSE).
-            // Instead drop the (possibly stale) link and resolve the track again.
-            try {
-              hls.destroy();
-            } catch (_) {}
-            if (window.currentHls === hls) window.currentHls = null;
-            handleTrackPlaybackFailure(track, 'hlsFatal:' + (data.type || 'unknown'));
+            handleActiveHlsFailure(track, hls, data);
+          }, () => {
+            if (requestId !== currentPlayRequestId) return;
+            media.play().then(handlePlaybackStart).catch(e => console.log('HLS play error:', e.message));
           });
         } else if (isHls) {
           // HLS stream but MSE/Hls.js is unavailable - a raw playlist can never be demuxed
@@ -17458,11 +17673,11 @@
           // A cached CDN link may be stale or the HLS session may be broken - start over
           // with a freshly resolved URL instead of dying on the same one.
           invalidateStreamUrl(track.id);
-          if (window.currentHls) {
+          if (currentHls) {
             try {
-              window.currentHls.destroy();
+              currentHls.destroy();
             } catch (_) {}
-            window.currentHls = null;
+            currentHls = null;
           }
           if (!playbackRetryTimers.has(track.id)) {
             const retryId = setTimeout(() => {
@@ -17760,7 +17975,7 @@
 
 
 
-    audioEngine.onplay = () => {
+    onPlaybackAudio('play', () => {
 
 
 
@@ -17840,7 +18055,7 @@
 
 
 
-    };
+    });
 
 
 
@@ -17848,7 +18063,11 @@
 
 
 
-    audioEngine.onpause = () => {
+    onPlaybackAudio('pause', () => {
+      if (!audioEngine.ended) {
+        discardPreparedTrack();
+        finishCrossfade();
+      }
 
 
 
@@ -17928,7 +18147,7 @@
 
 
 
-    };
+    });
 
 
 
@@ -17945,7 +18164,8 @@
 
 
     let lastSessionAutoSave = 0;
-    audioEngine.ontimeupdate = () => {
+    onPlaybackAudio('timeupdate', () => {
+      maybeCrossfade();
       const now = Date.now();
       if (now - lastSessionAutoSave > 5000 && isPlaying) {
         lastSessionAutoSave = now;
@@ -18166,7 +18386,7 @@
 
 
 
-    };
+    });
 
 
 
@@ -18174,7 +18394,7 @@
 
 
 
-    audioEngine.onloadedmetadata = () => {
+    onPlaybackAudio('loadedmetadata', () => {
 
 
 
@@ -18214,7 +18434,7 @@
 
 
 
-    };
+    });
 
 
 
@@ -18222,7 +18442,8 @@
 
 
 
-    audioEngine.onended = () => {
+    onPlaybackAudio('ended', () => {
+      finishCrossfade();
       if (repeatMode === 'one' || isRepeat) {
         audioEngine.currentTime = 0;
         audioEngine.play().catch(console.warn);
@@ -18230,14 +18451,14 @@
         if (isWaveActive && typeof checkWaveReplenish === 'function') {
           checkWaveReplenish();
         }
-        if ((isWaveActive && currentStationUrn === 'my_wave') || currentTrackIndex + 1 < currentQueue.length) {
+        if ((isWaveActive && currentStationUrn === 'my_wave') || nextQueuedTrackIndex() >= 0) {
           playNextTrack();
         } else {
           isPlaying = false;
           syncPlayPauseState(false);
         }
       }
-    };
+    });
 
 
 
@@ -18501,7 +18722,8 @@
 
 
 
-      audioEngine.volume = Math.pow(val / 100, 2);
+      playbackVolume = Math.pow(val / 100, 2);
+      applyPlaybackVolume();
 
 
 
@@ -19221,6 +19443,8 @@
     window.toggleShuffle = toggleShuffle;
 
     function toggleRepeat() {
+      discardPreparedTrack();
+      finishCrossfade();
       // 1-track repeat toggle: off <-> one
       if (repeatMode === 'one' || isRepeat) {
         repeatMode = 'off';
@@ -25235,6 +25459,8 @@
     async function logoutAccount() {
       if (isLoggingOut) return;
       isLoggingOut = true;
+      discardPreparedTrack();
+      finishCrossfade();
 
       // 1. Cancel any active login polling watcher
       if (authPollingTimer) {
@@ -27001,7 +27227,6 @@
 
 
 
-    let audioSourceNode = null;
 
 
 
@@ -27097,7 +27322,7 @@
       }
 
       try {
-        audioEngine.crossOrigin = "anonymous";
+        for (const media of playbackAudio) media.crossOrigin = "anonymous";
 
 
 
@@ -27401,85 +27626,14 @@
 
 
 
-        // Connect media element into Web Audio pipeline
-
-
-
-
-
-
-
-        if (!audioSourceNode) {
-
-
-
-
-
-
-
+        // Both playback elements share the equalizer, compressor, and visualizer.
+        for (const media of playbackAudio) {
           try {
-
-
-
-
-
-
-
-            audioSourceNode = audioCtx.createMediaElementSource(audioEngine);
-
-
-
-
-
-
-
-            audioSourceNode.connect(eq60Node);
-
-
-
-
-
-
-
-            logD('AudioSource connected to eq60Node successfully!');
-
-
-
-
-
-
-
+            audioCtx.createMediaElementSource(media).connect(eq60Node);
           } catch (srcErr) {
-
-
-
-
-
-
-
             logD('AudioSource creation note: ' + srcErr.message);
-
-
-
-
-
-
-
           }
-
-
-
-
-
-
-
         }
-
-
-
-
-
-
 
         // Audio path: EQ -> compressor -> analyser -> speakers
 
@@ -28086,11 +28240,11 @@
 
     // Add audio listeners for reliable activation
     if (typeof audioEngine !== 'undefined' && audioEngine) {
-      audioEngine.addEventListener('play', () => {
+      onPlaybackAudio('play', () => {
         if (!isPlatformLinux && typeof initAudioPipeline === 'function') initAudioPipeline();
         if (typeof startVisualizerLoop === 'function') startVisualizerLoop();
       });
-      audioEngine.addEventListener('playing', () => {
+      onPlaybackAudio('playing', () => {
         if (typeof startVisualizerLoop === 'function') startVisualizerLoop();
       });
     }
@@ -31273,10 +31427,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
     for (const event of ['play', 'playing', 'pause', 'seeked', 'ratechange', 'durationchange', 'waiting', 'ended', 'emptied', 'error']) {
-      audioEngine.addEventListener(event, queueDiscordPlaybackUpdate);
+      onPlaybackAudio(event, queueDiscordPlaybackUpdate);
     }
 
-    audioEngine.addEventListener('loadstart', () => logD('audioEngine: loadstart'));
+    onPlaybackAudio('loadstart', () => logD('audioEngine: loadstart'));
 
 
 
@@ -31284,7 +31438,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('loadedmetadata', () => logD(`audioEngine: loadedmetadata (duration=${audioEngine.duration})`));
+    onPlaybackAudio('loadedmetadata', () => logD(`audioEngine: loadedmetadata (duration=${audioEngine.duration})`));
 
 
 
@@ -31292,7 +31446,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('canplay', () => logD('audioEngine: canplay'));
+    onPlaybackAudio('canplay', () => logD('audioEngine: canplay'));
 
 
 
@@ -31300,7 +31454,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('play', () => {
+    onPlaybackAudio('play', () => {
 
 
 
@@ -31324,7 +31478,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('playing', () => {
+    onPlaybackAudio('playing', () => {
       logD('audioEngine: playing event fired (sound active!)');
       setPlayerLoading(false);
       // A track that really started playing is healthy again: forget its failure budget.
@@ -31337,7 +31491,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('pause', () => {
+    onPlaybackAudio('pause', () => {
 
 
 
@@ -31361,7 +31515,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('waiting', () => logD('audioEngine: waiting/buffering'));
+    onPlaybackAudio('waiting', () => logD('audioEngine: waiting/buffering'));
 
 
 
@@ -31369,7 +31523,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('stalled', () => logD('audioEngine: stalled'));
+    onPlaybackAudio('stalled', () => logD('audioEngine: stalled'));
 
 
 
@@ -31377,7 +31531,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('error', () => {
+    onPlaybackAudio('error', () => {
 
 
 
