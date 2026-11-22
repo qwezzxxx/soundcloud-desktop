@@ -5263,29 +5263,6 @@
 
 
 
-        <section id="home-recently-played" class="space-y-3" aria-labelledby="home-recently-played-title" hidden>
-          <h2 id="home-recently-played-title" class="text-sm font-bold text-white tracking-wide">Недавно слушали</h2>
-          <div class="ui-panel-glass border border-white/10 rounded-xl p-1">
-            <ul id="home-recently-played-list" class="recently-played-list"></ul>
-            <div class="border-t border-white/[0.08] pt-1">
-              <button id="home-recently-played-more" type="button" aria-haspopup="dialog" aria-controls="recently-played-dialog" class="w-full rounded-lg py-2 text-xs font-semibold text-white cursor-pointer">Больше</button>
-            </div>
-          </div>
-          <dialog id="recently-played-dialog" aria-labelledby="recently-played-dialog-title" class="ui-panel-glass rounded-xl border border-white/10 p-0">
-            <div class="recently-played-dialog-content flex flex-col">
-              <div class="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
-                <h2 id="recently-played-dialog-title" class="text-sm font-bold text-white">История прослушиваний</h2>
-                <form method="dialog">
-                  <button id="recently-played-close" class="flex h-8 w-8 items-center justify-center rounded-lg text-white cursor-pointer" type="submit" aria-label="Закрыть" autofocus>
-                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
-                  </button>
-                </form>
-              </div>
-              <ul id="recently-played-full-list" class="recently-played-list min-h-0 overflow-y-auto p-1"></ul>
-            </div>
-          </dialog>
-        </section>
-
         <!-- Wave Recommendations Section -->
         <div id="home-recommendations-section" class="space-y-3 pt-2">
 
@@ -5529,6 +5506,29 @@
 
 
         </div>
+
+        <section id="home-recently-played" class="space-y-3" aria-labelledby="home-recently-played-title" hidden>
+          <h2 id="home-recently-played-title" class="text-sm font-bold text-white tracking-wide">Недавно слушали</h2>
+          <div class="ui-panel-glass border border-white/10 rounded-xl p-1">
+            <ul id="home-recently-played-list" class="recently-played-list"></ul>
+            <div class="border-t border-white/[0.08] pt-1">
+              <button id="home-recently-played-more" type="button" aria-haspopup="dialog" aria-controls="recently-played-dialog" class="w-full rounded-lg py-2 text-xs font-semibold text-white cursor-pointer">Больше</button>
+            </div>
+          </div>
+          <dialog id="recently-played-dialog" aria-labelledby="recently-played-dialog-title" class="ui-panel-glass rounded-xl border border-white/10 p-0">
+            <div class="recently-played-dialog-content flex flex-col">
+              <div class="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+                <h2 id="recently-played-dialog-title" class="text-sm font-bold text-white">История прослушиваний</h2>
+                <form method="dialog">
+                  <button id="recently-played-close" class="flex h-8 w-8 items-center justify-center rounded-lg text-white cursor-pointer" type="submit" aria-label="Закрыть" autofocus>
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                  </button>
+                </form>
+              </div>
+              <ul id="recently-played-full-list" class="recently-played-list min-h-0 overflow-y-auto p-1"></ul>
+            </div>
+          </dialog>
+        </section>
 
         <!-- 4. Playlists Section (Внизу главной страницы) -->
         <div id="home-playlists-section" class="space-y-3 pt-3">
