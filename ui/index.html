@@ -667,6 +667,51 @@
 
 
 
+    .recently-played-list li + li {
+      position: relative;
+    }
+
+    .recently-played-list li + li::before {
+      content: '';
+      position: absolute;
+      inset: 0 12px auto 72px;
+      border-top: 1px solid var(--panel-border);
+      pointer-events: none;
+    }
+
+    .recently-played-list button:is(:hover, :focus-visible, [aria-current="true"]),
+    #home-recently-played-more:is(:hover, :focus-visible),
+    #recently-played-close:is(:hover, :focus-visible) {
+      background-color: color-mix(in srgb, currentColor 7%, transparent);
+    }
+
+    .recently-played-list button:focus-visible,
+    #home-recently-played-more:focus-visible,
+    #recently-played-close:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: -2px;
+    }
+
+    #recently-played-dialog {
+      width: min(720px, calc(100% - 48px));
+      margin: auto;
+      overflow: hidden;
+      color: inherit;
+    }
+
+    #recently-played-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.65);
+    }
+
+    #recently-played-dialog .recently-played-dialog-content {
+      max-height: min(75vh, 640px);
+    }
+
+    #recently-played-full-list li {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 64px;
+    }
+
     .card-glass, .settings-card {
       background-color: var(--card-bg) !important;
 
@@ -5218,7 +5263,30 @@
 
 
 
-                <!-- Wave Recommendations Section -->
+        <section id="home-recently-played" class="space-y-3" aria-labelledby="home-recently-played-title" hidden>
+          <h2 id="home-recently-played-title" class="text-sm font-bold text-white tracking-wide">Недавно слушали</h2>
+          <div class="ui-panel-glass border border-white/10 rounded-xl p-1">
+            <ul id="home-recently-played-list" class="recently-played-list"></ul>
+            <div class="border-t border-white/[0.08] pt-1">
+              <button id="home-recently-played-more" type="button" aria-haspopup="dialog" aria-controls="recently-played-dialog" class="w-full rounded-lg py-2 text-xs font-semibold text-white cursor-pointer">Больше</button>
+            </div>
+          </div>
+          <dialog id="recently-played-dialog" aria-labelledby="recently-played-dialog-title" class="ui-panel-glass rounded-xl border border-white/10 p-0">
+            <div class="recently-played-dialog-content flex flex-col">
+              <div class="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+                <h2 id="recently-played-dialog-title" class="text-sm font-bold text-white">История прослушиваний</h2>
+                <form method="dialog">
+                  <button id="recently-played-close" class="flex h-8 w-8 items-center justify-center rounded-lg text-white cursor-pointer" type="submit" aria-label="Закрыть" autofocus>
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                  </button>
+                </form>
+              </div>
+              <ul id="recently-played-full-list" class="recently-played-list min-h-0 overflow-y-auto p-1"></ul>
+            </div>
+          </dialog>
+        </section>
+
+        <!-- Wave Recommendations Section -->
         <div id="home-recommendations-section" class="space-y-3 pt-2">
 
 
@@ -11899,6 +11967,22 @@
 
 
     let currentlyPlayingTrackId = null;
+    const recentlyPlayedPreviewLimit = 4;
+    const recentlyPlayedStorageKey = 'sc_desktop_recently_played';
+    const recentlyPlayedDialog = document.getElementById('recently-played-dialog');
+    const recentlyPlayedPreview = document.getElementById('home-recently-played-list');
+    const recentlyPlayedFullList = document.getElementById('recently-played-full-list');
+    const recentTimeFormat = new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' });
+    const recentDateFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', year: 'numeric' });
+    let recentlyPlayed = [];
+    // Keep history across reloads of the main WebView for the lifetime of its window.
+    try {
+      const storedHistory = JSON.parse(sessionStorage.getItem(recentlyPlayedStorageKey));
+      if (Array.isArray(storedHistory)) recentlyPlayed = storedHistory;
+    } catch (_) {}
+    // Clear the history stores used before playback history became session-only.
+    try { localStorage.removeItem(recentlyPlayedStorageKey); } catch (_) {}
+    try { indexedDB.deleteDatabase('onyx-recently-played'); } catch (_) {}
 
 
 
@@ -12332,6 +12416,7 @@
 
     function switchTab(tabId) {
       currentActiveTab = tabId;
+      if (tabId === 'tab-home') renderRecentlyPlayed();
 
 
 
@@ -17093,6 +17178,7 @@
 
         if (track) {
           currentlyPlayingTrackId = track.id;
+          updateRecentlyPlayedCurrentTrack();
 
           if (playerTitle) playerTitle.textContent = track.title || "SoundCloud Track";
           if (playerArtist) playerArtist.textContent = track.artist || "SoundCloud Artist";
@@ -17496,6 +17582,7 @@
         if (!track) return;
         if (isShuffle && track.id != null) shufflePlayedTrackIds.add(String(track.id));
         currentlyPlayingTrackId = track.id;
+        updateRecentlyPlayedCurrentTrack();
         discordPlaybackTrack = null;
         const requestId = ++currentPlayRequestId;
         finishCrossfade();
@@ -17596,6 +17683,7 @@
             pendingSessionSeek = null;
           }
           saveSessionState();
+          recordRecentPlayback(track);
           startAutomaticKaraoke(track, streamUrl);
         };
 
@@ -22697,6 +22785,86 @@
     }
     window.startTrackRadio = startTrackRadio;
 
+    function recordRecentPlayback(track) {
+      if (isLoggingOut || String(track.id) !== String(currentlyPlayingTrackId)) return;
+      const { id, title, artist, duration, duration_ms, user_id, permalink_url } = track;
+      const entry = {
+        playedAt: Date.now(),
+        track: { id, title, artist, cover: track.cover || track.artwork_url, duration, duration_ms, user_id, permalink_url }
+      };
+      const trackId = String(id);
+      recentlyPlayed = [entry, ...recentlyPlayed.filter(item => String(item.track.id) !== trackId)];
+      try { sessionStorage.setItem(recentlyPlayedStorageKey, JSON.stringify(recentlyPlayed)); } catch (_) {}
+      renderRecentlyPlayed();
+    }
+
+    function formatRecentPlaybackTime(date, today, yesterday) {
+      const day = date.toDateString();
+      const label = day === today ? 'Сегодня' : day === yesterday ? 'Вчера' : recentDateFormat.format(date);
+      return `${label}, ${recentTimeFormat.format(date)}`;
+    }
+
+    function updateRecentlyPlayedCurrentTrack() {
+      for (const row of document.querySelectorAll('.recently-played-list button')) {
+        row.setAttribute('aria-current', String(row.dataset.trackId === String(currentlyPlayingTrackId)));
+      }
+    }
+
+    function renderRecentlyPlayedList(list, entries, today, yesterday) {
+      const focusedId = list.contains(document.activeElement) ? document.activeElement.dataset.trackId : null;
+      list.innerHTML = entries.map(({ track, playedAt }) => {
+        const date = new Date(playedAt);
+        const title = escapeMarkup(track.title || 'Трек SoundCloud');
+        return `
+          <li>
+            <button type="button" data-track-id="${escapeMarkup(track.id)}" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-white">
+              <img src="${escapeMarkup(track.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="h-12 w-12 shrink-0 rounded-lg border border-white/10 object-cover" loading="lazy" alt="">
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-xs font-semibold" title="${title}">${title}</span>
+                <span class="block truncate text-[11px] text-neutral-400">${escapeMarkup(track.artist || 'SoundCloud')}</span>
+              </span>
+              <time datetime="${date.toISOString()}" class="shrink-0 whitespace-nowrap text-right text-[11px] tabular-nums text-neutral-400">${formatRecentPlaybackTime(date, today, yesterday)}</time>
+            </button>
+          </li>`;
+      }).join('');
+      if (focusedId) Array.from(list.querySelectorAll('button')).find(row => row.dataset.trackId === focusedId)?.focus({ preventScroll: true });
+    }
+
+    function renderRecentlyPlayed() {
+      const now = new Date();
+      const today = now.toDateString();
+      now.setDate(now.getDate() - 1);
+      const yesterday = now.toDateString();
+      document.getElementById('home-recently-played').hidden = recentlyPlayed.length === 0;
+      renderRecentlyPlayedList(recentlyPlayedPreview, recentlyPlayed.slice(0, recentlyPlayedPreviewLimit), today, yesterday);
+      if (recentlyPlayedDialog.open) renderRecentlyPlayedList(recentlyPlayedFullList, recentlyPlayed, today, yesterday);
+      updateRecentlyPlayedCurrentTrack();
+    }
+
+    function playRecentlyPlayedRow(event) {
+      const row = event.target.closest('button[data-track-id]');
+      if (!row) return;
+      const entries = event.currentTarget === recentlyPlayedPreview
+        ? recentlyPlayed.slice(0, recentlyPlayedPreviewLimit)
+        : recentlyPlayed;
+      const tracks = entries.map(entry => entry.track);
+      const index = tracks.findIndex(track => String(track.id) === row.dataset.trackId);
+      if (index < 0) return;
+      if (row.dataset.trackId === String(currentlyPlayingTrackId)) {
+        togglePlay();
+      } else {
+        playTrack(index, tracks);
+      }
+    }
+
+    recentlyPlayedPreview.addEventListener('click', playRecentlyPlayedRow);
+    recentlyPlayedFullList.addEventListener('click', playRecentlyPlayedRow);
+    document.getElementById('home-recently-played-more').addEventListener('click', () => {
+      recentlyPlayedDialog.showModal();
+      renderRecentlyPlayed();
+    });
+    renderRecentlyPlayed();
+
     function renderHomeFeed(tracks, mixed) {
       if (mixed !== undefined) lastMixedData = mixed;
 
@@ -25503,6 +25671,7 @@
       if (playerArtistEl) playerArtistEl.textContent = "SoundCloud";
       if (playerCoverEl) playerCoverEl.src = "logo.png";
       currentlyPlayingTrackId = null;
+      updateRecentlyPlayedCurrentTrack();
 
       // 4. Reset Immersive Player & close it if open
       const immTitle = document.getElementById('immersive-player-title');
@@ -28538,6 +28707,7 @@
 
 
 
+      if (recentlyPlayedDialog.open || e.target.closest?.('#home-recently-played button')) return;
       const tag = (e.target.tagName || '').toLowerCase();
 
 
