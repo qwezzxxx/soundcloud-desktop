@@ -667,6 +667,51 @@
 
 
 
+    .recently-played-list li + li {
+      position: relative;
+    }
+
+    .recently-played-list li + li::before {
+      content: '';
+      position: absolute;
+      inset: 0 12px auto 72px;
+      border-top: 1px solid var(--panel-border);
+      pointer-events: none;
+    }
+
+    .recently-played-list button:is(:hover, :focus-visible, [aria-current="true"]),
+    #home-recently-played-more:is(:hover, :focus-visible),
+    #recently-played-close:is(:hover, :focus-visible) {
+      background-color: color-mix(in srgb, currentColor 7%, transparent);
+    }
+
+    .recently-played-list button:focus-visible,
+    #home-recently-played-more:focus-visible,
+    #recently-played-close:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: -2px;
+    }
+
+    #recently-played-dialog {
+      width: min(720px, calc(100% - 48px));
+      margin: auto;
+      overflow: hidden;
+      color: inherit;
+    }
+
+    #recently-played-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.65);
+    }
+
+    #recently-played-dialog .recently-played-dialog-content {
+      max-height: min(75vh, 640px);
+    }
+
+    #recently-played-full-list li {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 64px;
+    }
+
     .card-glass, .settings-card {
       background-color: var(--card-bg) !important;
 
@@ -4331,6 +4376,7 @@
 
 
   <audio id="audio-engine" preload="auto"></audio>
+  <audio id="secondary-audio-engine" preload="auto"></audio>
 
 
 
@@ -5217,7 +5263,30 @@
 
 
 
-                <!-- Wave Recommendations Section -->
+        <section id="home-recently-played" class="space-y-3" aria-labelledby="home-recently-played-title" hidden>
+          <h2 id="home-recently-played-title" class="text-sm font-bold text-white tracking-wide">Недавно слушали</h2>
+          <div class="ui-panel-glass border border-white/10 rounded-xl p-1">
+            <ul id="home-recently-played-list" class="recently-played-list"></ul>
+            <div class="border-t border-white/[0.08] pt-1">
+              <button id="home-recently-played-more" type="button" aria-haspopup="dialog" aria-controls="recently-played-dialog" class="w-full rounded-lg py-2 text-xs font-semibold text-white cursor-pointer">Больше</button>
+            </div>
+          </div>
+          <dialog id="recently-played-dialog" aria-labelledby="recently-played-dialog-title" class="ui-panel-glass rounded-xl border border-white/10 p-0">
+            <div class="recently-played-dialog-content flex flex-col">
+              <div class="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+                <h2 id="recently-played-dialog-title" class="text-sm font-bold text-white">История прослушиваний</h2>
+                <form method="dialog">
+                  <button id="recently-played-close" class="flex h-8 w-8 items-center justify-center rounded-lg text-white cursor-pointer" type="submit" aria-label="Закрыть" autofocus>
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                  </button>
+                </form>
+              </div>
+              <ul id="recently-played-full-list" class="recently-played-list min-h-0 overflow-y-auto p-1"></ul>
+            </div>
+          </dialog>
+        </section>
+
+        <!-- Wave Recommendations Section -->
         <div id="home-recommendations-section" class="space-y-3 pt-2">
 
 
@@ -6890,6 +6959,15 @@
 
 
 
+
+        <div class="card-glass p-5 space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <label for="crossfade-duration" class="text-sm font-bold text-white">Плавный переход</label>
+            <span id="crossfade-duration-value" class="text-xs text-neutral-400 tabular-nums"></span>
+          </div>
+          <input id="crossfade-duration" type="range" min="0" max="10" step="1" value="4"
+            class="custom-range-slider w-full" aria-describedby="crossfade-duration-value">
+        </div>
 
         <!-- Section 2: Discord RPC Section -->
 
@@ -11889,6 +11967,22 @@
 
 
     let currentlyPlayingTrackId = null;
+    const recentlyPlayedPreviewLimit = 4;
+    const recentlyPlayedStorageKey = 'sc_desktop_recently_played';
+    const recentlyPlayedDialog = document.getElementById('recently-played-dialog');
+    const recentlyPlayedPreview = document.getElementById('home-recently-played-list');
+    const recentlyPlayedFullList = document.getElementById('recently-played-full-list');
+    const recentTimeFormat = new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' });
+    const recentDateFormat = new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', year: 'numeric' });
+    let recentlyPlayed = [];
+    // Keep history across reloads of the main WebView for the lifetime of its window.
+    try {
+      const storedHistory = JSON.parse(sessionStorage.getItem(recentlyPlayedStorageKey));
+      if (Array.isArray(storedHistory)) recentlyPlayed = storedHistory;
+    } catch (_) {}
+    // Clear the history stores used before playback history became session-only.
+    try { localStorage.removeItem(recentlyPlayedStorageKey); } catch (_) {}
+    try { indexedDB.deleteDatabase('onyx-recently-played'); } catch (_) {}
 
 
 
@@ -11968,6 +12062,7 @@
     // Global Wave & Player variables (Declared early to prevent TDZ ReferenceError)
     var isWaveActive = false;
     var waveCurrentMood = 'all';
+    const waveSelectionVersion = 1;
     var wavePlayedIds = new Set();
     var isWaveLoadingMore = false;
     window.isWaveActive = false;
@@ -12011,7 +12106,18 @@
 
 
 
-    const audioEngine = document.getElementById('audio-engine');
+    const playbackAudio = [
+      document.getElementById('audio-engine'),
+      document.getElementById('secondary-audio-engine'),
+    ];
+    let audioEngine = playbackAudio[0];
+    function onPlaybackAudio(event, listener) {
+      for (const media of playbackAudio) {
+        media.addEventListener(event, (event) => {
+          if (media === audioEngine) listener(event);
+        });
+      }
+    }
     let discordPlaybackTrack = null;
 
 
@@ -12311,6 +12417,7 @@
 
     function switchTab(tabId) {
       currentActiveTab = tabId;
+      if (tabId === 'tab-home') renderRecentlyPlayed();
 
 
 
@@ -16567,11 +16674,7 @@
       if (!getInvoke()) return;
 
       try {
-        const reason = await api.toggleLike(change, newLikedState);
-        if (pendingLikeWrites.get(strId) === change) {
-          const detail = reason?.includes('CAPTCHA') ? '' : reason || '';
-          showLikeSyncStatus(detail ? 'Только в ONYX' : '', detail);
-        }
+        await api.toggleLike(change, newLikedState);
       } catch (err) {
         if (pendingLikeWrites.get(strId) === change) {
           pendingLikeWrites.delete(strId);
@@ -16943,6 +17046,7 @@
           isRepeat: Boolean(isRepeat),
           isWaveActive: Boolean(window.isWaveActive),
           waveCurrentMood: window.waveCurrentMood || 'all',
+          waveSelectionVersion,
           currentStationUrn: currentStationUrn || null,
           savedAt: Date.now()
         };
@@ -17025,7 +17129,9 @@
         }
 
         // Restore Wave state
-        if (session.isWaveActive && session.currentStationUrn === "my_wave" && Array.isArray(session.queue) && session.queue.length <= 35) {
+        const savedWave = session.isWaveActive && session.currentStationUrn === 'my_wave'
+          && Array.isArray(session.queue) && session.queue.length > 0;
+        if (savedWave) {
           window.isWaveActive = true;
           currentStationUrn = "my_wave";
           if (typeof syncWavePlayButton === 'function') syncWavePlayButton(false);
@@ -17039,7 +17145,13 @@
         }
 
         // Restore Queue
-        const savedQueue = Array.isArray(session.queue) ? session.queue : [];
+        let savedQueue = Array.isArray(session.queue) ? session.queue : [];
+        if (savedWave && session.waveSelectionVersion !== waveSelectionVersion) {
+          const savedWaveTrackId = session.track?.id ?? session.trackId;
+          const previousTrack = savedQueue.find(track => savedWaveTrackId != null && String(track?.id) === String(savedWaveTrackId))
+            || session.track || savedQueue[session.trackIndex] || savedQueue[0];
+          savedQueue = previousTrack ? [previousTrack] : [];
+        }
         if (savedQueue.length || session.track) {
           currentQueue = savedQueue.length ? [...savedQueue] : [session.track];
           currentTrackIndex = Number.isInteger(session.trackIndex) && currentQueue[session.trackIndex] ? session.trackIndex : 0;
@@ -17076,6 +17188,7 @@
 
         if (track) {
           currentlyPlayingTrackId = track.id;
+          updateRecentlyPlayedCurrentTrack();
 
           if (playerTitle) playerTitle.textContent = track.title || "SoundCloud Track";
           if (playerArtist) playerArtist.textContent = track.artist || "SoundCloud Artist";
@@ -17228,7 +17341,229 @@
       }, 1200);
     }
 
-    async function playTrack(index, newQueue = null, fromWave = false) {
+    const crossfadeInput = document.getElementById('crossfade-duration');
+    const crossfadeValue = document.getElementById('crossfade-duration-value');
+    const crossfadeKey = 'sc_audio_crossfade_seconds';
+    let crossfadeSeconds = 4;
+    try {
+      const saved = localStorage.getItem(crossfadeKey);
+      if (saved !== null && Number.isFinite(Number(saved))) {
+        crossfadeSeconds = Math.max(0, Math.min(10, Math.round(Number(saved))));
+      }
+    } catch (_) {}
+    let preparedNextTrack = null;
+    let activeFade = null;
+    let playbackVolume = 0.64;
+
+    function showCrossfadeDuration() {
+      crossfadeInput.value = crossfadeSeconds;
+      const label = crossfadeSeconds ? crossfadeSeconds + ' сек.' : 'Выкл.';
+      crossfadeValue.textContent = label;
+      crossfadeInput.setAttribute('aria-valuetext', label);
+    }
+    showCrossfadeDuration();
+    crossfadeInput.addEventListener('input', () => {
+      crossfadeSeconds = crossfadeInput.valueAsNumber;
+      showCrossfadeDuration();
+      try { localStorage.setItem(crossfadeKey, String(crossfadeSeconds)); } catch (_) {}
+      if (!crossfadeSeconds) {
+        discardPreparedTrack();
+        finishCrossfade();
+      }
+    });
+
+    function streamDetails(info) {
+      const source = typeof info === 'string' ? info : info?.url;
+      const url = typeof source === 'string' ? source : '';
+      const hls = !!url && (info?.protocol === 'hls' || url.includes('m3u8')) && !url.includes('127.0.0.1:49221');
+      return { url, hls };
+    }
+
+    function attachPlaybackHls(media, url, onFatal, onManifest = null) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 30,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 120,
+        manifestLoadingMaxRetry: 3,
+        manifestLoadingRetryDelay: 500,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 500,
+        levelLoadingMaxRetry: 3
+      });
+      if (onManifest) hls.on(Hls.Events.MANIFEST_PARSED, onManifest);
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        const status = data?.response?.code;
+        logD('HLS ' + (data?.fatal ? 'FATAL' : 'error') + ': type=' + data?.type
+          + ' details=' + data?.details + (status ? ' http=' + status : ''));
+        if (data?.fatal) onFatal(hls, data);
+      });
+      hls.loadSource(url);
+      hls.attachMedia(media);
+      return hls;
+    }
+
+    function handleActiveHlsFailure(track, hls, data) {
+      if (hls !== currentHls) return;
+      currentHls = null;
+      try { hls.destroy(); } catch (_) {}
+      handleTrackPlaybackFailure(track, 'hlsFatal:' + (data.type || 'unknown'));
+    }
+
+    function releasePlaybackMedia(media, hls) {
+      if (hls) {
+        try { hls.destroy(); } catch (_) {}
+      }
+      media.pause();
+      media.removeAttribute('src');
+      media.load();
+    }
+
+    function applyPlaybackVolume() {
+      audioEngine.volume = playbackVolume * (activeFade?.progress ?? 1);
+      if (activeFade) activeFade.outgoing.volume = playbackVolume * (1 - activeFade.progress);
+    }
+
+    function finishCrossfade() {
+      if (!activeFade) return;
+      const { outgoing, hls, timer } = activeFade;
+      activeFade = null;
+      clearInterval(timer);
+      applyPlaybackVolume();
+      releasePlaybackMedia(outgoing, hls);
+    }
+
+    function discardPreparedTrack() {
+      if (!preparedNextTrack) return;
+      const { audio, hls } = preparedNextTrack;
+      preparedNextTrack = null;
+      releasePlaybackMedia(audio, hls);
+    }
+
+    function failPreparedTrack(prepared) {
+      if (preparedNextTrack !== prepared || prepared.failed) return;
+      prepared.failed = true;
+      releasePlaybackMedia(prepared.audio, prepared.hls);
+      prepared.hls = null;
+    }
+
+    function nextQueuedTrackIndex() {
+      if (isShuffle) return getShuffleUpcomingIndices()[0] ?? -1;
+      const next = currentTrackIndex + 1;
+      return next < currentQueue.length ? next : -1;
+    }
+
+    async function prepareNextTrack(track) {
+      const audio = playbackAudio.find(media => media !== audioEngine);
+      const prepared = { audio, track, outgoing: audioEngine, hls: null, url: null, starting: false, failed: false };
+      preparedNextTrack = prepared;
+      audio.volume = 0;
+      try {
+        const info = getCachedStreamUrl(track.id) || await requestStreamUrl(track.id);
+        if (preparedNextTrack !== prepared) return;
+        if (info) cacheStreamUrl(track.id, info);
+        const { url, hls } = streamDetails(info);
+        if (!url) {
+          failPreparedTrack(prepared);
+          return;
+        }
+        prepared.url = url;
+        if (hls && !isPlatformLinux) {
+          if (!window.Hls || !Hls.isSupported()) {
+            failPreparedTrack(prepared);
+            return;
+          }
+          prepared.hls = attachPlaybackHls(audio, url, (instance, data) => {
+            if (audio === audioEngine && currentHls === instance) {
+              handleActiveHlsFailure(track, instance, data);
+            } else {
+              failPreparedTrack(prepared);
+            }
+          });
+        } else {
+          audio.src = url;
+          audio.load();
+        }
+      } catch (_) {
+        failPreparedTrack(prepared);
+      }
+    }
+
+    function maybeCrossfade() {
+      if (activeFade || !crossfadeSeconds || isRepeat || repeatMode === 'one'
+        || audioEngine.paused || audioEngine.seeking || !Number.isFinite(audioEngine.duration)) return;
+      const remaining = audioEngine.duration - audioEngine.currentTime;
+      if (remaining > crossfadeSeconds + 8 || remaining <= 0) return;
+
+      const track = currentQueue[nextQueuedTrackIndex()];
+      if (preparedNextTrack && preparedNextTrack.track !== track) discardPreparedTrack();
+      if (!track?.id || String(track.id) === String(currentlyPlayingTrackId)) return;
+      if (!preparedNextTrack) prepareNextTrack(track);
+      const prepared = preparedNextTrack;
+      if (prepared.failed || prepared.starting || !prepared.url
+        || prepared.audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+      const incomingDuration = prepared.audio.duration;
+      const overlap = Math.min(crossfadeSeconds, audioEngine.duration / 2,
+        Number.isFinite(incomingDuration) ? incomingDuration / 2 : crossfadeSeconds);
+      if (remaining > overlap || remaining < 0.25) return;
+      const { buffered, currentTime } = prepared.audio;
+      let bufferedThroughFade = false;
+      for (let i = 0; i < buffered.length; i++) {
+        if (buffered.start(i) <= currentTime + 0.05 && buffered.end(i) >= currentTime + remaining) {
+          bufferedThroughFade = true;
+          break;
+        }
+      }
+      if (!bufferedThroughFade) return;
+
+      prepared.starting = true;
+      prepared.audio.play().then(() => {
+        if (preparedNextTrack !== prepared) return;
+        const outgoing = prepared.outgoing;
+        const nextIndex = nextQueuedTrackIndex();
+        const duration = Math.min(crossfadeSeconds, outgoing.duration - outgoing.currentTime);
+        if (audioEngine !== outgoing || outgoing.paused || outgoing.seeking || isRepeat || repeatMode === 'one'
+          || currentQueue[nextIndex] !== prepared.track || !(duration >= 0.2)) {
+          discardPreparedTrack();
+          return;
+        }
+        preparedNextTrack = null;
+        playTrack(nextIndex, null, false, { ...prepared, duration });
+      }).catch(() => failPreparedTrack(prepared));
+    }
+
+    function adoptCrossfade(prepared) {
+      const outgoing = audioEngine;
+      const hls = currentHls;
+      const incoming = prepared.audio;
+      const startTime = incoming.currentTime;
+      audioEngine = incoming;
+      currentHls = prepared.hls;
+      const timer = setInterval(() => {
+        const elapsed = incoming.currentTime - startTime;
+        if (outgoing.ended || outgoing.paused || elapsed >= prepared.duration) {
+          finishCrossfade();
+          return;
+        }
+        activeFade.progress = Math.max(0, elapsed / prepared.duration);
+        applyPlaybackVolume();
+      }, 25);
+      activeFade = { outgoing, hls, timer, progress: 0 };
+      applyPlaybackVolume();
+    }
+
+    onPlaybackAudio('seeking', () => {
+      discardPreparedTrack();
+      finishCrossfade();
+    });
+    for (const media of playbackAudio) {
+      media.addEventListener('error', () => {
+        if (preparedNextTrack?.audio === media) failPreparedTrack(preparedNextTrack);
+      });
+    }
+
+    async function playTrack(index, newQueue = null, fromWave = false, prepared = null) {
       try {
         if (newQueue && Array.isArray(newQueue) && newQueue.length > 0) {
           if (!fromWave) {
@@ -17257,8 +17592,12 @@
         if (!track) return;
         if (isShuffle && track.id != null) shufflePlayedTrackIds.add(String(track.id));
         currentlyPlayingTrackId = track.id;
+        updateRecentlyPlayedCurrentTrack();
         discordPlaybackTrack = null;
         const requestId = ++currentPlayRequestId;
+        finishCrossfade();
+        discardPreparedTrack();
+        if (prepared) adoptCrossfade(prepared);
         if (pendingSessionSeek?.trackId !== String(track.id)) pendingSessionSeek = null;
 
         // Wave tracking
@@ -17304,28 +17643,15 @@
           fetchLyricsForTrack(track);
         }
 
-        // Teardown previous HLS safely
-        if (window.currentHls) {
-          try {
-            window.currentHls.stopLoad();
-            window.currentHls.detachMedia();
-            window.currentHls.destroy();
-          } catch (_) {}
-          window.currentHls = null;
+        if (!prepared) {
+          const previousHls = currentHls;
+          currentHls = null;
+          releasePlaybackMedia(audioEngine, previousHls);
         }
-        try {
-          audioEngine.pause();
-          audioEngine.removeAttribute('src');
-          if (isPlatformLinux) {
-            audioEngine.removeAttribute('crossOrigin');
-            audioEngine.crossOrigin = null;
-          }
-          audioEngine.load();
-        } catch (_) {}
 
         if (!track.id) return;
 
-        let streamInfo = getCachedStreamUrl(track.id);
+        let streamInfo = prepared?.url || getCachedStreamUrl(track.id);
         if (!streamInfo) {
           setPlayerLoading(true);
           try {
@@ -17347,10 +17673,9 @@
           }
         }
         if (requestId !== currentPlayRequestId) return;
-        prefetchNextTrack(currentTrackIndex + 1);
+        prefetchNextTrack(nextQueuedTrackIndex());
 
-        const streamUrl = typeof streamInfo === 'object' && streamInfo !== null ? streamInfo.url : streamInfo;
-        const isHls = ((typeof streamInfo === 'object' && streamInfo !== null && streamInfo.protocol === 'hls') || (streamUrl && streamUrl.includes('m3u8'))) && !streamUrl.includes('127.0.0.1:49221');
+        const { url: streamUrl, hls: isHls } = streamDetails(streamInfo);
 
         if (!streamUrl) {
           setPlayerLoading(false);
@@ -17368,11 +17693,19 @@
             pendingSessionSeek = null;
           }
           saveSessionState();
+          recordRecentPlayback(track);
           startAutomaticKaraoke(track, streamUrl);
         };
 
         discordPlaybackTrack = track;
-        if (isPlatformLinux) {
+
+        if (prepared) {
+          // This element started playing while it was still inactive.
+          for (const event of ['loadedmetadata', 'timeupdate', 'playing']) {
+            audioEngine.dispatchEvent(new Event(event));
+          }
+          handlePlaybackStart();
+        } else if (isPlatformLinux) {
           // WebKitGTK on Linux: Use native GStreamer playback directly.
           // Hls.js with MediaSource causes thread deadlocks in WebKitGTK when switching tracks.
           try {
@@ -17387,37 +17720,13 @@
             }
           });
         } else if (isHls && window.Hls && Hls.isSupported()) {
-          const hls = new Hls({
-            enableWorker: true,
-            lowLatencyMode: false,
-            backBufferLength: 30,
-            maxBufferLength: 30,
-            maxMaxBufferLength: 120,
-            manifestLoadingMaxRetry: 3,
-            manifestLoadingRetryDelay: 500,
-            fragLoadingMaxRetry: 6,
-            fragLoadingRetryDelay: 500,
-            levelLoadingMaxRetry: 3
-          });
-          window.currentHls = hls;
-          hls.loadSource(streamUrl);
-          hls.attachMedia(audioEngine);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          const media = audioEngine;
+          currentHls = attachPlaybackHls(media, streamUrl, (hls, data) => {
             if (requestId !== currentPlayRequestId) return;
-            audioEngine.play().then(handlePlaybackStart).catch(e => console.log('HLS play error:', e.message));
-          });
-          hls.on(Hls.Events.ERROR, (event, data) => {
-            const httpCode = data && data.response ? data.response.code : '';
-            logD(`HLS ${data && data.fatal ? 'FATAL' : 'error'}: type=${data ? data.type : ''} details=${data ? data.details : ''}${httpCode ? ' http=' + httpCode : ''}`);
-            if (!data || !data.fatal || requestId !== currentPlayRequestId) return;
-            // Never feed the raw m3u8 URL to <audio>: Chromium cannot demux HLS on its own
-            // (that produced MEDIA_ERR_SRC_NOT_SUPPORTED / DEMUXER_ERROR_COULD_NOT_PARSE).
-            // Instead drop the (possibly stale) link and resolve the track again.
-            try {
-              hls.destroy();
-            } catch (_) {}
-            if (window.currentHls === hls) window.currentHls = null;
-            handleTrackPlaybackFailure(track, 'hlsFatal:' + (data.type || 'unknown'));
+            handleActiveHlsFailure(track, hls, data);
+          }, () => {
+            if (requestId !== currentPlayRequestId) return;
+            media.play().then(handlePlaybackStart).catch(e => console.log('HLS play error:', e.message));
           });
         } else if (isHls) {
           // HLS stream but MSE/Hls.js is unavailable - a raw playlist can never be demuxed
@@ -17462,11 +17771,11 @@
           // A cached CDN link may be stale or the HLS session may be broken - start over
           // with a freshly resolved URL instead of dying on the same one.
           invalidateStreamUrl(track.id);
-          if (window.currentHls) {
+          if (currentHls) {
             try {
-              window.currentHls.destroy();
+              currentHls.destroy();
             } catch (_) {}
-            window.currentHls = null;
+            currentHls = null;
           }
           if (!playbackRetryTimers.has(track.id)) {
             const retryId = setTimeout(() => {
@@ -17764,7 +18073,7 @@
 
 
 
-    audioEngine.onplay = () => {
+    onPlaybackAudio('play', () => {
 
 
 
@@ -17844,7 +18153,7 @@
 
 
 
-    };
+    });
 
 
 
@@ -17852,7 +18161,11 @@
 
 
 
-    audioEngine.onpause = () => {
+    onPlaybackAudio('pause', () => {
+      if (!audioEngine.ended) {
+        discardPreparedTrack();
+        finishCrossfade();
+      }
 
 
 
@@ -17932,7 +18245,7 @@
 
 
 
-    };
+    });
 
 
 
@@ -17949,7 +18262,8 @@
 
 
     let lastSessionAutoSave = 0;
-    audioEngine.ontimeupdate = () => {
+    onPlaybackAudio('timeupdate', () => {
+      maybeCrossfade();
       const now = Date.now();
       if (now - lastSessionAutoSave > 5000 && isPlaying) {
         lastSessionAutoSave = now;
@@ -18170,7 +18484,7 @@
 
 
 
-    };
+    });
 
 
 
@@ -18178,7 +18492,7 @@
 
 
 
-    audioEngine.onloadedmetadata = () => {
+    onPlaybackAudio('loadedmetadata', () => {
 
 
 
@@ -18218,7 +18532,7 @@
 
 
 
-    };
+    });
 
 
 
@@ -18226,7 +18540,8 @@
 
 
 
-    audioEngine.onended = () => {
+    onPlaybackAudio('ended', () => {
+      finishCrossfade();
       if (repeatMode === 'one' || isRepeat) {
         audioEngine.currentTime = 0;
         audioEngine.play().catch(console.warn);
@@ -18234,14 +18549,14 @@
         if (isWaveActive && typeof checkWaveReplenish === 'function') {
           checkWaveReplenish();
         }
-        if ((isWaveActive && currentStationUrn === 'my_wave') || currentTrackIndex + 1 < currentQueue.length) {
+        if ((isWaveActive && currentStationUrn === 'my_wave') || nextQueuedTrackIndex() >= 0) {
           playNextTrack();
         } else {
           isPlaying = false;
           syncPlayPauseState(false);
         }
       }
-    };
+    });
 
 
 
@@ -18505,7 +18820,8 @@
 
 
 
-      audioEngine.volume = Math.pow(val / 100, 2);
+      playbackVolume = Math.pow(val / 100, 2);
+      applyPlaybackVolume();
 
 
 
@@ -19225,6 +19541,8 @@
     window.toggleShuffle = toggleShuffle;
 
     function toggleRepeat() {
+      discardPreparedTrack();
+      finishCrossfade();
       // 1-track repeat toggle: off <-> one
       if (repeatMode === 'one' || isRepeat) {
         repeatMode = 'off';
@@ -22205,17 +22523,46 @@
     let waveRefillQueue;
     let waveRefillAfter = 0;
 
-    function waveTasteSeeds() {
-      const likes = allTracks.filter(track => track?.id != null);
-      if (likes.length) return likes;
+    function waveGenreKey(track) {
+      const genre = String(track?.genre || '').normalize('NFKC').toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      if (!genre || genre === 'music' || genre === 'other') return '';
+      if (/^(?:hip ?hop(?: rap)?|rap(?: hip ?hop)?)$/.test(genre)) return 'hip hop';
+      if (/^(?:drum (?:and )?bass|dnb)$/.test(genre)) return 'drum and bass';
+      if (/^(?:dance (?:and )?edm|edm)$/.test(genre)) return 'dance';
+      return genre;
+    }
+
+    function waveMoodFit(track, mood) {
+      if (mood !== 'energetic' && mood !== 'calm') return 0;
+      const genre = waveGenreKey(track);
+      const energetic = /\b(?:breakcore|dance|drum and bass|hardcore|house|phonk|punk|techno|trance)\b/.test(genre);
+      const calm = /\b(?:acoustic|ambient|chill|chillhop|chillout|downtempo|lo fi|lofi|piano)\b/.test(genre);
+      if (energetic === calm) return 0;
+      return energetic === (mood === 'energetic') ? 1 : -1;
+    }
+
+    function waveTasteSeeds(mood) {
+      const likes = new Map(allTracks.filter(track => track?.id != null).map(track => [String(track.id), track]));
+      if (likes.size) {
+        // Recent listens can boost existing favorites without feeding the wave's own guesses back into taste.
+        const recentLikes = recentlyPlayed.slice(0, 40).map(({ track }) => likes.get(String(track.id))).filter(Boolean);
+        return [...new Set([...recentLikes, ...likes.values()])]
+          .sort((a, b) => waveMoodFit(b, mood) - waveMoodFit(a, mood));
+      }
+      if (mood === 'favorites') return [];
       return (lastMixedData || []).flatMap(mix => mix.tracks || []).filter(track => track?.id != null);
     }
 
     async function startWave() {
-      const taste = waveTasteSeeds();
-      const candidates = taste.length ? taste : (currentQueue.length ? currentQueue : (window.PRELOADED_TRACKS || []));
-      const fresh = candidates.filter(track => !isWaveTrackRecentlyPlayed(track.id));
-      const pool = fresh.length ? fresh : candidates;
+      const mood = waveCurrentMood || 'all';
+      const taste = waveTasteSeeds(mood);
+      const candidates = taste.length || mood === 'favorites'
+        ? taste
+        : (currentQueue.length ? currentQueue : (window.PRELOADED_TRACKS || []));
+      const recent = new Set(recentlyPlayed.slice(0, 60).map(({ track }) => String(track.id)));
+      const fresh = candidates.filter(track => !recent.has(String(track.id)) && !isWaveTrackRecentlyPlayed(track.id));
+      const pool = (fresh.length ? fresh : candidates).slice(0, 8);
       const seed = pool[Math.floor(Math.random() * pool.length)];
       if (!seed) {
         notify("Для запуска волны добавьте любимые треки в медиатеку", "ℹ️");
@@ -22231,73 +22578,96 @@
     }
     window.startWave = startWave;
 
+    function personalWaveSeeds(taste, anchor) {
+      const seeds = [anchor];
+      const artists = new Set([waveArtistKey(anchor) || String(anchor.id)]);
+      const genre = waveGenreKey(anchor);
+      const nearby = genre ? taste.filter(track => waveGenreKey(track) === genre).slice(0, 8) : [];
+      const pools = [nearby, taste.slice(0, 18)];
+      for (const pool of pools) {
+        for (let offset = 0; offset < pool.length && seeds.length < 4; offset++) {
+          const track = pool[(waveSeedCursor + offset) % pool.length];
+          const artist = waveArtistKey(track) || String(track.id);
+          if (artists.has(artist)) continue;
+          artists.add(artist);
+          seeds.push(track);
+          if (pool === nearby && seeds.length === 3) break;
+        }
+      }
+      waveSeedCursor++;
+      return seeds;
+    }
+
     async function replenishPersonalWave(queue) {
       const mood = waveCurrentMood || 'all';
-      const current = queue[currentTrackIndex];
-      const taste = waveTasteSeeds();
-      const seeds = [];
-      const artists = new Set();
-      for (let offset = 0; offset < taste.length && seeds.length < 4; offset++) {
-        const track = taste[(waveSeedCursor + offset) % taste.length];
-        const artist = waveArtistKey(track) || String(track.id);
-        if (artists.has(artist)) continue;
-        artists.add(artist);
-        seeds.push(track);
-      }
-      waveSeedCursor += Math.max(1, seeds.length);
-      if (!seeds.length && current) seeds.push(current);
-
+      const taste = waveTasteSeeds(mood);
+      const anchor = queue.find(track => track?.id != null);
+      if (!anchor) return;
       const seen = new Set(queue.map(track => String(track.id)));
+      for (const { track } of recentlyPlayed.slice(0, 60)) seen.add(String(track.id));
       const liked = new Set(allTracks.map(track => String(track.id)));
-      const queries = seeds.map(async track => api?.getRelatedTracks
-        ? api.getRelatedTracks(track.id)
-        : api?.invoke?.('get_related_tracks', { trackId: track.id }));
-      if (mood !== 'all' && mood !== 'favorites') {
-        const keywords = MOOD_SEARCH_KEYWORDS[mood] || [];
-        const keyword = keywords[waveSeedCursor % keywords.length];
-        const artist = seeds[0]?.artist;
-        if (artist && keyword) {
-          const query = artist + ' ' + keyword;
-          queries.push((async () => api?.searchTracks
-            ? api.searchTracks(query, 'soundcloud')
-            : api?.invoke?.('search_tracks', { query, provider: 'soundcloud' }))());
-        }
-      }
-
-      const batches = queries.map(() => []);
-      let timeout;
-      try {
-        await Promise.race([
-          Promise.allSettled(queries.map(async (query, index) => {
-            const tracks = await query;
-            if (Array.isArray(tracks)) batches[index] = tracks.slice(0, 12);
-          })),
-          new Promise(resolve => { timeout = setTimeout(resolve, 3500); })
-        ]);
-      } finally {
-        clearTimeout(timeout);
-      }
-      if (!isWaveActive || currentStationUrn !== 'my_wave' || currentQueue !== queue) return;
-
       const recommendations = [];
-      const add = (track, favorite = false) => {
-        if (track?.id == null) return;
-        const id = String(track.id);
-        if (seen.has(id) || isWaveTrackRecentlyPlayed(id) || (!favorite && liked.has(id))) return;
-        seen.add(id);
-        recommendations.push(track);
-      };
-      for (let rank = 0; rank < 12; rank++) {
-        for (const batch of batches) add(batch[rank]);
-      }
-      if (mood !== 'new' && (recommendations.length < 6 || mood === 'favorites')) {
-        const favorites = shuffleArray([...allTracks]);
-        for (const track of favorites) {
-          if (recommendations.length >= 12) break;
-          add(track, true);
+      const canRecommend = (track) => track?.id != null && !seen.has(String(track.id))
+        && !isWaveTrackRecentlyPlayed(track.id) && waveMoodFit(track, mood) >= 0;
+
+      if (mood !== 'favorites') {
+        const seeds = personalWaveSeeds(taste, anchor);
+        const batches = seeds.map(() => []);
+        let timeout;
+        try {
+          await Promise.race([
+            Promise.allSettled(seeds.map(async (track, index) => {
+              const results = await api.getRelatedTracks(track.id);
+              if (Array.isArray(results)) batches[index] = results.slice(0, 18);
+            })),
+            new Promise(resolve => { timeout = setTimeout(resolve, 3500); })
+          ]);
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (!isWaveActive || currentStationUrn !== 'my_wave' || currentQueue !== queue) return;
+
+        const anchorGenre = waveGenreKey(anchor);
+        const preferredGenres = new Set(taste.slice(0, 50).map(waveGenreKey).filter(Boolean));
+        const evidence = new Map();
+        batches.forEach((batch, source) => {
+          const sourceIds = new Set();
+          batch.forEach((track, rank) => {
+            if (!canRecommend(track)) return;
+            const id = String(track.id);
+            if (sourceIds.has(id) || liked.has(id)) return;
+            sourceIds.add(id);
+            const match = evidence.get(id) || { track, sources: 0, score: 0 };
+            match.sources++;
+            match.score += (18 - rank) * (source === 0 ? 2 : 1);
+            evidence.set(id, match);
+          });
+        });
+        const ranked = [];
+        for (const match of evidence.values()) {
+          const genre = waveGenreKey(match.track);
+          const nearAnchor = Boolean(anchorGenre && genre === anchorGenre);
+          const familiar = preferredGenres.has(genre);
+          if (genre && !nearAnchor && !familiar && (anchorGenre || preferredGenres.size) && match.sources === 1) continue;
+          const score = match.score + (nearAnchor ? 18 : 0) + (familiar ? 10 : 0) + 10 * waveMoodFit(match.track, mood);
+          ranked.push({ track: match.track, score });
+        }
+        ranked.sort((a, b) => b.score - a.score);
+        for (const { track } of ranked.slice(0, 12)) {
+          seen.add(String(track.id));
+          recommendations.push(track);
         }
       }
-      const next = orderWaveRecommendations(recommendations, 18, queue.at(-1));
+
+      if (mood === 'favorites' || (mood !== 'new' && recommendations.length < 6)) {
+        const anchorGenre = waveGenreKey(anchor);
+        const favorites = taste.filter(track => liked.has(String(track.id)) && canRecommend(track));
+        favorites.sort((a, b) => waveMoodFit(b, mood) - waveMoodFit(a, mood)
+          || Number(Boolean(anchorGenre && waveGenreKey(b) === anchorGenre)) - Number(Boolean(anchorGenre && waveGenreKey(a) === anchorGenre)));
+        for (const track of favorites.slice(0, 12 - recommendations.length)) recommendations.push(track);
+      }
+
+      const next = orderWaveRecommendations(recommendations, 12, queue.at(-1));
       waveRefillAfter = Date.now() + (next.length ? 1500 : 10000);
       if (!next.length) return;
       queue.push(...next);
@@ -22476,6 +22846,86 @@
       }
     }
     window.startTrackRadio = startTrackRadio;
+
+    function recordRecentPlayback(track) {
+      if (isLoggingOut || String(track.id) !== String(currentlyPlayingTrackId)) return;
+      const { id, title, artist, duration, duration_ms, user_id, permalink_url } = track;
+      const entry = {
+        playedAt: Date.now(),
+        track: { id, title, artist, cover: track.cover || track.artwork_url, duration, duration_ms, user_id, permalink_url }
+      };
+      const trackId = String(id);
+      recentlyPlayed = [entry, ...recentlyPlayed.filter(item => String(item.track.id) !== trackId)];
+      try { sessionStorage.setItem(recentlyPlayedStorageKey, JSON.stringify(recentlyPlayed)); } catch (_) {}
+      renderRecentlyPlayed();
+    }
+
+    function formatRecentPlaybackTime(date, today, yesterday) {
+      const day = date.toDateString();
+      const label = day === today ? 'Сегодня' : day === yesterday ? 'Вчера' : recentDateFormat.format(date);
+      return `${label}, ${recentTimeFormat.format(date)}`;
+    }
+
+    function updateRecentlyPlayedCurrentTrack() {
+      for (const row of document.querySelectorAll('.recently-played-list button')) {
+        row.setAttribute('aria-current', String(row.dataset.trackId === String(currentlyPlayingTrackId)));
+      }
+    }
+
+    function renderRecentlyPlayedList(list, entries, today, yesterday) {
+      const focusedId = list.contains(document.activeElement) ? document.activeElement.dataset.trackId : null;
+      list.innerHTML = entries.map(({ track, playedAt }) => {
+        const date = new Date(playedAt);
+        const title = escapeMarkup(track.title || 'Трек SoundCloud');
+        return `
+          <li>
+            <button type="button" data-track-id="${escapeMarkup(track.id)}" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-white">
+              <img src="${escapeMarkup(track.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="h-12 w-12 shrink-0 rounded-lg border border-white/10 object-cover" loading="lazy" alt="">
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-xs font-semibold" title="${title}">${title}</span>
+                <span class="block truncate text-[11px] text-neutral-400">${escapeMarkup(track.artist || 'SoundCloud')}</span>
+              </span>
+              <time datetime="${date.toISOString()}" class="shrink-0 whitespace-nowrap text-right text-[11px] tabular-nums text-neutral-400">${formatRecentPlaybackTime(date, today, yesterday)}</time>
+            </button>
+          </li>`;
+      }).join('');
+      if (focusedId) Array.from(list.querySelectorAll('button')).find(row => row.dataset.trackId === focusedId)?.focus({ preventScroll: true });
+    }
+
+    function renderRecentlyPlayed() {
+      const now = new Date();
+      const today = now.toDateString();
+      now.setDate(now.getDate() - 1);
+      const yesterday = now.toDateString();
+      document.getElementById('home-recently-played').hidden = recentlyPlayed.length === 0;
+      renderRecentlyPlayedList(recentlyPlayedPreview, recentlyPlayed.slice(0, recentlyPlayedPreviewLimit), today, yesterday);
+      if (recentlyPlayedDialog.open) renderRecentlyPlayedList(recentlyPlayedFullList, recentlyPlayed, today, yesterday);
+      updateRecentlyPlayedCurrentTrack();
+    }
+
+    function playRecentlyPlayedRow(event) {
+      const row = event.target.closest('button[data-track-id]');
+      if (!row) return;
+      const entries = event.currentTarget === recentlyPlayedPreview
+        ? recentlyPlayed.slice(0, recentlyPlayedPreviewLimit)
+        : recentlyPlayed;
+      const tracks = entries.map(entry => entry.track);
+      const index = tracks.findIndex(track => String(track.id) === row.dataset.trackId);
+      if (index < 0) return;
+      if (row.dataset.trackId === String(currentlyPlayingTrackId)) {
+        togglePlay();
+      } else {
+        playTrack(index, tracks);
+      }
+    }
+
+    recentlyPlayedPreview.addEventListener('click', playRecentlyPlayedRow);
+    recentlyPlayedFullList.addEventListener('click', playRecentlyPlayedRow);
+    document.getElementById('home-recently-played-more').addEventListener('click', () => {
+      recentlyPlayedDialog.showModal();
+      renderRecentlyPlayed();
+    });
+    renderRecentlyPlayed();
 
     function renderHomeFeed(tracks, mixed) {
       if (mixed !== undefined) lastMixedData = mixed;
@@ -25239,6 +25689,8 @@
     async function logoutAccount() {
       if (isLoggingOut) return;
       isLoggingOut = true;
+      discardPreparedTrack();
+      finishCrossfade();
 
       // 1. Cancel any active login polling watcher
       if (authPollingTimer) {
@@ -25281,6 +25733,7 @@
       if (playerArtistEl) playerArtistEl.textContent = "SoundCloud";
       if (playerCoverEl) playerCoverEl.src = "logo.png";
       currentlyPlayingTrackId = null;
+      updateRecentlyPlayedCurrentTrack();
 
       // 4. Reset Immersive Player & close it if open
       const immTitle = document.getElementById('immersive-player-title');
@@ -27005,7 +27458,6 @@
 
 
 
-    let audioSourceNode = null;
 
 
 
@@ -27101,7 +27553,7 @@
       }
 
       try {
-        audioEngine.crossOrigin = "anonymous";
+        for (const media of playbackAudio) media.crossOrigin = "anonymous";
 
 
 
@@ -27405,85 +27857,14 @@
 
 
 
-        // Connect media element into Web Audio pipeline
-
-
-
-
-
-
-
-        if (!audioSourceNode) {
-
-
-
-
-
-
-
+        // Both playback elements share the equalizer, compressor, and visualizer.
+        for (const media of playbackAudio) {
           try {
-
-
-
-
-
-
-
-            audioSourceNode = audioCtx.createMediaElementSource(audioEngine);
-
-
-
-
-
-
-
-            audioSourceNode.connect(eq60Node);
-
-
-
-
-
-
-
-            logD('AudioSource connected to eq60Node successfully!');
-
-
-
-
-
-
-
+            audioCtx.createMediaElementSource(media).connect(eq60Node);
           } catch (srcErr) {
-
-
-
-
-
-
-
             logD('AudioSource creation note: ' + srcErr.message);
-
-
-
-
-
-
-
           }
-
-
-
-
-
-
-
         }
-
-
-
-
-
-
 
         // Audio path: EQ -> compressor -> analyser -> speakers
 
@@ -28090,11 +28471,11 @@
 
     // Add audio listeners for reliable activation
     if (typeof audioEngine !== 'undefined' && audioEngine) {
-      audioEngine.addEventListener('play', () => {
+      onPlaybackAudio('play', () => {
         if (!isPlatformLinux && typeof initAudioPipeline === 'function') initAudioPipeline();
         if (typeof startVisualizerLoop === 'function') startVisualizerLoop();
       });
-      audioEngine.addEventListener('playing', () => {
+      onPlaybackAudio('playing', () => {
         if (typeof startVisualizerLoop === 'function') startVisualizerLoop();
       });
     }
@@ -28388,6 +28769,7 @@
 
 
 
+      if (recentlyPlayedDialog.open || e.target.closest?.('#home-recently-played button')) return;
       const tag = (e.target.tagName || '').toLowerCase();
 
 
@@ -31277,10 +31659,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
     for (const event of ['play', 'playing', 'pause', 'seeked', 'ratechange', 'durationchange', 'waiting', 'ended', 'emptied', 'error']) {
-      audioEngine.addEventListener(event, queueDiscordPlaybackUpdate);
+      onPlaybackAudio(event, queueDiscordPlaybackUpdate);
     }
 
-    audioEngine.addEventListener('loadstart', () => logD('audioEngine: loadstart'));
+    onPlaybackAudio('loadstart', () => logD('audioEngine: loadstart'));
 
 
 
@@ -31288,7 +31670,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('loadedmetadata', () => logD(`audioEngine: loadedmetadata (duration=${audioEngine.duration})`));
+    onPlaybackAudio('loadedmetadata', () => logD(`audioEngine: loadedmetadata (duration=${audioEngine.duration})`));
 
 
 
@@ -31296,7 +31678,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('canplay', () => logD('audioEngine: canplay'));
+    onPlaybackAudio('canplay', () => logD('audioEngine: canplay'));
 
 
 
@@ -31304,7 +31686,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('play', () => {
+    onPlaybackAudio('play', () => {
 
 
 
@@ -31328,7 +31710,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('playing', () => {
+    onPlaybackAudio('playing', () => {
       logD('audioEngine: playing event fired (sound active!)');
       setPlayerLoading(false);
       // A track that really started playing is healthy again: forget its failure budget.
@@ -31341,7 +31723,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('pause', () => {
+    onPlaybackAudio('pause', () => {
 
 
 
@@ -31365,7 +31747,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('waiting', () => logD('audioEngine: waiting/buffering'));
+    onPlaybackAudio('waiting', () => logD('audioEngine: waiting/buffering'));
 
 
 
@@ -31373,7 +31755,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('stalled', () => logD('audioEngine: stalled'));
+    onPlaybackAudio('stalled', () => logD('audioEngine: stalled'));
 
 
 
@@ -31381,7 +31763,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    audioEngine.addEventListener('error', () => {
+    onPlaybackAudio('error', () => {
 
 
 
