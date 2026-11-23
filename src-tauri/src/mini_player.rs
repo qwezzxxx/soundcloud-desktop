@@ -7,7 +7,7 @@ const LABEL: &str = "mini-player";
 const WIDTH: f64 = 404.0;
 const HEIGHT: f64 = 142.0;
 
-pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let mut builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("mini_player.html".into()))
         .title("ONYX — Мини-плеер")
         .inner_size(WIDTH, HEIGHT)
@@ -44,6 +44,14 @@ pub fn create<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 }
 
 pub fn show_at_tray<R: Runtime>(app: &AppHandle<R>, pointer: PhysicalPosition<f64>, icon: Rect) -> bool {
+    static OPEN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = OPEN.lock().unwrap_or_else(|err| err.into_inner());
+    if app.get_webview_window(LABEL).is_none() {
+        if let Err(error) = create(app) {
+            crate::log_debug(format!("[Mini-player] {error}"));
+            return false;
+        }
+    }
     let Some(window) = app.get_webview_window(LABEL) else {
         return false;
     };

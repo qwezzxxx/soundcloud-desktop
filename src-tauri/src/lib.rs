@@ -648,7 +648,9 @@ fn win_toggle_maximize(window: tauri::Window) -> Result<(), String> {
 fn win_close(window: tauri::Window) -> Result<(), String> {
     // Background mode: hide window to tray / background so music continues playing
     let _ = window.set_skip_taskbar(true);
-    window.hide().map_err(|e| e.to_string())
+    window.hide().map_err(|e| e.to_string())?;
+    let _ = tauri::Emitter::emit(&window, "main-visibility", false);
+    Ok(())
 }
 
 #[tauri::command]
@@ -814,11 +816,6 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
 
             if let Some(icon) = app.default_window_icon() {
-                #[cfg(windows)]
-                if let Err(error) = mini_player::create(app.handle()) {
-                    log_debug(format!("[Mini-player] {error}"));
-                }
-
                 let _ = TrayIconBuilder::new()
                     .icon(icon.clone())
                     .tooltip("ONYX")
@@ -841,22 +838,17 @@ pub fn run() {
                         }
                     })
                     .on_tray_icon_event(|tray, event| {
-                        #[cfg(windows)]
-                        if let TrayIconEvent::Click {
-                            button: MouseButton::Left,
-                            button_state: MouseButtonState::Up,
-                            position,
-                            rect,
-                            ..
-                        } = event
-                        {
-                            if mini_player::show_at_tray(tray.app_handle(), position, rect) {
+                        let TrayIconEvent::Click {
+                            button: MouseButton::Left, button_state: MouseButtonState::Up,
+                            position, rect, ..
+                        } = event else { return };
+                        let app = tray.app_handle().clone();
+                        // WebView2 creation needs the UI thread free to pump messages.
+                        std::thread::spawn(move || {
+                            #[cfg(windows)]
+                            if mini_player::show_at_tray(&app, position, rect) {
                                 return;
                             }
-                        }
-
-                        if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                            let app = tray.app_handle();
                             if let Some(w) = app.get_webview_window("main") {
                                 if let Ok(is_visible) = w.is_visible() {
                                     if is_visible {
@@ -875,7 +867,7 @@ pub fn run() {
                                     let _ = w.set_focus();
                                 }
                             }
-                        }
+                        });
                     })
                     .build(app);
             }
@@ -927,6 +919,12 @@ pub fn run() {
             clear_custom_wallpaper
         ])
         .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event,
+                tauri::WindowEvent::Focused(_) | tauri::WindowEvent::Resized(_)
+            ) {
+                let visible = window.is_visible().unwrap_or(true) && !window.is_minimized().unwrap_or(false);
+                let _ = tauri::Emitter::emit(window, "main-visibility", visible);
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Only the main player window minimizes to tray; auxiliary windows
                 // (e.g. the SoundCloud sign-in window) must be able to close normally.
@@ -934,6 +932,7 @@ pub fn run() {
                     api.prevent_close();
                     let _ = window.set_skip_taskbar(true);
                     let _ = window.hide();
+                    let _ = tauri::Emitter::emit(window, "main-visibility", false);
                 }
             }
         })
