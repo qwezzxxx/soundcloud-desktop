@@ -1949,8 +1949,8 @@
     body.theme-light #like-btn:hover {
       color: #0f172a !important;
     }
-    body.theme-light #player-soundwave .wave-bar {
-      background-color: #64748b !important;
+    body.theme-light #player-soundwave {
+      color: #64748b !important;
     }
 
     .liked-songs-cover {
@@ -4228,6 +4228,14 @@
     }
     #progress-bar-fill, #immersive-progress-fill {
       transition: background-color 0.3s ease !important;
+    }
+
+    #tab-home .grid > .card-glass {
+      border-color: color-mix(in srgb, currentColor 3%, transparent) !important;
+    }
+
+    #tab-home .grid > .card-glass:hover {
+      border-color: color-mix(in srgb, currentColor 8%, transparent) !important;
     }
 
     /* Theme preset selector buttons in Settings */
@@ -9076,63 +9084,16 @@
 
 
 
-        <div id="player-soundwave" class="flex items-end gap-[3px] h-[18px] px-1 select-none pointer-events-none shrink-0" title="Звуковая волна">
-
-
-
-
-
-
-
-          <span class="wave-bar w-[3px] h-2 rounded-full transition-all duration-100" style="background-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow);"></span>
-
-
-
-
-
-
-
-          <span class="wave-bar w-[3px] h-3.5 rounded-full transition-all duration-100" style="background-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow);"></span>
-
-
-
-
-
-
-
-          <span class="wave-bar w-[3px] h-2.5 rounded-full transition-all duration-100" style="background-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow);"></span>
-
-
-
-
-
-
-
-          <span class="wave-bar w-[3px] h-4 rounded-full transition-all duration-100" style="background-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow);"></span>
-
-
-
-
-
-
-
-          <span class="wave-bar w-[3px] h-3 rounded-full transition-all duration-100" style="background-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow);"></span>
-
-
-
-
-
-
-
-          <span class="wave-bar w-[3px] h-1.5 rounded-full transition-all duration-100" style="background-color: var(--accent); box-shadow: 0 0 6px var(--accent-glow);"></span>
-
-
-
-
-
-
-
-        </div>
+        <svg id="player-soundwave" width="41" height="18" viewBox="0 0 41 18" class="shrink-0" style="color: var(--accent)" aria-hidden="true">
+          <g id="playback-spectrum-bars" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".45">
+            <line x1="5.5" x2="5.5" y1="14" y2="16.5"/>
+            <line x1="11.5" x2="11.5" y1="8" y2="16.5"/>
+            <line x1="17.5" x2="17.5" y1="3" y2="16.5"/>
+            <line x1="23.5" x2="23.5" y1="6" y2="16.5"/>
+            <line x1="29.5" x2="29.5" y1="11" y2="16.5"/>
+            <line x1="35.5" x2="35.5" y1="15" y2="16.5"/>
+          </g>
+        </svg>
 
 
 
@@ -10248,23 +10209,9 @@
 
 
 
-        <div id="immersive-visualizer" class="flex items-end justify-center gap-1.5 h-10 w-full max-w-md px-4 select-none pointer-events-none">
-
-
-
-
-
-
-
-          <!-- dynamic bars -->
-
-
-
-
-
-
-
-        </div>
+        <svg id="immersive-visualizer" width="264" height="48" viewBox="0 0 264 48" class="max-w-full shrink-0 self-center" style="color: var(--accent)" aria-hidden="true">
+          <g stroke="currentColor" stroke-width="6" stroke-linecap="round" opacity=".45"></g>
+        </svg>
 
 
 
@@ -13933,15 +13880,6 @@
         });
       });
 
-      // Update soundwave bars
-      document.querySelectorAll('#player-soundwave .wave-bar').forEach(b => {
-        b.style.backgroundColor = color;
-        b.style.boxShadow = 'none';
-      });
-      document.querySelectorAll('#immersive-visualizer .imm-bar').forEach(b => {
-        b.style.backgroundColor = color;
-        b.style.boxShadow = 'none';
-      });
 
       // Update active controls
       if (shuffleBtn && isShuffle) shuffleBtn.style.color = color;
@@ -19731,7 +19669,7 @@
         const row = document.createElement('div');
         row.className = 'flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-xs transition-colors';
         row.innerHTML = `
-          <img src="${escapeMarkup(track.cover || track.artwork_url || 'logo.png')}" class="w-8 h-8 rounded-md object-cover shrink-0">
+          <img loading="lazy" decoding="async" width="32" height="32" src="${escapeMarkup(track.cover || track.artwork_url || 'logo.png')}" class="w-8 h-8 rounded-md object-cover shrink-0">
           <div class="truncate flex-1">
             <div class="text-white font-medium truncate">${escapeMarkup(track.title || 'Без названия')}</div>
             <div class="text-[10px] text-neutral-400 truncate">${escapeMarkup(track.artist || 'Неизвестный исполнитель')}</div>
@@ -20127,7 +20065,7 @@
 
 
 
-            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/5">
+            <img loading="lazy" decoding="async" width="40" height="40" src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 border border-white/5">
 
 
 
@@ -23031,7 +22969,7 @@
                    <svg class="w-5 h-5 ml-0.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                  </div>`;
             card.innerHTML = `
-              <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
+              <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900">
                 ${waveBadge}
                 <img src="${escapeMarkup(artwork)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                 <div class="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors flex items-center justify-center">
@@ -23076,7 +23014,7 @@
                    <svg class="w-5 h-5 ml-0.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                  </div>`;
             card.innerHTML = `
-              <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
+              <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900">
                 <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
                 <div class="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors flex items-center justify-center">
                   ${playBadge}
@@ -23168,7 +23106,7 @@
         const coverSrc = escapeMarkup(p.cover || DEFAULT_COVER);
 
         card.innerHTML = `
-          <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900 border border-white/5">
+          <div class="relative aspect-square w-full rounded-xl overflow-hidden mb-2.5 bg-neutral-900">
             <img src="${coverSrc}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
             <div class="absolute inset-0 bg-transparent group-hover:bg-black/20 transition-colors flex items-center justify-center">
               <div class="station-play-badge card-play-btn w-10 h-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:scale-100 scale-90 shadow-xl transition-all cursor-pointer" style="background-color: var(--accent); color: var(--accent-contrast, #fff);">
@@ -27518,6 +27456,7 @@
 
 
     let analyserNode = null;
+    let spectrumBins = null;
 
 
 
@@ -27833,30 +27772,6 @@
 
 
 
-        // FFT Analyser
-
-
-
-
-
-
-
-        analyserNode = audioCtx.createAnalyser();
-
-
-
-
-
-
-
-        analyserNode.fftSize = 128;
-
-
-
-
-
-
-
         // Both playback elements share the equalizer, compressor, and visualizer.
         for (const media of playbackAudio) {
           try {
@@ -27907,6 +27822,10 @@
 
 
         eq12kNode.connect(compressorNode);
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 2048;
+        analyserNode.smoothingTimeConstant = 0.12;
+        spectrumBins = new Float32Array(analyserNode.frequencyBinCount);
         compressorNode.connect(analyserNode);
 
 
@@ -28324,146 +28243,103 @@
 
 
 
-    let visualizerLoopStarted = false;
+    let refreshVisualizer = null;
+    let nativeWindowVisible = true;
     let visualizerAnimFrameId = null;
 
     function startVisualizerLoop() {
-      if (analyserNode) {
-        try {
-          analyserNode.fftSize = 128;
-          analyserNode.smoothingTimeConstant = 0.65;
-        } catch (e) {}
+      if (refreshVisualizer) return refreshVisualizer();
+
+      const waveGroup = document.getElementById('playback-spectrum-bars');
+      const karaokeGroup = document.querySelector('#immersive-visualizer g');
+      const bandEdges = [35, 115, 300, 800, 2100, 5500, 15000];
+      const travel = [10, 14, 15, 13, 11, 9];
+      const footerBands = Array.from(waveGroup.children, (bar, i) => ({
+        bar, low: bandEdges[i], high: bandEdges[i + 1], travel: travel[i],
+        baseline: 16.5, restingY: bar.getAttribute('y1'), level: 0, average: 0
+      }));
+
+      const karaokeBands = [];
+      const count = 24;
+      // Equal spacing on the mel scale leaves room for distinct low-frequency bins.
+      const frequency = i => 700 * ((1 + 35 / 700) * ((700 + 15000) / (700 + 35)) ** (i / count) - 1);
+      for (let i = 0; i < count; i++) {
+        const bar = document.createElementNS(karaokeGroup.namespaceURI, 'line');
+        const x = 5.5 + 11 * i;
+        const contour = Math.sin(Math.PI * (i + 0.5) / count);
+        const restingY = 43 - 9 * contour;
+        bar.setAttribute('x1', x);
+        bar.setAttribute('x2', x);
+        bar.setAttribute('y1', restingY);
+        bar.setAttribute('y2', 45);
+        karaokeGroup.appendChild(bar);
+        karaokeBands.push({ bar, low: frequency(i), high: frequency(i + 1), travel: 34 + 8 * contour,
+          baseline: 45, restingY, level: 0, average: 0 });
       }
-
-      const immVis = document.getElementById('immersive-visualizer');
-      if (immVis && immVis.children.length === 0) {
-        for (let i = 0; i < 24; i++) {
-          const b = document.createElement('span');
-          b.className = 'imm-bar w-[4px] sm:w-[6px] h-2 rounded-full transition-all duration-75';
-          b.style.backgroundColor = 'var(--accent)';
-          b.style.boxShadow = '0 0 8px var(--accent-glow)';
-          immVis.appendChild(b);
-        }
-      }
-
-      if (visualizerLoopStarted) return;
-      visualizerLoopStarted = true;
-
-      const restingContour = [4, 10, 15, 12, 7, 3];
+      const karaokeView = document.getElementById('immersive-player-view');
+      let lastWaveSample = 0;
+      let displayedBands = null;
 
       function renderVisualizer() {
+        visualizerAnimFrameId = null;
+        const karaoke = !karaokeView.classList.contains('hidden');
+        const bands = karaoke ? karaokeBands : footerBands;
+        const visible = nativeWindowVisible && !document.hidden;
+        const playing = !audioEngine.paused && !audioEngine.ended;
+        if (displayedBands && (!playing || !visible || displayedBands !== bands)) {
+          for (const band of displayedBands) {
+            band.bar.setAttribute('y1', band.restingY);
+            band.level = band.average = 0;
+          }
+          (displayedBands === karaokeBands ? karaokeGroup : waveGroup).setAttribute('opacity', '.45');
+          displayedBands = null;
+          lastWaveSample = 0;
+        }
+        if (!playing || !visible) return;
+        if (karaoke) updateLyricsSync();
+        if (!analyserNode && !karaoke) return;
         visualizerAnimFrameId = requestAnimationFrame(renderVisualizer);
-
-        const waveBars = document.querySelectorAll('#player-soundwave .wave-bar');
-        const immBars = document.querySelectorAll('#immersive-visualizer .imm-bar');
-
-        const active = Boolean(
-          audioEngine &&
-          !audioEngine.paused &&
-          !audioEngine.ended &&
-          (audioEngine.currentTime > 0 || isPlaying)
-        );
-
-        if (!active) {
-          if (waveBars.length > 0) {
-            waveBars.forEach((b, i) => {
-              b.style.height = `${restingContour[i % restingContour.length]}px`;
-              b.style.opacity = '0.45';
-            });
-          }
-          if (immBars.length > 0) {
-            immBars.forEach((b, i) => {
-              const h = 4 + Math.sin(i / 2.5) * 6;
-              b.style.height = `${Math.max(3, h)}px`;
-              b.style.opacity = '0.35';
-            });
-          }
-          return;
-        }
-
-        let energy = 0;
-        let dataArray = null;
-        let bufferLength = 0;
-        if (analyserNode) {
-          try {
-            bufferLength = analyserNode.frequencyBinCount;
-            if (bufferLength > 0) {
-              dataArray = new Uint8Array(bufferLength);
-              analyserNode.getByteFrequencyData(dataArray);
-              for (let k = 0; k < bufferLength; k++) energy += dataArray[k];
-            }
-          } catch (e) {}
-        }
-
-        // Use continuous high-resolution timer for buttery smooth 60fps animation
         const t = performance.now() / 1000;
 
-        // Dynamic Footer 6 Bars Waveform Animation
-        if (waveBars.length > 0) {
-          if (energy > 20 && dataArray) {
-            // Real Web Audio FFT spectrum data
-            const v0 = (dataArray[1] + dataArray[2]) / 2;
-            const v1 = (dataArray[3] + dataArray[4] + dataArray[5]) / 3;
-            const v2 = (dataArray[6] + dataArray[7] + dataArray[8]) / 3;
-            const v3 = (dataArray[10] + dataArray[12] + dataArray[14]) / 3;
-            const v4 = (dataArray[16] + dataArray[19] + dataArray[22]) / 3;
-            const v5 = (dataArray[24] + dataArray[27] + dataArray[30]) / 3;
-
-            const h0 = Math.max(3, Math.min(14, (v0 / 255) * 15 * 1.05));
-            const h1 = Math.max(4, Math.min(18, (v1 / 255) * 19 * 1.35));
-            const h2 = Math.max(3, Math.min(13, (v2 / 255) * 14 * 1.45));
-            const h3 = Math.max(4, Math.min(17, (v3 / 255) * 18 * 1.65));
-            const h4 = Math.max(3, Math.min(14, (v4 / 255) * 15 * 1.9));
-            const h5 = Math.max(2, Math.min(12, (v5 / 255) * 13 * 2.2));
-            const heights = [h0, h1, h2, h3, h4, h5];
-
-            waveBars.forEach((b, i) => {
-              b.style.height = `${heights[i]}px`;
-              b.style.opacity = '0.95';
-            });
-          } else {
-            // Organic polyrhythmic beat engine (bars never move uniformly!)
-            const p0 = Math.sin(t * 12.5) * 0.5 + Math.sin(t * 6.2) * 0.5;
-            const p1 = Math.pow(Math.max(0, Math.sin(t * 6.28)), 3); // Tall beat kick
-            const p2 = Math.sin(t * 18.3) * 0.4 + Math.sin(t * 9.1) * 0.4 + 0.2;
-            const p3 = Math.sin(t * 14.7 + 1.2) * 0.5 + 0.3; // Vocal melody
-            const p4 = Math.sin(t * 22.4 + 2.4) * 0.4 + 0.2;
-            const p5 = Math.pow(Math.max(0, Math.sin(t * 25.1)), 2); // Rapid hi-hat flutter
-
-            const h0 = Math.max(3, Math.min(13, 3 + p0 * 9));
-            const h1 = Math.max(4, Math.min(18, 4 + p1 * 14)); // Tall beat bounce
-            const h2 = Math.max(3, Math.min(12, 3 + p2 * 8));
-            const h3 = Math.max(4, Math.min(16, 4 + p3 * 11));
-            const h4 = Math.max(3, Math.min(13, 3 + p4 * 9));
-            const h5 = Math.max(2, Math.min(11, 2 + p5 * 8));
-            const heights = [h0, h1, h2, h3, h4, h5];
-
-            waveBars.forEach((b, i) => {
-              b.style.height = `${heights[i]}px`;
-              b.style.opacity = '0.95';
-            });
+        if (analyserNode && t - lastWaveSample >= 1 / 60) {
+          const dt = Math.min(0.1, t - lastWaveSample);
+          if (!lastWaveSample) {
+            displayedBands = bands;
+            (karaoke ? karaokeGroup : waveGroup).setAttribute('opacity', '.95');
           }
-        }
+          lastWaveSample = t;
+          analyserNode.getFloatFrequencyData(spectrumBins);
+          const binHz = audioCtx.sampleRate / analyserNode.fftSize;
+          const follow = 1 - Math.exp(-dt / 0.38);
+          for (const band of bands) {
+            const first = Math.ceil(band.low / binHz);
+            const end = Math.min(spectrumBins.length, Math.ceil(band.high / binHz));
+            let peak = -Infinity;
+            for (let bin = first; bin < end; bin++) peak = Math.max(peak, spectrumBins[bin]);
 
-        // 24 immersive view bars
-        if (immBars.length > 0) {
-          immBars.forEach((b, i) => {
-            let h = 4;
-            if (energy > 20 && dataArray && bufferLength > 0) {
-              const idx = Math.min(bufferLength - 1, Math.floor((i / immBars.length) * 30) + 1);
-              const val = dataArray[idx] || 0;
-              const multiplier = 1 + (i / immBars.length) * 1.5;
-              h = Math.max(4, Math.min(38, (val / 255) * 38 * multiplier));
-            } else {
-              h = Math.max(4, Math.min(36, 6 + Math.sin(t * 8 + i * 0.5) * 15 + Math.sin(t * 14 + i) * 8));
-            }
-            b.style.height = `${h}px`;
-            b.style.opacity = '0.9';
-          });
+            const level = Math.max(0, Math.min(1, (peak + 78) / 68));
+            const onset = Math.max(0, level - band.average);
+            band.average += (level - band.average) * follow;
+            const target = Math.min(1, level * 0.76 + onset * 0.85);
+            const response = target > band.level ? 0.018 : 0.105;
+            band.level += (target - band.level) * (1 - Math.exp(-dt / response));
+            band.bar.setAttribute('y1', (band.baseline - band.travel * band.level).toFixed(2));
+          }
         }
       }
 
-      renderVisualizer();
+      refreshVisualizer = () => {
+        if (visualizerAnimFrameId !== null) cancelAnimationFrame(visualizerAnimFrameId);
+        renderVisualizer();
+      };
+      document.addEventListener('visibilitychange', refreshVisualizer);
+      onPlaybackAudio('pause', refreshVisualizer);
+      onPlaybackAudio('ended', refreshVisualizer);
+      window.__TAURI__?.event?.listen('main-visibility', ({ payload }) => {
+        nativeWindowVisible = payload;
+        refreshVisualizer();
+      }).catch(console.warn);
+      refreshVisualizer();
     }
 
     // Immediately start visualizer loop
@@ -30571,6 +30447,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
         immersiveView.classList.remove('hidden');
+        startVisualizerLoop();
 
 
 
@@ -30664,6 +30541,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
         immersiveView.classList.add('hidden');
+        startVisualizerLoop();
 
 
 
@@ -30986,7 +30864,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
     function updateLyricsSync() {
-      if (!currentParsedLyrics?.length) return;
+      if (!currentParsedLyrics?.length || document.hidden || !nativeWindowVisible || immersiveView.classList.contains('hidden')) return;
       // Proactive lead time (default +250ms) to compensate for audio driver latency & visual perception
       const time = (audioEngine.currentTime || 0) + 0.25;
       let lineIndex = -1;
@@ -31026,70 +30904,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         activeLyricWordIndex = wordIndex;
       }
     }
-
-
-
-
-
-
-
-    // Continuous 60 FPS prompter engine
-
-
-
-
-
-
-
-    function lyricsRafLoop() {
-
-
-
-
-
-
-
-      if (isPlaying && currentParsedLyrics && currentParsedLyrics.length > 0) {
-
-
-
-
-
-
-
-        updateLyricsSync();
-
-
-
-
-
-
-
-      }
-
-
-
-
-
-
-
-      requestAnimationFrame(lyricsRafLoop);
-
-
-
-
-
-
-
-    }
-
-
-
-
-
-
-
-    requestAnimationFrame(lyricsRafLoop);
 
 
 
