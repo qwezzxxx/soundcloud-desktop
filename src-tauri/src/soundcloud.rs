@@ -346,6 +346,8 @@ pub struct FormattedTrack {
     pub duration_ms: u64,
     #[serde(default)]
     pub cover: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waveform_url: Option<String>,
     #[serde(default)]
     pub liked: bool,
     #[serde(default)]
@@ -1393,6 +1395,7 @@ impl SoundCloudClient {
             duration,
             duration_ms,
             cover: artwork,
+            waveform_url: t.get("waveform_url").and_then(Value::as_str).map(str::to_owned),
             liked,
             description,
             genre,
