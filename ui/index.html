@@ -10352,7 +10352,7 @@
               </button>
               <div class="karaoke-volume-popover">
                 <div class="karaoke-volume-panel card-glass border border-white/10 rounded-full shadow-xl">
-                  <input id="immersive-volume-slider" type="range" min="0" max="100" value="80" oninput="setVolume(parseInt(this.value))" onchange="saveVolumeConfig()" class="min-w-0 cursor-pointer custom-range-slider focus-visible:ring-2 focus-visible:ring-white/50" title="Громкость" style="pointer-events: auto !important;">
+                  <input id="immersive-volume-slider" type="range" min="0" max="100" value="80" class="min-w-0 cursor-pointer custom-range-slider focus-visible:ring-2 focus-visible:ring-white/50" title="Громкость" style="pointer-events: auto !important;">
                 </div>
               </div>
             </div>
@@ -16361,6 +16361,7 @@
 
 
           permalink_url: track.permalink_url || null,
+          waveform_url: track.waveform_url || null,
 
 
 
@@ -16973,6 +16974,7 @@
             artwork_url: curTrack.artwork_url || curTrack.cover,
             duration: curTrack.duration,
             duration_ms: curTrack.duration_ms,
+            waveform_url: curTrack.waveform_url,
             stream_url: curTrack.stream_url
           } : null,
           queue: (currentQueue && currentQueue.length > 0) ? currentQueue.slice(0, 200) : [],
@@ -17530,6 +17532,7 @@
         if (!track) return;
         if (isShuffle && track.id != null) shufflePlayedTrackIds.add(String(track.id));
         currentlyPlayingTrackId = track.id;
+        if (isPlatformLinux) void loadLinuxWaveform(track);
         updateRecentlyPlayedCurrentTrack();
         discordPlaybackTrack = null;
         const requestId = ++currentPlayRequestId;
@@ -17961,6 +17964,7 @@
             return playNextTrack();
           }
         }
+        audioEngine.pause();
         isPlaying = false;
         syncPlayPauseState(false);
         scheduleWaveAdvance();
@@ -17977,6 +17981,7 @@
             return;
           }
         }
+        audioEngine.pause();
         isPlaying = false;
         syncPlayPauseState(false);
         scheduleWaveAdvance();
@@ -19099,70 +19104,6 @@
 
 
 
-    volumeIconBtn.addEventListener('click', () => {
-
-
-
-
-
-
-
-      if (parseInt(volumeSlider.value) > 0) {
-
-
-
-
-
-
-
-        setVolume(0);
-
-
-
-
-
-
-
-      } else {
-
-
-
-
-
-
-
-        setVolume(lastVolume || 80);
-
-
-
-
-
-
-
-      }
-
-
-
-
-
-
-
-      if (appConfig) api.saveConfig(appConfig).catch(console.warn);
-
-
-
-
-
-
-
-    });
-
-
-
-
-
-
-
     const immVolSlider = document.getElementById('immersive-volume-slider');
 
 
@@ -19220,102 +19161,6 @@
 
 
       immVolSlider.addEventListener('change', () => {
-
-
-
-
-
-
-
-        if (appConfig) api.saveConfig(appConfig).catch(console.warn);
-
-
-
-
-
-
-
-      });
-
-
-
-
-
-
-
-    }
-
-
-
-
-
-
-
-    const immVolBtn = document.getElementById('immersive-volume-btn');
-
-
-
-
-
-
-
-    if (immVolBtn) {
-
-
-
-
-
-
-
-      immVolBtn.addEventListener('click', () => {
-
-
-
-
-
-
-
-        const cur = volumeSlider ? parseInt(volumeSlider.value) : 80;
-
-
-
-
-
-
-
-        if (cur > 0) {
-
-
-
-
-
-
-
-          setVolume(0);
-
-
-
-
-
-
-
-        } else {
-
-
-
-
-
-
-
-          setVolume(lastVolume || 80);
-
-
-
-
-
-
-
-        }
 
 
 
@@ -19558,18 +19403,6 @@
 
 
 
-    window.saveVolumeConfig = function() {
-
-
-
-      if (appConfig) api.saveConfig(appConfig).catch(console.warn);
-
-
-
-    };
-
-
-
     window.openImmersiveView = openImmersiveView;
 
 
@@ -19702,6 +19535,98 @@
 
 
 
+
+    function likedRowIcon(index, isCurrent, isThisPlaying) {
+      return isThisPlaying
+
+
+
+
+
+
+
+          ? `<span class="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm" style="background-color: var(--accent-glow); color: var(--accent);">
+
+
+
+
+
+
+
+               <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+
+
+
+
+
+
+
+             </span>`
+
+
+
+
+
+
+
+          : isCurrent
+
+
+
+
+
+
+
+            ? `<span class="w-6 h-6 rounded-lg bg-white/10 text-white flex items-center justify-center">
+
+
+
+
+
+
+
+                 <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+
+
+
+
+
+
+
+               </span>`
+
+
+
+
+
+
+
+            : `<span class="group-hover:hidden font-mono text-neutral-500">${index + 1}</span>
+
+
+
+
+
+
+
+               <span class="hidden group-hover:flex w-6 h-6 rounded-lg bg-white/10 text-white items-center justify-center">
+
+
+
+
+
+
+
+                 <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+
+
+
+
+
+
+
+               </span>`;
+    }
 
     function renderLikedTable() {
 
@@ -19907,124 +19832,6 @@
         row.dataset.trackId = String(t.id);
         row.dataset.index = String(i);
 
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
-        // Icon on the left: Pause bars (||) when playing, Play arrow (▶) when paused or hovered, otherwise row number
-
-
-
-
-
-
-
-        const iconHtml = isThisPlaying
-
-
-
-
-
-
-
-          ? `<span class="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm" style="background-color: var(--accent-glow); color: var(--accent);">
-
-
-
-
-
-
-
-               <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-
-
-
-
-
-
-
-             </span>`
-
-
-
-
-
-
-
-          : isCurrent
-
-
-
-
-
-
-
-            ? `<span class="w-6 h-6 rounded-lg bg-white/10 text-white flex items-center justify-center">
-
-
-
-
-
-
-
-                 <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-
-
-
-
-
-
-
-               </span>`
-
-
-
-
-
-
-
-            : `<span class="group-hover:hidden font-mono text-neutral-500">${i + 1}</span>
-
-
-
-
-
-
-
-               <span class="hidden group-hover:flex w-6 h-6 rounded-lg bg-white/10 text-white items-center justify-center">
-
-
-
-
-
-
-
-                 <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-
-
-
-
-
-
-
-               </span>`;
-
-
-
-
-
-
-
         row.innerHTML = `
 
 
@@ -20033,7 +19840,7 @@
 
 
 
-          <div class="text-center text-xs flex items-center justify-center">
+          <div class="liked-row-num text-center text-xs flex items-center justify-center" data-state="${isThisPlaying ? 'playing' : isCurrent ? 'paused' : 'idle'}">
 
 
 
@@ -20041,7 +19848,7 @@
 
 
 
-            ${iconHtml}
+            ${likedRowIcon(i, isCurrent, isThisPlaying)}
 
 
 
@@ -20295,27 +20102,10 @@
         }
 
         const numCol = row.querySelector('.liked-row-num');
-        if (numCol) {
-          if (isThisPlaying) {
-            numCol.innerHTML = `
-              <span class="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm" style="background-color: var(--accent-glow); color: var(--accent);">
-                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-              </span>
-            `;
-          } else if (isCurrent) {
-            numCol.innerHTML = `
-              <span class="w-6 h-6 rounded-lg flex items-center justify-center shadow-sm" style="background-color: var(--accent-glow); color: var(--accent);">
-                <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              </span>
-            `;
-          } else {
-            numCol.innerHTML = `
-              <span class="row-num text-xs text-neutral-400 font-mono">${rowIdx + 1}</span>
-              <span class="row-play-icon hidden group-hover:flex items-center justify-center w-6 h-6 rounded-lg bg-white/10 text-white">
-                <svg class="w-3 h-3 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              </span>
-            `;
-          }
+        const state = isThisPlaying ? 'playing' : isCurrent ? 'paused' : 'idle';
+        if (numCol && numCol.dataset.state !== state) {
+          numCol.dataset.state = state;
+          numCol.innerHTML = likedRowIcon(rowIdx, isCurrent, isThisPlaying);
         }
       });
     }
@@ -22787,10 +22577,10 @@
 
     function recordRecentPlayback(track) {
       if (isLoggingOut || String(track.id) !== String(currentlyPlayingTrackId)) return;
-      const { id, title, artist, duration, duration_ms, user_id, permalink_url } = track;
+      const { id, title, artist, duration, duration_ms, user_id, permalink_url, waveform_url } = track;
       const entry = {
         playedAt: Date.now(),
-        track: { id, title, artist, cover: track.cover || track.artwork_url, duration, duration_ms, user_id, permalink_url }
+        track: { id, title, artist, cover: track.cover || track.artwork_url, duration, duration_ms, user_id, permalink_url, waveform_url }
       };
       const trackId = String(id);
       recentlyPlayed = [entry, ...recentlyPlayed.filter(item => String(item.track.id) !== trackId)];
@@ -28244,6 +28034,25 @@
 
 
     let refreshVisualizer = null;
+    let linuxWaveRequest = null;
+    let linuxWaveSamples = null;
+    async function loadLinuxWaveform(track) {
+      linuxWaveRequest?.abort();
+      linuxWaveSamples = null;
+      if (!track.waveform_url) return;
+      const request = new AbortController();
+      linuxWaveRequest = request;
+      try {
+        const url = new URL(track.waveform_url);
+        if (url.protocol !== 'https:' || !url.hostname.endsWith('.sndcdn.com')) return;
+        const response = await fetch(url, { signal: request.signal, credentials: 'omit' });
+        if (!response.ok) return;
+        const { samples, height } = await response.json();
+        if (!request.signal.aborted && Array.isArray(samples) && samples.length && height > 0) {
+          linuxWaveSamples = samples.map(value => Math.min(1, Math.max(0, Number(value) / height || 0)));
+        }
+      } catch (_) { /* Tracks without a waveform use the playback indicator. */ }
+    }
     let nativeWindowVisible = true;
     let visualizerAnimFrameId = null;
 
@@ -28297,17 +28106,36 @@
         }
         if (!playing || !visible) return;
         if (karaoke) updateLyricsSync();
-        if (!analyserNode && !karaoke) return;
+        if (!analyserNode && !isPlatformLinux && !karaoke) return;
         visualizerAnimFrameId = requestAnimationFrame(renderVisualizer);
         const t = performance.now() / 1000;
 
-        if (analyserNode && t - lastWaveSample >= 1 / 60) {
+        if ((analyserNode || isPlatformLinux) && t - lastWaveSample >= 1 / (analyserNode ? 60 : 30)) {
           const dt = Math.min(0.1, t - lastWaveSample);
           if (!lastWaveSample) {
             displayedBands = bands;
             (karaoke ? karaokeGroup : waveGroup).setAttribute('opacity', '.95');
           }
           lastWaveSample = t;
+          if (!analyserNode) {
+            const position = audioEngine.currentTime;
+            const duration = audioEngine.duration;
+            const samples = linuxWaveSamples;
+            bands.forEach((band, i) => {
+              let level;
+              if (samples && Number.isFinite(duration) && duration > 0) {
+                const offset = (i - (bands.length - 1) / 2) * 0.1;
+                const at = Math.min(samples.length - 1, Math.max(0, (position + offset) / duration * (samples.length - 1)));
+                const left = Math.floor(at);
+                level = samples[left] + (samples[Math.min(left + 1, samples.length - 1)] - samples[left]) * (at - left);
+              } else {
+                level = 0.18 + 0.62 * Math.sin(position * 3 + i * 0.71) ** 2;
+              }
+              const volume = audioEngine.muted ? 0 : Math.sqrt(audioEngine.volume);
+              band.bar.setAttribute('y1', (band.baseline - band.travel * level * volume).toFixed(2));
+            });
+            return;
+          }
           analyserNode.getFloatFrequencyData(spectrumBins);
           const binHz = audioCtx.sampleRate / analyserNode.fftSize;
           const follow = 1 - Math.exp(-dt / 0.38);
