@@ -354,6 +354,8 @@ pub struct FormattedTrack {
     pub description: Option<String>,
     #[serde(default)]
     pub genre: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag_list: Option<String>,
     #[serde(default)]
     pub permalink_url: Option<String>,
     #[serde(default)]
@@ -1399,6 +1401,7 @@ impl SoundCloudClient {
             liked,
             description,
             genre,
+            tag_list: t.get("tag_list").and_then(Value::as_str).filter(|tags| !tags.is_empty()).map(str::to_owned),
             permalink_url,
             provider: Some("soundcloud".to_string()),
             user_id,
