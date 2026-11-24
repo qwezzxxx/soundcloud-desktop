@@ -4350,123 +4350,6 @@
     }
     #normalization-toggle:focus-visible + .normalization-switch { outline: 2px solid var(--accent); outline-offset: 2px; }
     #normalization-toggle:disabled + .normalization-switch { opacity: 0.4; cursor: default; }
-
-    #tab-wave {
-      --wave-text: #f4f4f5;
-      --wave-muted: #b0b0bb;
-      --wave-line: color-mix(in srgb, var(--wave-text) 13%, transparent);
-      --wave-surface: color-mix(in srgb, var(--wave-text) 6%, transparent);
-      --wave-tint: color-mix(in srgb, var(--accent) 13%, transparent);
-    }
-
-    .theme-light #tab-wave {
-      --wave-text: #0f172a;
-      --wave-muted: #526076;
-    }
-
-    #wave-hero-card {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      gap: clamp(12px, 2vw, 24px);
-      padding: clamp(14px, 2vw, 22px);
-      border: 1px solid var(--panel-border, var(--wave-line));
-      border-radius: var(--app-radius);
-      background: var(--card-bg, var(--panel-bg));
-      color: var(--wave-text);
-    }
-
-    #wave-stream-indicator-container {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--wave-muted);
-      font-size: 11px;
-    }
-
-    #wave-stream-indicator-container::before {
-      content: "";
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-
-    #wave-hero-card[data-playing="true"] #wave-stream-indicator-container::before {
-      background: #10b981;
-    }
-
-    #wave-queue-count {
-      color: var(--wave-muted);
-    }
-
-    #wave-mood-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      width: fit-content;
-      max-width: 100%;
-      padding: 3px;
-      border: 1px solid var(--wave-line);
-      border-radius: 10px;
-      background: var(--wave-surface);
-    }
-
-    .wave-mood-chip,
-    #wave-feed-refresh {
-      color: var(--wave-muted);
-      cursor: pointer;
-      transition: background-color 160ms, color 160ms;
-    }
-
-    .wave-mood-chip {
-      padding: 5px 9px;
-      border-radius: 6px;
-      white-space: nowrap;
-    }
-
-    #wave-feed-refresh { border-radius: 8px; }
-
-    .wave-mood-chip:hover,
-    #wave-feed-refresh:hover {
-      color: var(--wave-text);
-      background: var(--wave-surface);
-    }
-
-    .wave-mood-chip[aria-pressed="true"],
-    #wave-main-btn,
-    .wave-track-playing-icon {
-      background: var(--accent);
-      color: var(--accent-contrast, #fff);
-    }
-
-    #wave-main-btn {
-      display: grid;
-      place-items: center;
-      width: clamp(42px, 6vw, 54px);
-      aspect-ratio: 1;
-      border-radius: 50%;
-      cursor: pointer;
-      transition: transform 160ms;
-    }
-
-    #wave-main-btn:hover { transform: scale(1.06); }
-    #wave-main-btn:active { transform: scale(0.96); }
-
-    #tab-wave button:focus-visible {
-      outline: 2px solid var(--wave-text);
-      outline-offset: 2px;
-    }
-
-    #wave-feed-title { color: var(--wave-text); }
-
-    .wave-track-current {
-      background: var(--wave-tint);
-      outline: 1px solid var(--wave-line);
-      outline-offset: -1px;
-      color: var(--wave-text);
-    }
-
 </style>
 
 
@@ -6035,33 +5918,82 @@
       <!-- Tab: Моя волна -->
       <div id="tab-wave" class="tab-content space-y-6">
         
-        <section id="wave-hero-card" aria-labelledby="wave-card-title">
-          <div class="min-w-0 space-y-2.5">
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h2 id="wave-card-title" class="text-2xl font-bold tracking-tight">Моя волна</h2>
-              <span id="wave-stream-indicator-container">
-                <span id="wave-stream-indicator">Готова к эфиру</span>
-              </span>
+        <!-- Верхняя карточка Моей Волны -->
+        <div id="wave-hero-card" class="w-full relative overflow-hidden rounded-3xl p-6 sm:p-8 border shadow-2xl backdrop-blur-2xl group transition-all duration-500">
+          
+          <!-- Анимированные градиентные световые волны -->
+          <div id="wave-bg-blob" class="pointer-events-none absolute -right-10 -top-10 w-80 h-80 blur-3xl opacity-80 group-hover:opacity-100 transition-all duration-700 animate-blob-morph"></div>
+          <div id="wave-bg-blob-2" class="pointer-events-none absolute -left-12 -bottom-12 w-64 h-64 rounded-full blur-3xl opacity-60 transition-all duration-700"></div>
+
+          <div class="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+            
+            <!-- Левый блок: Заголовок, описание и фильтры -->
+            <div class="space-y-3.5 max-w-2xl min-w-0">
+              <div class="flex items-center gap-3">
+                <h2 id="wave-card-title" class="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5 transition-colors">
+                  <span>Моя волна</span>
+                  
+                </h2>
+                <span id="wave-stream-indicator-container" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md text-[11px] font-medium border transition-all">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span id="wave-stream-indicator">Готов к эфиру</span>
+                </span>
+              </div>
+
+              <p id="wave-card-desc" class="text-xs sm:text-sm text-neutral-300/80 leading-relaxed transition-colors">
+                Бесконечный персональный радиопоток: обучается на ваших лайках, подбирает похожие треки и играет без остановки.
+              </p>
+
+              <!-- Чипы настроений: компактные, в одну строку -->
+              <div class="flex flex-wrap items-center gap-1.5 pt-1" id="wave-mood-container">
+                <button onclick="setWaveMood(this, 'all')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95 shadow-sm" data-mood="all">
+                  ✨ Всё подряд
+                </button>
+                <button onclick="setWaveMood(this, 'energetic')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="energetic">
+                  ⚡ Бодрое
+                </button>
+                <button onclick="setWaveMood(this, 'calm')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="calm">
+                  🌙 Спокойное
+                </button>
+                <button onclick="setWaveMood(this, 'sad')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="sad">
+                  🌧️ Грустное
+                </button>
+                <button onclick="setWaveMood(this, 'favorites')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="favorites">
+                  ❤️ Любимое
+                </button>
+                <button onclick="setWaveMood(this, 'new')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="new">
+                  ✦ Новое
+                </button>
+              </div>
             </div>
-            <div id="wave-mood-container" role="group" aria-label="Настроение волны">
-              <button type="button" onclick="setWaveMood('all')" class="wave-mood-chip text-xs font-semibold" data-mood="all" aria-pressed="true">Всё подряд</button>
-              <button type="button" onclick="setWaveMood('energetic')" class="wave-mood-chip text-xs font-semibold" data-mood="energetic" aria-pressed="false">Бодрое</button>
-              <button type="button" onclick="setWaveMood('calm')" class="wave-mood-chip text-xs font-semibold" data-mood="calm" aria-pressed="false">Спокойное</button>
-              <button type="button" onclick="setWaveMood('sad')" class="wave-mood-chip text-xs font-semibold" data-mood="sad" aria-pressed="false">Грустное</button>
-              <button type="button" onclick="setWaveMood('favorites')" class="wave-mood-chip text-xs font-semibold" data-mood="favorites" aria-pressed="false">Любимое</button>
-              <button type="button" onclick="setWaveMood('new')" class="wave-mood-chip text-xs font-semibold" data-mood="new" aria-pressed="false">Новое</button>
+
+            <!-- Правый блок: Круглая кнопка запуска/паузы волны с надписью «Играет» / «Моя волна» -->
+            <div class="flex flex-col items-center justify-center self-center shrink-0 gap-2">
+              <div class="relative flex items-center justify-center">
+                <!-- Внешнее свечение волны -->
+                <div id="wave-glow-ring" class="absolute -inset-2 rounded-full opacity-35 blur-lg transition-all duration-700 pointer-events-none"></div>
+
+                <button id="wave-main-btn" onclick="toggleWavePlayback()" class="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-white text-black hover:scale-105 active:scale-95 flex items-center justify-center p-0 m-0 transition-all cursor-pointer relative z-10 select-none border-0 outline-none shadow-xl" style="background: #ffffff; color: #000000;" title="Запустить волну">
+                  
+                  <!-- Иконка Play: ровно по центру -->
+                  <svg id="wave-play-svg" class="w-7 h-7 pointer-events-none fill-black transition-colors" viewBox="0 0 24 24" style="display: block;">
+                    <path d="M8 5.5v13a.75.75 0 0 0 1.16.63l10-6.5a.75.75 0 0 0 0-1.26l-10-6.5A.75.75 0 0 0 8 5.5z"/>
+                  </svg>
+
+                  <!-- Иконка Паузы: ровно по центру -->
+                  <svg id="wave-pause-svg" class="w-7 h-7 pointer-events-none fill-black transition-colors" viewBox="0 0 24 24" style="display: none;">
+                    <rect x="6.5" y="5" width="3.5" height="14" rx="1.5"/>
+                    <rect x="14" y="5" width="3.5" height="14" rx="1.5"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Текст под кружком: «Играет» или «Моя волна» -->
+              <span id="wave-btn-subtext" class="text-xs font-medium select-none transition-colors">Моя волна</span>
             </div>
+
           </div>
-          <button id="wave-main-btn" type="button" onclick="toggleWavePlayback()" title="Запустить волну" aria-label="Запустить волну">
-            <svg id="wave-play-svg" class="w-6 h-6 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 5.5v13a.75.75 0 0 0 1.16.63l10-6.5a.75.75 0 0 0 0-1.26l-10-6.5A.75.75 0 0 0 8 5.5z"/>
-            </svg>
-            <svg id="wave-pause-svg" class="w-6 h-6 fill-current hidden" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="6.5" y="5" width="3.5" height="14" rx="1.5"/>
-              <rect x="14" y="5" width="3.5" height="14" rx="1.5"/>
-            </svg>
-          </button>
-        </section>
+        </div>
 
         <!-- Секция: Список треков волны -->
         <div class="space-y-3">
@@ -6070,7 +6002,7 @@
               <span>Эфир волны</span>
               <span id="wave-queue-count" class="text-xs text-neutral-500 font-normal">0 треков</span>
             </h3>
-            <button id="wave-feed-refresh" type="button" onclick="refreshWaveFeed()" class="text-xs font-semibold px-2.5 py-1.5 flex items-center gap-1.5">
+            <button onclick="refreshWaveFeed()" class="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
               <span>Сменить треки</span>
             </button>
@@ -6078,7 +6010,9 @@
 
           <!-- Контейнер треков волны -->
           <div id="wave-track-list" class="space-y-1">
-            <div class="text-center py-12 text-xs text-neutral-500">Запустите волну, чтобы увидеть очередь.</div>
+            <div class="text-center py-12 text-xs text-neutral-500">
+              Нажмите «Запустить волну», чтобы сформировать поток музыки по вашему вкусу.
+            </div>
           </div>
         </div>
 
@@ -12078,7 +12012,7 @@
     // Global Wave & Player variables (Declared early to prevent TDZ ReferenceError)
     var isWaveActive = false;
     var waveCurrentMood = 'all';
-    const waveSelectionVersion = 2;
+    const waveSelectionVersion = 1;
     var wavePlayedIds = new Set();
     var isWaveLoadingMore = false;
     window.isWaveActive = false;
@@ -13831,7 +13765,7 @@
       applyAccent(newAccent, "", false);
       try { localStorage.setItem('sc_desktop_accent', newAccent); } catch(_) {}
 
-      renderWaveTrackList();
+      if (typeof updateWaveTheme === 'function') updateWaveTheme(themeKey);
 
       if (appConfig) {
         appConfig.theme = themeKey;
@@ -13890,7 +13824,7 @@
 
       const lbl = document.getElementById('current-accent-label');
       if (lbl) lbl.textContent = `${color} ${name ? '(' + name + ')' : ''}`;
-
+      if (typeof updateWaveTheme === 'function') { try { updateWaveTheme(currentThemeKey); } catch (_) {} }
 
       // Update custom color inputs in settings
       const customPicker = document.getElementById('custom-accent-picker');
@@ -17150,8 +17084,7 @@
           if (typeof syncWavePlayButton === 'function') syncWavePlayButton(false);
         }
         if (session.waveCurrentMood && typeof setWaveMood === 'function') {
-          waveCurrentMood = session.waveCurrentMood;
-          syncWaveMoodButtons();
+          window.waveCurrentMood = session.waveCurrentMood;
         }
 
         // Restore Queue
@@ -21566,25 +21499,537 @@
     // ==========================================
     // (Wave variables isWaveActive, waveCurrentMood, wavePlayedIds initialized globally at top)
 
-    function syncWaveMoodButtons() {
+    const waveThemes = {
+      wine: {
+        cardBg: 'radial-gradient(ellipse at 80% 20%, rgba(225, 29, 72, 0.35) 0%, rgba(136, 19, 55, 0.2) 50%, rgba(10, 8, 14, 0.96) 90%)',
+        cardBorder: 'rgba(244, 63, 94, 0.28)',
+        cardShadow: '0 20px 60px -15px rgba(225, 29, 72, 0.3)',
+        blob1: 'radial-gradient(circle, rgba(244, 63, 94, 0.5) 0%, rgba(190, 18, 60, 0.3) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(136, 19, 55, 0.4) 0%, rgba(76, 5, 25, 0.25) 60%, transparent 70%)',
+        aiMixBg: 'rgba(244, 63, 94, 0.2)',
+        aiMixText: '#fda4af',
+        aiMixBorder: 'rgba(244, 63, 94, 0.4)',
+        statusBg: 'rgba(244, 63, 94, 0.15)',
+        statusText: '#fecdd3',
+        statusBorder: 'rgba(244, 63, 94, 0.25)',
+        btnGradient: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 50%, #9f1239 100%)',
+        btnShadow: '0 0 35px rgba(244, 63, 94, 0.65)',
+        btnTextColor: '#ffffff',
+        glowRing: 'radial-gradient(circle, rgba(244, 63, 94, 0.65) 0%, rgba(159, 18, 57, 0.35) 60%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #f43f5e, #be123c)',
+        activeChipText: '#ffffff',
+        activeChipShadow: '0 0 15px rgba(244, 63, 94, 0.5)',
+        inactiveChipBg: 'rgba(244, 63, 94, 0.08)',
+        inactiveChipBorder: 'rgba(244, 63, 94, 0.2)',
+        inactiveChipText: '#fecdd3',
+        activeTrackBg: 'rgba(136, 19, 55, 0.3)',
+        activeTrackBorder: 'rgba(244, 63, 94, 0.4)',
+        activeTrackShadow: '0 0 20px rgba(244, 63, 94, 0.2)',
+        activeTrackTitle: '#fb7185',
+        activeTrackBtn: 'linear-gradient(135deg, #f43f5e, #e11d48)',
+        activeTrackBtnText: '#ffffff'
+      },
+      flame: {
+        cardBg: 'radial-gradient(ellipse at 80% 20%, rgba(255, 85, 0, 0.38) 0%, rgba(217, 74, 0, 0.2) 50%, rgba(14, 10, 16, 0.96) 90%)',
+        cardBorder: 'rgba(255, 85, 0, 0.32)',
+        cardShadow: '0 20px 60px -15px rgba(255, 85, 0, 0.35)',
+        blob1: 'radial-gradient(circle, rgba(255, 85, 0, 0.55) 0%, rgba(245, 158, 11, 0.3) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(239, 68, 68, 0.4) 0%, rgba(180, 50, 0, 0.25) 60%, transparent 70%)',
+        aiMixBg: 'rgba(255, 85, 0, 0.22)',
+        aiMixText: '#fb923c',
+        aiMixBorder: 'rgba(255, 85, 0, 0.45)',
+        statusBg: 'rgba(255, 85, 0, 0.15)',
+        statusText: '#fed7aa',
+        statusBorder: 'rgba(255, 85, 0, 0.28)',
+        btnGradient: 'linear-gradient(135deg, #ff5500 0%, #ff7700 50%, #f59e0b 100%)',
+        btnShadow: '0 0 35px rgba(255, 85, 0, 0.7)',
+        btnTextColor: '#ffffff',
+        glowRing: 'radial-gradient(circle, rgba(255, 85, 0, 0.7) 0%, rgba(245, 158, 11, 0.35) 60%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #ff5500, #f59e0b)',
+        activeChipText: '#ffffff',
+        activeChipShadow: '0 0 15px rgba(255, 85, 0, 0.5)',
+        inactiveChipBg: 'rgba(255, 85, 0, 0.08)',
+        inactiveChipBorder: 'rgba(255, 85, 0, 0.22)',
+        inactiveChipText: '#fed7aa',
+        activeTrackBg: 'rgba(217, 74, 0, 0.28)',
+        activeTrackBorder: 'rgba(255, 85, 0, 0.4)',
+        activeTrackShadow: '0 0 20px rgba(255, 85, 0, 0.2)',
+        activeTrackTitle: '#fb923c',
+        activeTrackBtn: 'linear-gradient(135deg, #ff5500, #f59e0b)',
+        activeTrackBtnText: '#ffffff'
+      },
+      cyan: {
+        cardBg: 'radial-gradient(ellipse at 85% 15%, rgba(0, 245, 255, 0.4) 0%, rgba(217, 70, 239, 0.28) 45%, rgba(3, 4, 12, 0.96) 90%)',
+        cardBorder: 'rgba(0, 245, 255, 0.38)',
+        cardShadow: '0 20px 60px -15px rgba(0, 245, 255, 0.38)',
+        blob1: 'radial-gradient(circle, rgba(0, 245, 255, 0.6) 0%, rgba(217, 70, 239, 0.4) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(139, 92, 246, 0.45) 0%, rgba(6, 182, 212, 0.3) 60%, transparent 70%)',
+        aiMixBg: 'rgba(0, 245, 255, 0.22)',
+        aiMixText: '#67e8f9',
+        aiMixBorder: 'rgba(0, 245, 255, 0.55)',
+        statusBg: 'rgba(0, 245, 255, 0.16)',
+        statusText: '#a5f3fc',
+        statusBorder: 'rgba(0, 245, 255, 0.32)',
+        btnGradient: 'linear-gradient(135deg, #00f5ff 0%, #3b82f6 50%, #d946ef 100%)',
+        btnShadow: '0 0 40px rgba(0, 245, 255, 0.8)',
+        btnTextColor: '#000000',
+        glowRing: 'radial-gradient(circle, rgba(0, 245, 255, 0.75) 0%, rgba(217, 70, 239, 0.45) 55%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #00f5ff, #06b6d4)',
+        activeChipText: '#000000',
+        activeChipShadow: '0 0 18px rgba(0, 245, 255, 0.65)',
+        inactiveChipBg: 'rgba(0, 245, 255, 0.08)',
+        inactiveChipBorder: 'rgba(0, 245, 255, 0.28)',
+        inactiveChipText: '#a5f3fc',
+        activeTrackBg: 'rgba(6, 182, 212, 0.26)',
+        activeTrackBorder: 'rgba(0, 245, 255, 0.45)',
+        activeTrackShadow: '0 0 20px rgba(0, 245, 255, 0.25)',
+        activeTrackTitle: '#67e8f9',
+        activeTrackBtn: 'linear-gradient(135deg, #00f5ff, #3b82f6)',
+        activeTrackBtnText: '#000000'
+      },
+      emerald: {
+        cardBg: 'radial-gradient(ellipse at 80% 20%, rgba(16, 185, 129, 0.38) 0%, rgba(5, 150, 105, 0.2) 50%, rgba(6, 14, 11, 0.96) 90%)',
+        cardBorder: 'rgba(16, 185, 129, 0.32)',
+        cardShadow: '0 20px 60px -15px rgba(16, 185, 129, 0.35)',
+        blob1: 'radial-gradient(circle, rgba(16, 185, 129, 0.55) 0%, rgba(52, 211, 153, 0.3) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(6, 95, 70, 0.45) 0%, rgba(4, 120, 87, 0.28) 60%, transparent 70%)',
+        aiMixBg: 'rgba(16, 185, 129, 0.22)',
+        aiMixText: '#6ee7b7',
+        aiMixBorder: 'rgba(16, 185, 129, 0.45)',
+        statusBg: 'rgba(16, 185, 129, 0.16)',
+        statusText: '#a7f3d0',
+        statusBorder: 'rgba(16, 185, 129, 0.28)',
+        btnGradient: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #34d399 100%)',
+        btnShadow: '0 0 35px rgba(16, 185, 129, 0.7)',
+        btnTextColor: '#ffffff',
+        glowRing: 'radial-gradient(circle, rgba(16, 185, 129, 0.7) 0%, rgba(5, 150, 105, 0.35) 60%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #10b981, #059669)',
+        activeChipText: '#ffffff',
+        activeChipShadow: '0 0 15px rgba(16, 185, 129, 0.5)',
+        inactiveChipBg: 'rgba(16, 185, 129, 0.08)',
+        inactiveChipBorder: 'rgba(16, 185, 129, 0.22)',
+        inactiveChipText: '#a7f3d0',
+        activeTrackBg: 'rgba(6, 95, 70, 0.28)',
+        activeTrackBorder: 'rgba(16, 185, 129, 0.4)',
+        activeTrackShadow: '0 0 20px rgba(16, 185, 129, 0.2)',
+        activeTrackTitle: '#6ee7b7',
+        activeTrackBtn: 'linear-gradient(135deg, #10b981, #34d399)',
+        activeTrackBtnText: '#ffffff'
+      },
+      amethyst: {
+        cardBg: 'radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.38) 0%, rgba(109, 40, 217, 0.22) 50%, rgba(8, 6, 16, 0.96) 90%)',
+        cardBorder: 'rgba(168, 85, 247, 0.32)',
+        cardShadow: '0 20px 60px -15px rgba(168, 85, 247, 0.35)',
+        blob1: 'radial-gradient(circle, rgba(168, 85, 247, 0.55) 0%, rgba(192, 132, 252, 0.32) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(109, 40, 217, 0.45) 0%, rgba(76, 29, 149, 0.28) 60%, transparent 70%)',
+        aiMixBg: 'rgba(168, 85, 247, 0.22)',
+        aiMixText: '#d8b4fe',
+        aiMixBorder: 'rgba(168, 85, 247, 0.45)',
+        statusBg: 'rgba(168, 85, 247, 0.16)',
+        statusText: '#e9d5ff',
+        statusBorder: 'rgba(168, 85, 247, 0.28)',
+        btnGradient: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 50%, #c084fc 100%)',
+        btnShadow: '0 0 35px rgba(168, 85, 247, 0.7)',
+        btnTextColor: '#ffffff',
+        glowRing: 'radial-gradient(circle, rgba(168, 85, 247, 0.7) 0%, rgba(109, 40, 217, 0.35) 60%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #a855f7, #7c3aed)',
+        activeChipText: '#ffffff',
+        activeChipShadow: '0 0 15px rgba(168, 85, 247, 0.5)',
+        inactiveChipBg: 'rgba(168, 85, 247, 0.08)',
+        inactiveChipBorder: 'rgba(168, 85, 247, 0.22)',
+        inactiveChipText: '#e9d5ff',
+        activeTrackBg: 'rgba(109, 40, 217, 0.28)',
+        activeTrackBorder: 'rgba(168, 85, 247, 0.4)',
+        activeTrackShadow: '0 0 20px rgba(168, 85, 247, 0.2)',
+        activeTrackTitle: '#d8b4fe',
+        activeTrackBtn: 'linear-gradient(135deg, #a855f7, #c084fc)',
+        activeTrackBtnText: '#ffffff'
+      },
+      sunset: {
+        cardBg: 'radial-gradient(ellipse at 80% 20%, rgba(249, 115, 22, 0.38) 0%, rgba(244, 63, 94, 0.22) 50%, rgba(14, 8, 14, 0.96) 90%)',
+        cardBorder: 'rgba(249, 115, 22, 0.32)',
+        cardShadow: '0 20px 60px -15px rgba(249, 115, 22, 0.35)',
+        blob1: 'radial-gradient(circle, rgba(249, 115, 22, 0.55) 0%, rgba(251, 191, 36, 0.32) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(244, 63, 94, 0.45) 0%, rgba(217, 70, 239, 0.28) 60%, transparent 70%)',
+        aiMixBg: 'rgba(249, 115, 22, 0.22)',
+        aiMixText: '#fdba74',
+        aiMixBorder: 'rgba(249, 115, 22, 0.45)',
+        statusBg: 'rgba(249, 115, 22, 0.16)',
+        statusText: '#fed7aa',
+        statusBorder: 'rgba(249, 115, 22, 0.28)',
+        btnGradient: 'linear-gradient(135deg, #f97316 0%, #f43f5e 50%, #fbbf24 100%)',
+        btnShadow: '0 0 35px rgba(249, 115, 22, 0.7)',
+        btnTextColor: '#ffffff',
+        glowRing: 'radial-gradient(circle, rgba(249, 115, 22, 0.7) 0%, rgba(244, 63, 94, 0.35) 60%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #f97316, #f43f5e)',
+        activeChipText: '#ffffff',
+        activeChipShadow: '0 0 15px rgba(249, 115, 22, 0.5)',
+        inactiveChipBg: 'rgba(249, 115, 22, 0.08)',
+        inactiveChipBorder: 'rgba(249, 115, 22, 0.22)',
+        inactiveChipText: '#fed7aa',
+        activeTrackBg: 'rgba(244, 63, 94, 0.26)',
+        activeTrackBorder: 'rgba(249, 115, 22, 0.4)',
+        activeTrackShadow: '0 0 20px rgba(249, 115, 22, 0.2)',
+        activeTrackTitle: '#fdba74',
+        activeTrackBtn: 'linear-gradient(135deg, #f97316, #fbbf24)',
+        activeTrackBtnText: '#ffffff'
+      },
+      midnight: {
+        cardBg: 'radial-gradient(ellipse at 80% 20%, rgba(59, 130, 246, 0.38) 0%, rgba(30, 58, 138, 0.22) 50%, rgba(6, 9, 20, 0.96) 90%)',
+        cardBorder: 'rgba(59, 130, 246, 0.32)',
+        cardShadow: '0 20px 60px -15px rgba(59, 130, 246, 0.35)',
+        blob1: 'radial-gradient(circle, rgba(59, 130, 246, 0.55) 0%, rgba(56, 189, 248, 0.32) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(30, 58, 138, 0.45) 0%, rgba(29, 78, 216, 0.28) 60%, transparent 70%)',
+        aiMixBg: 'rgba(59, 130, 246, 0.22)',
+        aiMixText: '#93c5fd',
+        aiMixBorder: 'rgba(59, 130, 246, 0.45)',
+        statusBg: 'rgba(59, 130, 246, 0.16)',
+        statusText: '#bfdbfe',
+        statusBorder: 'rgba(59, 130, 246, 0.28)',
+        btnGradient: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 50%, #38bdf8 100%)',
+        btnShadow: '0 0 35px rgba(59, 130, 246, 0.7)',
+        btnTextColor: '#ffffff',
+        glowRing: 'radial-gradient(circle, rgba(59, 130, 246, 0.7) 0%, rgba(30, 58, 138, 0.35) 60%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+        activeChipText: '#ffffff',
+        activeChipShadow: '0 0 15px rgba(59, 130, 246, 0.5)',
+        inactiveChipBg: 'rgba(59, 130, 246, 0.08)',
+        inactiveChipBorder: 'rgba(59, 130, 246, 0.22)',
+        inactiveChipText: '#bfdbfe',
+        activeTrackBg: 'rgba(30, 58, 138, 0.28)',
+        activeTrackBorder: 'rgba(59, 130, 246, 0.4)',
+        activeTrackShadow: '0 0 20px rgba(59, 130, 246, 0.2)',
+        activeTrackTitle: '#93c5fd',
+        activeTrackBtn: 'linear-gradient(135deg, #3b82f6, #38bdf8)',
+        activeTrackBtnText: '#ffffff'
+      },
+      oled: {
+        cardBg: 'radial-gradient(ellipse at 80% 20%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 50%, #000000 90%)',
+        cardBorder: 'rgba(255, 255, 255, 0.2)',
+        cardShadow: '0 20px 60px -15px rgba(0, 0, 0, 1)',
+        blob1: 'radial-gradient(circle, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 60%, transparent 70%)',
+        aiMixBg: 'rgba(255, 255, 255, 0.14)',
+        aiMixText: '#ffffff',
+        aiMixBorder: 'rgba(255, 255, 255, 0.3)',
+        statusBg: 'rgba(255, 255, 255, 0.08)',
+        statusText: '#f5f5f5',
+        statusBorder: 'rgba(255, 255, 255, 0.18)',
+        btnGradient: 'linear-gradient(135deg, #ffffff 0%, #e2e8f0 60%, #cbd5e1 100%)',
+        btnShadow: '0 0 35px rgba(255, 255, 255, 0.55)',
+        btnTextColor: '#000000',
+        glowRing: 'radial-gradient(circle, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.12) 60%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #ffffff, #e2e8f0)',
+        activeChipText: '#000000',
+        activeChipShadow: '0 0 15px rgba(255, 255, 255, 0.35)',
+        inactiveChipBg: 'rgba(255, 255, 255, 0.06)',
+        inactiveChipBorder: 'rgba(255, 255, 255, 0.15)',
+        inactiveChipText: '#e5e5e5',
+        activeTrackBg: 'rgba(255, 255, 255, 0.12)',
+        activeTrackBorder: 'rgba(255, 255, 255, 0.25)',
+        activeTrackShadow: '0 0 20px rgba(255, 255, 255, 0.1)',
+        activeTrackTitle: '#ffffff',
+        activeTrackBtn: 'linear-gradient(135deg, #ffffff, #e2e8f0)',
+        activeTrackBtnText: '#000000'
+      },
+      light: {
+        cardBg: '#ffffff',
+        cardBorder: 'rgba(226, 232, 240, 0.95)',
+        cardShadow: '0 10px 30px -10px rgba(99, 102, 241, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04)',
+        blob1: 'radial-gradient(circle, rgba(99, 102, 241, 0.22) 0%, rgba(99, 102, 241, 0.08) 50%, transparent 70%)',
+        blob2: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.04) 60%, transparent 70%)',
+        aiMixBg: 'rgba(241, 245, 249, 0.95)',
+        aiMixText: '#334155',
+        aiMixBorder: 'rgba(226, 232, 240, 1)',
+        statusBg: 'rgba(241, 245, 249, 0.95)',
+        statusText: '#334155',
+        statusBorder: 'rgba(226, 232, 240, 1)',
+        btnGradient: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+        btnShadow: '0 8px 25px rgba(99, 102, 241, 0.42)',
+        btnTextColor: '#ffffff',
+        glowRing: 'radial-gradient(circle, rgba(99, 102, 241, 0.38) 0%, rgba(99, 102, 241, 0.12) 60%, transparent 80%)',
+        activeChipBg: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+        activeChipText: '#ffffff',
+        activeChipShadow: '0 4px 12px rgba(99, 102, 241, 0.32)',
+        inactiveChipBg: '#f1f5f9',
+        inactiveChipBorder: '#e2e8f0',
+        inactiveChipText: '#475569',
+        activeTrackBg: 'rgba(99, 102, 241, 0.08)',
+        activeTrackBorder: 'rgba(99, 102, 241, 0.30)',
+        activeTrackShadow: '0 2px 8px rgba(99, 102, 241, 0.10)',
+        activeTrackTitle: '#6366f1',
+        activeTrackBtn: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+        activeTrackBtnText: '#ffffff'
+      }
+    };
+
+    function updateWaveTheme(themeKey) {
+      if (!themeKey || !waveThemes[themeKey]) themeKey = currentThemeKey || 'wine';
+      let wt = waveThemes[themeKey] || waveThemes.wine;
+      const isLight = (themeKey === 'light');
+      let acc = currentAccent || (appConfig && appConfig.accent_color) || '#6366f1';
+      const isWhiteAcc = (acc.toLowerCase() === '#ffffff' || acc.toLowerCase() === '#fff' || acc.toLowerCase() === '#f8fafc');
+      const isBlackAcc = (acc.toLowerCase() === '#000000' || acc.toLowerCase() === '#0f172a');
+
+      if (isLight) {
+
+        function hexToRgba(hex, alpha) {
+          let clean = (hex || '').replace('#', '');
+          if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+          if (clean.length !== 6) return 'rgba(99, 102, 241, ' + alpha + ')';
+          const r = parseInt(clean.substring(0, 2), 16) || 0;
+          const g = parseInt(clean.substring(2, 4), 16) || 0;
+          const b = parseInt(clean.substring(4, 6), 16) || 0;
+          return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+        }
+
+        function shiftDarker(hex, percent) {
+          let clean = (hex || '').replace('#', '');
+          if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+          if (clean.length !== 6) return hex;
+          let r = Math.max(0, Math.floor((parseInt(clean.substring(0, 2), 16) || 0) * (1 - percent / 100)));
+          let g = Math.max(0, Math.floor((parseInt(clean.substring(2, 4), 16) || 0) * (1 - percent / 100)));
+          let b = Math.max(0, Math.floor((parseInt(clean.substring(4, 6), 16) || 0) * (1 - percent / 100)));
+          return '#' + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0');
+        }
+
+        function getContrast(hex) {
+          let clean = (hex || '').replace('#', '');
+          if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
+          if (clean.length !== 6) return '#ffffff';
+          const r = parseInt(clean.substring(0, 2), 16) || 0;
+          const g = parseInt(clean.substring(2, 4), 16) || 0;
+          const b = parseInt(clean.substring(4, 6), 16) || 0;
+          const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+          return (yiq >= 170) ? '#0f172a' : '#ffffff';
+        }
+
+        const darkAcc = shiftDarker(acc, 18);
+        const textCol = getContrast(acc);
+
+        if (isWhiteAcc) {
+          wt = {
+            cardBg: '#ffffff',
+            cardBorder: 'rgba(226, 232, 240, 1)',
+            cardShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04)',
+            blob1: 'radial-gradient(circle, rgba(226, 232, 240, 0.7) 0%, rgba(203, 213, 225, 0.3) 50%, transparent 70%)',
+            blob2: 'radial-gradient(circle, rgba(241, 245, 249, 0.8) 0%, rgba(226, 232, 240, 0.4) 60%, transparent 70%)',
+            aiMixBg: 'rgba(241, 245, 249, 0.95)',
+            aiMixText: '#334155',
+            aiMixBorder: 'rgba(226, 232, 240, 1)',
+            statusBg: 'rgba(241, 245, 249, 0.95)',
+            statusText: '#334155',
+            statusBorder: 'rgba(226, 232, 240, 1)',
+            btnGradient: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+            btnShadow: '0 10px 25px -4px rgba(15, 23, 42, 0.16), 0 4px 10px -2px rgba(15, 23, 42, 0.08)',
+            btnTextColor: '#0f172a',
+            glowRing: 'radial-gradient(circle, rgba(148, 163, 184, 0.28) 0%, rgba(226, 232, 240, 0.1) 60%, transparent 80%)',
+            activeChipBg: '#ffffff',
+            activeChipText: '#0f172a',
+            activeChipShadow: '0 2px 8px rgba(15, 23, 42, 0.10)',
+            inactiveChipBg: '#f1f5f9',
+            inactiveChipBorder: '#e2e8f0',
+            inactiveChipText: '#64748b',
+            activeTrackBg: '#f1f5f9',
+            activeTrackBorder: '#cbd5e1',
+            activeTrackShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+            activeTrackTitle: '#0f172a',
+            activeTrackBtn: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+            activeTrackBtnText: '#0f172a'
+          };
+        } else if (isBlackAcc) {
+          wt = {
+            cardBg: '#ffffff',
+            cardBorder: 'rgba(226, 232, 240, 0.95)',
+            cardShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.04)',
+            blob1: 'radial-gradient(circle, rgba(15, 23, 42, 0.14) 0%, rgba(15, 23, 42, 0.04) 50%, transparent 70%)',
+            blob2: 'radial-gradient(circle, rgba(30, 41, 59, 0.10) 0%, rgba(30, 41, 59, 0.02) 60%, transparent 70%)',
+            aiMixBg: 'rgba(241, 245, 249, 0.95)',
+            aiMixText: '#334155',
+            aiMixBorder: 'rgba(226, 232, 240, 1)',
+            statusBg: 'rgba(241, 245, 249, 0.95)',
+            statusText: '#334155',
+            statusBorder: 'rgba(226, 232, 240, 1)',
+            btnGradient: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+            btnShadow: '0 8px 24px rgba(15, 23, 42, 0.35)',
+            btnTextColor: '#ffffff',
+            glowRing: 'radial-gradient(circle, rgba(15, 23, 42, 0.25) 0%, rgba(15, 23, 42, 0.06) 60%, transparent 80%)',
+            activeChipBg: 'linear-gradient(135deg, #1e293b, #0f172a)',
+            activeChipText: '#ffffff',
+            activeChipShadow: '0 4px 12px rgba(15, 23, 42, 0.25)',
+            inactiveChipBg: '#f1f5f9',
+            inactiveChipBorder: '#e2e8f0',
+            inactiveChipText: '#475569',
+            activeTrackBg: 'rgba(15, 23, 42, 0.06)',
+            activeTrackBorder: 'rgba(15, 23, 42, 0.20)',
+            activeTrackShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
+            activeTrackTitle: '#0f172a',
+            activeTrackBtn: 'linear-gradient(135deg, #1e293b, #0f172a)',
+            activeTrackBtnText: '#ffffff'
+          };
+        } else {
+          wt = {
+            cardBg: '#ffffff',
+            cardBorder: 'rgba(226, 232, 240, 0.95)',
+            cardShadow: '0 10px 30px -10px ' + hexToRgba(acc, 0.12) + ', 0 4px 12px rgba(0, 0, 0, 0.04)',
+            blob1: 'radial-gradient(circle, ' + hexToRgba(acc, 0.22) + ' 0%, ' + hexToRgba(acc, 0.08) + ' 50%, transparent 70%)',
+            blob2: 'radial-gradient(circle, ' + hexToRgba(acc, 0.15) + ' 0%, ' + hexToRgba(acc, 0.04) + ' 60%, transparent 70%)',
+            aiMixBg: 'rgba(241, 245, 249, 0.95)',
+            aiMixText: '#334155',
+            aiMixBorder: 'rgba(226, 232, 240, 1)',
+            statusBg: 'rgba(241, 245, 249, 0.95)',
+            statusText: '#334155',
+            statusBorder: 'rgba(226, 232, 240, 1)',
+            btnGradient: 'linear-gradient(135deg, ' + acc + ' 0%, ' + darkAcc + ' 100%)',
+            btnShadow: '0 8px 25px ' + hexToRgba(acc, 0.42),
+            btnTextColor: textCol,
+            glowRing: 'radial-gradient(circle, ' + hexToRgba(acc, 0.38) + ' 0%, ' + hexToRgba(acc, 0.12) + ' 60%, transparent 80%)',
+            activeChipBg: 'linear-gradient(135deg, ' + acc + ', ' + darkAcc + ')',
+            activeChipText: textCol,
+            activeChipShadow: '0 4px 12px ' + hexToRgba(acc, 0.32),
+            inactiveChipBg: '#f1f5f9',
+            inactiveChipBorder: '#e2e8f0',
+            inactiveChipText: '#475569',
+            activeTrackBg: hexToRgba(acc, 0.08),
+            activeTrackBorder: hexToRgba(acc, 0.30),
+            activeTrackShadow: '0 2px 8px ' + hexToRgba(acc, 0.10),
+            activeTrackTitle: (getContrast(acc) === '#0f172a' ? '#0f172a' : acc),
+            activeTrackBtn: 'linear-gradient(135deg, ' + acc + ', ' + darkAcc + ')',
+            activeTrackBtnText: textCol
+          };
+        }
+      }
+
+      const card = document.getElementById('wave-hero-card');
+      const blob1 = document.getElementById('wave-bg-blob');
+      const blob2 = document.getElementById('wave-bg-blob-2');
+      const aiMix = document.getElementById('wave-aimix-badge');
+      const statusCont = document.getElementById('wave-stream-indicator-container');
+      const waveBtn = document.getElementById('wave-main-btn');
+      const glowRing = document.getElementById('wave-glow-ring');
+      const titleEl = document.getElementById('wave-card-title');
+      const descEl = document.getElementById('wave-card-desc');
+      const feedTitleEl = document.getElementById('wave-feed-title');
+      const refreshBtn = document.getElementById('wave-feed-refresh');
+      const playSvg = document.getElementById('wave-play-svg');
+      const pauseSvg = document.getElementById('wave-pause-svg');
+
+      if (card) {
+        card.style.background = wt.cardBg;
+        card.style.borderColor = wt.cardBorder;
+        card.style.boxShadow = wt.cardShadow;
+      }
+      if (blob1) blob1.style.background = wt.blob1;
+      if (blob2) blob2.style.background = wt.blob2;
+
+      if (aiMix) {
+        aiMix.style.background = wt.aiMixBg;
+        aiMix.style.color = wt.aiMixText;
+        aiMix.style.borderColor = wt.aiMixBorder;
+      }
+
+      if (statusCont) {
+        statusCont.style.background = wt.statusBg;
+        statusCont.style.color = wt.statusText;
+        statusCont.style.borderColor = wt.statusBorder;
+      }
+
+      if (waveBtn) {
+        waveBtn.style.background = wt.btnGradient;
+        waveBtn.style.boxShadow = wt.btnShadow;
+        waveBtn.style.border = (isLight && isWhiteAcc) ? '1px solid rgba(0, 0, 0, 0.12)' : 'none';
+      }
+
+      if (playSvg) playSvg.style.fill = wt.btnTextColor;
+      if (pauseSvg) pauseSvg.style.fill = wt.btnTextColor;
+
+      if (glowRing) {
+        glowRing.style.background = wt.glowRing;
+      }
+
+      // Typography adjustments for light vs dark theme
+      if (titleEl) titleEl.style.color = isLight ? '#0f172a' : '#ffffff';
+      if (descEl) descEl.style.color = isLight ? '#475569' : 'rgba(212, 212, 216, 0.85)';
+      if (feedTitleEl) feedTitleEl.style.color = isLight ? '#0f172a' : '#e4e4e7';
+      const shuffleWaveBtn = document.getElementById('wave-feed-shuffle');
+      if (shuffleWaveBtn) {
+        shuffleWaveBtn.style.color = isLight ? '#475569' : '#a1a1aa';
+        shuffleWaveBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
+        shuffleWaveBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
+      }
+      if (refreshBtn) {
+        refreshBtn.style.color = isLight ? '#475569' : '#a1a1aa';
+        refreshBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
+        refreshBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
+      }
+
+      // Update mood chips
       document.querySelectorAll('.wave-mood-chip').forEach(chip => {
-        chip.setAttribute('aria-pressed', String(chip.dataset.mood === waveCurrentMood));
+        const isCurrentActive = chip.getAttribute('data-mood') === waveCurrentMood;
+        if (isCurrentActive) {
+          chip.style.background = wt.activeChipBg;
+          chip.style.color = wt.activeChipText;
+          chip.style.boxShadow = wt.activeChipShadow;
+          chip.style.borderColor = (isLight && isWhiteAcc) ? '#0f172a' : 'transparent';
+        } else {
+          chip.style.background = wt.inactiveChipBg;
+          chip.style.color = wt.inactiveChipText;
+          chip.style.borderColor = wt.inactiveChipBorder;
+          chip.style.boxShadow = 'none';
+        }
       });
+
+      syncWavePlayButton(isPlaying);
+      renderWaveTrackList();
     }
+    window.updateWaveTheme = updateWaveTheme;
 
     function syncWavePlayButton(playing) {
-      const active = isWaveActive && currentStationUrn === 'my_wave';
-      const onAir = active && playing;
-      const card = document.getElementById('wave-hero-card');
-      const button = document.getElementById('wave-main-btn');
-      if (!card || !button) return;
-      card.dataset.playing = String(onAir);
-      document.getElementById('wave-play-svg').classList.toggle('hidden', onAir);
-      document.getElementById('wave-pause-svg').classList.toggle('hidden', !onAir);
-      const action = onAir ? 'Поставить волну на паузу' : active ? 'Продолжить волну' : 'Запустить волну';
-      button.title = action;
-      button.setAttribute('aria-label', action);
-      document.getElementById('wave-stream-indicator').textContent = onAir ? 'В эфире' : active ? 'На паузе' : 'Готова к эфиру';
+      const playSvg = document.getElementById('wave-play-svg');
+      const pauseSvg = document.getElementById('wave-pause-svg');
+      const waveBtn = document.getElementById('wave-main-btn');
+      const subtext = document.getElementById('wave-btn-subtext');
+      const streamIndicator = document.getElementById('wave-stream-indicator');
+      const glowRing = document.getElementById('wave-glow-ring');
+      const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
+      const isLight = (currentThemeKey === 'light');
+
+      if (isWaveActive && currentStationUrn === "my_wave" && playing) {
+        if (playSvg) { playSvg.style.display = 'none'; playSvg.classList.add('hidden'); }
+        if (pauseSvg) { pauseSvg.style.display = 'block'; pauseSvg.classList.remove('hidden'); }
+        if (waveBtn) waveBtn.title = "Пауза";
+        if (subtext) {
+          subtext.textContent = "Играет";
+          subtext.style.color = wt.activeTrackTitle;
+          subtext.className = "text-xs font-semibold select-none transition-colors";
+        }
+        if (streamIndicator) streamIndicator.textContent = "В эфире";
+        if (glowRing) {
+          glowRing.style.background = wt.glowRing;
+          glowRing.className = "absolute -inset-2.5 rounded-full opacity-75 blur-xl animate-pulse pointer-events-none";
+        }
+      } else {
+        if (playSvg) { playSvg.style.display = 'block'; playSvg.classList.remove('hidden'); }
+        if (pauseSvg) { pauseSvg.style.display = 'none'; pauseSvg.classList.add('hidden'); }
+        if (waveBtn) {
+          const isRealWave = isWaveActive && currentStationUrn === "my_wave";
+          waveBtn.title = isRealWave ? "Продолжить волну" : "Запустить волну";
+        }
+        if (subtext) {
+          const isRealWave = isWaveActive && currentStationUrn === "my_wave";
+          subtext.textContent = isRealWave ? "На паузе" : "Моя волна";
+          subtext.style.color = isLight ? '#64748b' : '#a3a3a3';
+          subtext.className = "text-xs font-medium select-none transition-colors";
+        }
+        if (streamIndicator) {
+          const isRealWave = isWaveActive && currentStationUrn === "my_wave";
+          streamIndicator.textContent = isRealWave ? "На паузе" : "Готов к эфиру";
+        }
+        if (glowRing) {
+          glowRing.style.background = wt.glowRing;
+          glowRing.className = "absolute -inset-1.5 rounded-full opacity-30 blur-md pointer-events-none";
+        }
+      }
     }
 
     function renderWaveTrackList() {
@@ -21592,12 +22037,13 @@
       const countEl = document.getElementById('wave-queue-count');
       if (!container) return;
 
+      const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
       const isLight = (currentThemeKey === 'light');
 
       if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0) {
         container.innerHTML = `
           <div class="text-center py-12 text-xs ${isLight ? 'text-slate-400' : 'text-neutral-500'}">
-            Запустите волну, чтобы увидеть очередь.
+            Нажмите кнопку запуска, чтобы сгенерировать умную волну по вашему вкусу.
           </div>
         `;
         if (countEl) countEl.textContent = "0 треков";
@@ -21613,19 +22059,27 @@
         const row = document.createElement('div');
         row.className = `flex items-center justify-between p-2.5 rounded-xl cursor-pointer group transition-all select-none ${
           isCurrent 
-            ? 'wave-track-current font-medium'
+            ? 'font-medium shadow-sm' 
             : (isLight ? 'hover:bg-slate-100 text-slate-700' : 'hover:bg-white/5 text-neutral-300')
         }`;
 
+        if (isCurrent) {
+          row.style.background = wt.activeTrackBg;
+          row.style.borderColor = wt.activeTrackBorder;
+          row.style.borderWidth = '1px';
+          row.style.borderStyle = 'solid';
+          row.style.boxShadow = wt.activeTrackShadow;
+        }
+
         const iconHtml = isThisPlaying
-          ? `<span class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 wave-track-playing-icon">
+          ? `<span class="w-6 h-6 rounded-lg text-white flex items-center justify-center shadow-md shrink-0" style="background: ${wt.activeTrackBtn}; color: ${wt.activeTrackBtnText};">
                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                  <rect x="6.5" y="5" width="3.5" height="14" rx="1.5"/>
                  <rect x="14" y="5" width="3.5" height="14" rx="1.5"/>
                </svg>
              </span>`
           : isCurrent
-            ? `<span class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style="background: var(--wave-surface); border: 1px solid var(--wave-line);">
+            ? `<span class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style="background: ${wt.inactiveChipBg}; color: ${wt.activeTrackTitle}; border: 1px solid ${wt.activeTrackBorder};">
                  <svg class="w-3.5 h-3.5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                </span>`
             : `<span class="w-6 text-center text-xs ${isLight ? 'text-slate-400' : 'text-neutral-500'} font-mono group-hover:hidden shrink-0">${idx + 1}</span>
@@ -21640,7 +22094,7 @@
             </div>
             <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm">
             <div class="truncate min-w-0">
-              <div class="text-xs truncate ${isCurrent ? 'font-semibold' : ''}">${escapeMarkup(t.title)}</div>
+              <div class="text-xs truncate" style="${isCurrent ? `color: ${wt.activeTrackTitle}; font-weight: bold;` : ''}">${escapeMarkup(t.title)}</div>
               <div class="text-[11px] ${isLight ? 'text-slate-500' : 'text-neutral-400'} truncate">${escapeMarkup(t.artist)}</div>
             </div>
           </div>
@@ -21673,22 +22127,34 @@
       });
     }
 
-    async function setWaveMood(mood) {
+    async function setWaveMood(btn, mood) {
+      waveCurrentMood = mood;
+      const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
+      document.querySelectorAll('.wave-mood-chip').forEach(b => {
+        b.style.background = wt.inactiveChipBg;
+        b.style.color = wt.inactiveChipText;
+        b.style.borderColor = wt.inactiveChipBorder;
+        b.style.boxShadow = 'none';
+      });
+      if (typeof updateWaveTheme === 'function') {
+        updateWaveTheme(currentThemeKey);
+      } else if (btn) {
+        btn.style.background = wt.activeChipBg;
+        btn.style.color = wt.activeChipText;
+        btn.style.boxShadow = wt.activeChipShadow;
+        btn.style.borderColor = 'transparent';
+      }
       if (isWaveActive) {
         await startWave(mood);
-      } else {
-        waveStartRequest++;
-        waveCurrentMood = mood;
-        syncWaveMoodButtons();
       }
     }
     window.setWaveMood = setWaveMood;
 
     async function toggleWavePlayback() {
-      const incompatible = ['sad', 'calm'].includes(waveCurrentMood)
+      const incompatible = ['sad', 'calm', 'energetic'].includes(waveCurrentMood)
         && waveMoodFit(currentQueue?.[currentTrackIndex], waveCurrentMood) < 0;
-      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue?.length || incompatible) {
-        await startWave();
+      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0 || incompatible) {
+        await startWave(waveCurrentMood);
       } else {
         togglePlay();
         syncWavePlayButton(isPlaying);
@@ -21722,15 +22188,14 @@
     window.shuffleWaveQueue = shuffleWaveQueue;
 
     async function refreshWaveFeed() {
-      await startWave();
+      await startWave(true);
     }
     window.refreshWaveFeed = refreshWaveFeed;
 
     const MOOD_SEARCH_KEYWORDS = {
       energetic: ['phonk', 'drum and bass', 'bass house', 'edm festival', 'synthwave electro', 'trap banger', 'cyberpunk club', 'techno bounce'],
-      calm: ['chillhop beats', 'ambient chill', 'relaxing piano', 'lo-fi hip hop', 'chillout session', 'calm acoustic'],
+      calm: ['lo-fi hip hop', 'ambient chill', 'acoustic indie', 'chillout session', 'chillhop beats', 'calm piano', 'dream pop', 'relaxing beats'],
       sad: ['sad indie', 'emo rap', 'melancholy songs', 'sad acoustic', 'heartbreak songs', 'sad piano'],
-      happy: ['happy indie pop', 'upbeat pop', 'feel good dance', 'uplifting house', 'happy hip hop', 'upbeat indie rock'],
       new: ['fresh tracks 2026', 'new soundcloud premiere', 'trending remix', 'new wave music', 'underground discovery', 'breakthrough artists'],
       all: ['electronic hits', 'indie alternative', 'hip hop beats', 'club dance', 'deep house', 'hyperpop', 'rock anthems', 'lofi beats'],
       favorites: []
@@ -21813,35 +22278,46 @@
     }
 
     function waveTrackMood(track) {
-      const metadata = waveMetadataText([track?.genre, track?.tag_list, track?.title].filter(Boolean).join(' '));
+      const metadata = waveMetadataText([track?.genre, track?.tag_list, track?.title, track?.artist].filter(Boolean).join(' '));
       if (/(?:^| )(?:sad(?:core|rap|ness)?|sorrow|melanchol(?:y|ic|ia)|emo|depress(?:ed|ing|ion)|heartbrok(?:en|e)|heartbreak|breakup|lonely|груст\p{L}*|печаль\p{L}*|тоск\p{L}*|меланхол\p{L}*)(?: |$)/u.test(metadata)) return 'sad';
-      if (/(?:^| )(?:calm|relax(?:ing|ation)?|peaceful|ambient|chill(?:hop|out|wave)?|downtempo|lo fi|lofi|smooth jazz|спокой\p{L}*|расслаб\p{L}*)(?: |$)/u.test(metadata)) return 'calm';
+      if (/(?:^| )(?:calm|relax(?:ing|ation)?|peaceful|ambient|chill(?:hop|out|wave)?|downtempo|lo fi|lofi|smooth jazz|sleep|спокой\p{L}*|расслаб\p{L}*|уют\p{L}*)(?: |$)/u.test(metadata)) return 'calm';
       if (/(?:^| )(?:happy|upbeat|uplifting|joyful|cheerful|feel good|весел\p{L}*|радост\p{L}*)(?: |$)/u.test(metadata)) return 'happy';
       const genre = waveGenreKey(track);
-      if (/\b(?:breakcore|dance|drum and bass|hardcore|house|phonk|punk|techno|trance)\b/.test(genre)) return 'energetic';
-      if (/\b(?:acoustic|piano)\b/.test(genre)) return 'calm';
-      return '';
+      if (/\b(?:breakcore|dance|drum and bass|hardcore|house|phonk|punk|techno|trance|rock|metal|trap|edm)\b/.test(genre) ||
+          /(?:^| )(?:phonk|drift|bass|energy|club|dance|edm|rave|hardcore|party|techno|synthwave|drum and bass|dnb|fast|бодр\p{L}*|энерг\p{L}*|кач\p{L}*|драйв\p{L}*)(?: |$)/u.test(metadata)) return 'energetic';
+      if (/\b(?:acoustic|piano|ambient|chill)\b/.test(genre)) return 'calm';
+      return 'all';
     }
 
     function waveMoodFit(track, mood) {
+      if (!mood || mood === 'all') return 0;
       if (mood === 'sad' || mood === 'calm') return waveTrackMood(track) === mood ? 1 : -1;
-      if (mood !== 'energetic') return 0;
-      const trackMood = waveTrackMood(track);
-      if (trackMood === 'calm') return -1;
-      return trackMood === 'energetic' || trackMood === 'happy' ? 1 : 0;
+      if (mood === 'energetic') {
+        const trackMood = waveTrackMood(track);
+        if (trackMood === 'calm' || trackMood === 'sad') return -1;
+        return trackMood === 'energetic' || trackMood === 'happy' ? 1 : 0;
+      }
+      return 0;
     }
 
     async function searchWaveMood(mood, offset) {
-      const keywords = MOOD_SEARCH_KEYWORDS[mood];
+      const keywords = MOOD_SEARCH_KEYWORDS[mood] || MOOD_SEARCH_KEYWORDS.all;
+      if (!keywords || !keywords.length) return [];
       const query = keywords[offset % keywords.length];
-      const results = await api.searchTracks(query, 'soundcloud').catch(() => []);
-      return Array.isArray(results) ? results.filter(track => track?.id != null && waveTrackMood(track) === mood) : [];
+      let results = [];
+      try {
+        if (api && api.searchTracks) {
+          results = await api.searchTracks(query, 'soundcloud');
+        } else if (api && api.invoke) {
+          results = await api.invoke('search_tracks', { query, provider: 'soundcloud' });
+        }
+      } catch (_) {}
+      return Array.isArray(results) ? results.filter(track => track?.id != null && (mood === 'all' || waveMoodFit(track, mood) >= 0)) : [];
     }
 
     function waveTasteSeeds(mood) {
       const likes = new Map(allTracks.filter(track => track?.id != null).map(track => [String(track.id), track]));
       if (likes.size) {
-        // Recent listens can boost existing favorites without feeding the wave's own guesses back into taste.
         const recentLikes = recentlyPlayed.slice(0, 40).map(({ track }) => likes.get(String(track.id))).filter(Boolean);
         return [...new Set([...recentLikes, ...likes.values()])]
           .sort((a, b) => waveMoodFit(b, mood) - waveMoodFit(a, mood));
@@ -21854,7 +22330,7 @@
       const request = ++waveStartRequest;
       const playbackBeforeSearch = currentPlayRequestId;
       const taste = waveTasteSeeds(mood);
-      const targeted = mood === 'sad' || mood === 'calm';
+      const targeted = mood === 'sad' || mood === 'calm' || mood === 'energetic';
       const local = taste.length || mood === 'favorites'
         ? taste
         : (currentQueue.length ? currentQueue : (window.PRELOADED_TRACKS || []));
@@ -21868,7 +22344,7 @@
       let pool = candidates.filter(isFresh);
       if (targeted && !pool.length) {
         const cursor = waveSeedCursor++;
-        notify('Подбираем треки для волны…', '🌊');
+        notify('Подбираем треки под настроение…', '🌊');
         const batches = await Promise.all([searchWaveMood(mood, cursor), searchWaveMood(mood, cursor + 1)]);
         if (request !== waveStartRequest || playbackBeforeSearch !== currentPlayRequestId) return;
         const found = [...new Map(batches.flat().map(track => [String(track.id), track])).values()];
@@ -21885,7 +22361,6 @@
       }
 
       waveCurrentMood = mood;
-      syncWaveMoodButtons();
       isWaveActive = true;
       currentStationUrn = 'my_wave';
       syncWavePlayButton(true);
@@ -21941,8 +22416,8 @@
         const cursor = waveSeedCursor++;
         const seeds = personalWaveSeeds(taste, anchor, mood, cursor);
         const batches = seeds.map(() => []);
-        const discoveryMoods = mood === 'all' ? ['sad', 'happy'] : [];
-        if (mood === 'sad' || mood === 'calm') discoveryMoods.push(mood);
+        const discoveryMoods = mood === 'all' ? ['sad', 'happy', 'energetic', 'calm'] : [];
+        if (mood === 'sad' || mood === 'calm' || mood === 'energetic') discoveryMoods.push(mood);
         const discoveries = new Map();
         let timeout;
         try {

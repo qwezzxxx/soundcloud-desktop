@@ -5751,7 +5751,7 @@
           <div class="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             
             <!-- Левый блок: Заголовок, описание и фильтры -->
-            <div class="space-y-3.5 max-w-xl">
+            <div class="space-y-3.5 max-w-2xl min-w-0">
               <div class="flex items-center gap-3">
                 <h2 id="wave-card-title" class="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-2.5 transition-colors">
                   <span>Моя волна</span>
@@ -5768,20 +5768,23 @@
               </p>
 
               <!-- Чипы настроений: компактные, в одну строку -->
-              <div class="flex flex-wrap items-center gap-2 pt-1" id="wave-mood-container">
-                <button onclick="setWaveMood(this, 'all')" class="wave-mood-chip px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105 active:scale-95 shadow-sm" data-mood="all">
+              <div class="flex flex-wrap items-center gap-1.5 pt-1" id="wave-mood-container">
+                <button onclick="setWaveMood(this, 'all')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95 shadow-sm" data-mood="all">
                   ✨ Всё подряд
                 </button>
-                <button onclick="setWaveMood(this, 'energetic')" class="wave-mood-chip px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105 active:scale-95" data-mood="energetic">
+                <button onclick="setWaveMood(this, 'energetic')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="energetic">
                   ⚡ Бодрое
                 </button>
-                <button onclick="setWaveMood(this, 'calm')" class="wave-mood-chip px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105 active:scale-95" data-mood="calm">
+                <button onclick="setWaveMood(this, 'calm')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="calm">
                   🌙 Спокойное
                 </button>
-                <button onclick="setWaveMood(this, 'favorites')" class="wave-mood-chip px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105 active:scale-95" data-mood="favorites">
+                <button onclick="setWaveMood(this, 'sad')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="sad">
+                  🌧️ Грустное
+                </button>
+                <button onclick="setWaveMood(this, 'favorites')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="favorites">
                   ❤️ Любимое
                 </button>
-                <button onclick="setWaveMood(this, 'new')" class="wave-mood-chip px-3 py-1.5 rounded-xl text-xs font-semibold transition-all hover:scale-105 active:scale-95" data-mood="new">
+                <button onclick="setWaveMood(this, 'new')" class="wave-mood-chip px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all hover:scale-105 active:scale-95" data-mood="new">
                   ✦ Новое
                 </button>
               </div>
@@ -5793,15 +5796,15 @@
                 <!-- Внешнее свечение волны -->
                 <div id="wave-glow-ring" class="absolute -inset-2 rounded-full opacity-35 blur-lg transition-all duration-700 pointer-events-none"></div>
 
-                <button id="wave-main-btn" onclick="toggleWavePlayback()" class="w-18 h-18 sm:w-20 sm:h-20 rounded-full hover:scale-105 active:scale-95 flex items-center justify-center p-0 m-0 transition-all cursor-pointer relative z-10 select-none border-0 outline-none" title="Запустить волну">
+                <button id="wave-main-btn" onclick="toggleWavePlayback()" class="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-white text-black hover:scale-105 active:scale-95 flex items-center justify-center p-0 m-0 transition-all cursor-pointer relative z-10 select-none border-0 outline-none shadow-xl" style="background: #ffffff; color: #000000;" title="Запустить волну">
                   
                   <!-- Иконка Play: ровно по центру -->
-                  <svg id="wave-play-svg" class="w-7 h-7 pointer-events-none transition-colors" viewBox="0 0 24 24" style="display: block;">
+                  <svg id="wave-play-svg" class="w-7 h-7 pointer-events-none fill-black transition-colors" viewBox="0 0 24 24" style="display: block;">
                     <path d="M8 5.5v13a.75.75 0 0 0 1.16.63l10-6.5a.75.75 0 0 0 0-1.26l-10-6.5A.75.75 0 0 0 8 5.5z"/>
                   </svg>
 
                   <!-- Иконка Паузы: ровно по центру -->
-                  <svg id="wave-pause-svg" class="w-7 h-7 pointer-events-none transition-colors" viewBox="0 0 24 24" style="display: none;">
+                  <svg id="wave-pause-svg" class="w-7 h-7 pointer-events-none fill-black transition-colors" viewBox="0 0 24 24" style="display: none;">
                     <rect x="6.5" y="5" width="3.5" height="14" rx="1.5"/>
                     <rect x="14" y="5" width="3.5" height="14" rx="1.5"/>
                   </svg>
@@ -21612,14 +21615,16 @@
         btn.style.borderColor = 'transparent';
       }
       if (isWaveActive) {
-        await startWave(true);
+        await startWave(mood);
       }
     }
     window.setWaveMood = setWaveMood;
 
     async function toggleWavePlayback() {
-      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length > 35) {
-        await startWave(true);
+      const incompatible = ['sad', 'calm', 'energetic'].includes(waveCurrentMood)
+        && waveMoodFit(currentQueue?.[currentTrackIndex], waveCurrentMood) < 0;
+      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0 || incompatible) {
+        await startWave(waveCurrentMood);
       } else {
         togglePlay();
         syncWavePlayButton(isPlaying);
@@ -21660,6 +21665,7 @@
     const MOOD_SEARCH_KEYWORDS = {
       energetic: ['phonk', 'drum and bass', 'bass house', 'edm festival', 'synthwave electro', 'trap banger', 'cyberpunk club', 'techno bounce'],
       calm: ['lo-fi hip hop', 'ambient chill', 'acoustic indie', 'chillout session', 'chillhop beats', 'calm piano', 'dream pop', 'relaxing beats'],
+      sad: ['sad indie', 'emo rap', 'melancholy songs', 'sad acoustic', 'heartbreak songs', 'sad piano'],
       new: ['fresh tracks 2026', 'new soundcloud premiere', 'trending remix', 'new wave music', 'underground discovery', 'breakthrough artists'],
       all: ['electronic hits', 'indie alternative', 'hip hop beats', 'club dance', 'deep house', 'hyperpop', 'rock anthems', 'lofi beats'],
       favorites: []
@@ -21684,175 +21690,321 @@
     }
     window.isWaveTrackRecentlyPlayed = isWaveTrackRecentlyPlayed;
 
-    async function startWave(forceNewSeed = false) {
-      isWaveActive = true;
-      currentStationUrn = "my_wave";
+    function waveArtistKey(track) {
+      return String(track?.artist || '').trim().toLowerCase();
+    }
 
-      notify("Подбор разнообразной волны...", "🌊");
-
-      const mood = waveCurrentMood || 'all';
-
-      // 1. Gather a diverse pool of candidate seeds
-      let candidateSeeds = [];
-
-      // A) User likes that haven't been recently played
-      if (allTracks && allTracks.length > 0) {
-        const freshLikes = allTracks.filter(t => !isWaveTrackRecentlyPlayed(t.id));
-        candidateSeeds.push(...(freshLikes.length > 0 ? freshLikes : allTracks));
-      }
-
-      // B) Personalized mixes & featured playlists
-      if (lastMixedData && Array.isArray(lastMixedData) && lastMixedData.length > 0) {
-        lastMixedData.forEach(m => {
-          if (m.tracks && Array.isArray(m.tracks)) {
-            m.tracks.forEach(t => {
-              if (!isWaveTrackRecentlyPlayed(t.id)) candidateSeeds.push(t);
-            });
+    function orderWaveRecommendations(tracks, limit, precedingTrack, mixMoods = false) {
+      const artistCounts = new Map();
+      let previousArtist = waveArtistKey(precedingTrack);
+      if (previousArtist) artistCounts.set(previousArtist, 1);
+      let previousMood = mixMoods ? waveTrackMood(precedingTrack) : '';
+      const remaining = tracks.map((track, rank) => ({
+        track, rank, artist: waveArtistKey(track), mood: mixMoods ? waveTrackMood(track) : ''
+      }));
+      const ordered = [];
+      while (remaining.length && ordered.length < limit) {
+        const hasAlternative = remaining.some(({ artist }) => artist && artist !== previousArtist);
+        const hasNewArtist = ordered.length < 5 && remaining.some(({ artist }) => artist && !artistCounts.has(artist));
+        let bestIndex = 0;
+        let bestScore = Infinity;
+        remaining.forEach(({ rank, artist, mood }, index) => {
+          if (hasNewArtist && (!artist || artistCounts.has(artist))) return;
+          if (hasAlternative && artist === previousArtist) return;
+          const repeatMood = mood && mood === previousMood ? 6 : 0;
+          const score = rank + 5 * (artistCounts.get(artist) || 0) + repeatMood;
+          if (score < bestScore) {
+            bestScore = score;
+            bestIndex = index;
           }
         });
+        const [{ track, artist, mood }] = remaining.splice(bestIndex, 1);
+        ordered.push(track);
+        if (artist) artistCounts.set(artist, (artistCounts.get(artist) || 0) + 1);
+        previousArtist = artist;
+        previousMood = mood;
       }
+      return ordered;
+    }
 
-      // C) Fallback to current queue or preloaded tracks
-      if (candidateSeeds.length === 0 && currentQueue && currentQueue.length > 0) {
-        candidateSeeds.push(...currentQueue);
-      }
-      if (candidateSeeds.length === 0 && typeof window !== 'undefined' && Array.isArray(window.PRELOADED_TRACKS)) {
-        candidateSeeds.push(...window.PRELOADED_TRACKS);
-      }
+    let waveStartRequest = 0;
+    let waveSeedCursor = 0;
+    let personalWaveRefill;
+    let waveRefillQueue;
+    let waveRefillAfter = 0;
 
-      // 2. Select initial seed
-      let seed = null;
-      if (candidateSeeds.length > 0) {
-        shuffleArray(candidateSeeds);
-        seed = candidateSeeds[0];
-      }
+    function waveMetadataText(value) {
+      return String(value || '').normalize('NFKC').toLowerCase().replace(/ё/g, 'е')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    }
 
+    function waveGenreKey(track) {
+      const genre = waveMetadataText(track?.genre);
+      if (!genre || genre === 'music' || genre === 'other') return '';
+      if (/^(?:hip ?hop(?: rap)?|rap(?: hip ?hop)?)$/.test(genre)) return 'hip hop';
+      if (/^(?:drum (?:and )?bass|dnb)$/.test(genre)) return 'drum and bass';
+      if (/^(?:dance (?:and )?edm|edm)$/.test(genre)) return 'dance';
+      return genre;
+    }
+
+    function waveTrackMood(track) {
+      const metadata = waveMetadataText([track?.genre, track?.tag_list, track?.title, track?.artist].filter(Boolean).join(' '));
+      if (/(?:^| )(?:sad(?:core|rap|ness)?|sorrow|melanchol(?:y|ic|ia)|emo|depress(?:ed|ing|ion)|heartbrok(?:en|e)|heartbreak|breakup|lonely|груст\p{L}*|печаль\p{L}*|тоск\p{L}*|меланхол\p{L}*)(?: |$)/u.test(metadata)) return 'sad';
+      if (/(?:^| )(?:calm|relax(?:ing|ation)?|peaceful|ambient|chill(?:hop|out|wave)?|downtempo|lo fi|lofi|smooth jazz|sleep|спокой\p{L}*|расслаб\p{L}*|уют\p{L}*)(?: |$)/u.test(metadata)) return 'calm';
+      if (/(?:^| )(?:happy|upbeat|uplifting|joyful|cheerful|feel good|весел\p{L}*|радост\p{L}*)(?: |$)/u.test(metadata)) return 'happy';
+      const genre = waveGenreKey(track);
+      if (/\b(?:breakcore|dance|drum and bass|hardcore|house|phonk|punk|techno|trance|rock|metal|trap|edm)\b/.test(genre) ||
+          /(?:^| )(?:phonk|drift|bass|energy|club|dance|edm|rave|hardcore|party|techno|synthwave|drum and bass|dnb|fast|бодр\p{L}*|энерг\p{L}*|кач\p{L}*|драйв\p{L}*)(?: |$)/u.test(metadata)) return 'energetic';
+      if (/\b(?:acoustic|piano|ambient|chill)\b/.test(genre)) return 'calm';
+      return 'all';
+    }
+
+    function waveMoodFit(track, mood) {
+      if (!mood || mood === 'all') return 0;
+      if (mood === 'sad' || mood === 'calm') return waveTrackMood(track) === mood ? 1 : -1;
+      if (mood === 'energetic') {
+        const trackMood = waveTrackMood(track);
+        if (trackMood === 'calm' || trackMood === 'sad') return -1;
+        return trackMood === 'energetic' || trackMood === 'happy' ? 1 : 0;
+      }
+      return 0;
+    }
+
+    async function searchWaveMood(mood, offset) {
+      const keywords = MOOD_SEARCH_KEYWORDS[mood] || MOOD_SEARCH_KEYWORDS.all;
+      if (!keywords || !keywords.length) return [];
+      const query = keywords[offset % keywords.length];
+      let results = [];
+      try {
+        if (api && api.searchTracks) {
+          results = await api.searchTracks(query, 'soundcloud');
+        } else if (api && api.invoke) {
+          results = await api.invoke('search_tracks', { query, provider: 'soundcloud' });
+        }
+      } catch (_) {}
+      return Array.isArray(results) ? results.filter(track => track?.id != null && (mood === 'all' || waveMoodFit(track, mood) >= 0)) : [];
+    }
+
+    function waveTasteSeeds(mood) {
+      const likes = new Map(allTracks.filter(track => track?.id != null).map(track => [String(track.id), track]));
+      if (likes.size) {
+        const recentLikes = recentlyPlayed.slice(0, 40).map(({ track }) => likes.get(String(track.id))).filter(Boolean);
+        return [...new Set([...recentLikes, ...likes.values()])]
+          .sort((a, b) => waveMoodFit(b, mood) - waveMoodFit(a, mood));
+      }
+      if (mood === 'favorites') return [];
+      return (lastMixedData || []).flatMap(mix => mix.tracks || []).filter(track => track?.id != null);
+    }
+
+    async function startWave(mood = waveCurrentMood) {
+      const request = ++waveStartRequest;
+      const playbackBeforeSearch = currentPlayRequestId;
+      const taste = waveTasteSeeds(mood);
+      const targeted = mood === 'sad' || mood === 'calm' || mood === 'energetic';
+      const local = taste.length || mood === 'favorites'
+        ? taste
+        : (currentQueue.length ? currentQueue : (window.PRELOADED_TRACKS || []));
+      let candidates = local.filter(track => track?.id != null && waveMoodFit(track, mood) >= 0);
+      if (targeted && !candidates.length) {
+        candidates = (lastMixedData || []).flatMap(mix => mix.tracks || [])
+          .filter(track => track?.id != null && waveMoodFit(track, mood) > 0);
+      }
+      const recent = new Set(recentlyPlayed.slice(0, 60).map(({ track }) => String(track.id)));
+      const isFresh = track => !recent.has(String(track.id)) && !isWaveTrackRecentlyPlayed(track.id);
+      let pool = candidates.filter(isFresh);
+      if (targeted && !pool.length) {
+        const cursor = waveSeedCursor++;
+        notify('Подбираем треки под настроение…', '🌊');
+        const batches = await Promise.all([searchWaveMood(mood, cursor), searchWaveMood(mood, cursor + 1)]);
+        if (request !== waveStartRequest || playbackBeforeSearch !== currentPlayRequestId) return;
+        const found = [...new Map(batches.flat().map(track => [String(track.id), track])).values()];
+        pool = found.filter(isFresh);
+        if (!pool.length) pool = candidates.length ? candidates : found;
+      }
+      if (!pool.length) pool = candidates;
+      if (mood !== 'all') pool = pool.slice(0, 8);
+      const seed = pool[Math.floor(Math.random() * pool.length)];
       if (!seed) {
-        notify("Для запуска волны добавьте любимые треки в медиатеку", "ℹ️");
-        isWaveActive = false;
-        syncWavePlayButton(false);
+        const message = targeted ? 'Пока не удалось найти треки под это настроение' : 'Для запуска волны добавьте любимые треки в медиатеку';
+        notify(message, 'ℹ️');
         return;
       }
 
-      markWaveTrackPlayed(seed.id);
-
-      // Start playing seed immediately
-      await playTrack(0, [seed], true);
+      waveCurrentMood = mood;
       isWaveActive = true;
-      currentStationUrn = "my_wave";
+      currentStationUrn = 'my_wave';
       syncWavePlayButton(true);
-      renderWaveTrackList();
-
-      // 3. Multi-Source Recommendation Gathering for maximum diversity
-      try {
-        const candidatePool = [];
-        const seenIds = new Set([String(seed.id)]);
-
-        // Source 1: Related tracks for primary seed
-        let related = null;
-        try {
-          if (api && api.getRelatedTracks) {
-            related = await api.getRelatedTracks(seed.id);
-          } else if (api && api.invoke) {
-            related = await api.invoke('get_related_tracks', { trackId: seed.id });
-          }
-        } catch (_) {}
-
-        if (related && Array.isArray(related)) {
-          related.forEach(t => {
-            const sid = String(t.id);
-            if (!seenIds.has(sid) && !isWaveTrackRecentlyPlayed(sid)) {
-              seenIds.add(sid);
-              candidatePool.push(t);
-            }
-          });
-        }
-
-        // Source 2: Pick a secondary diverse seed for complementary vibe
-        if (candidateSeeds.length > 1) {
-          const secondSeed = candidateSeeds[1];
-          try {
-            let secondRelated = null;
-            if (api && api.getRelatedTracks) {
-              secondRelated = await api.getRelatedTracks(secondSeed.id);
-            } else if (api && api.invoke) {
-              secondRelated = await api.invoke('get_related_tracks', { trackId: secondSeed.id });
-            }
-            if (secondRelated && Array.isArray(secondRelated)) {
-              secondRelated.forEach(t => {
-                const sid = String(t.id);
-                if (!seenIds.has(sid) && !isWaveTrackRecentlyPlayed(sid)) {
-                  seenIds.add(sid);
-                  candidatePool.push(t);
-                }
-              });
-            }
-          } catch (_) {}
-        }
-
-        // Source 3: Mood-targeted discovery search (ensures fresh, non-repeating discoveries)
-        const moodKeywords = MOOD_SEARCH_KEYWORDS[mood] || MOOD_SEARCH_KEYWORDS.all;
-        if (moodKeywords && moodKeywords.length > 0) {
-          const randomQuery = moodKeywords[Math.floor(Math.random() * moodKeywords.length)];
-          try {
-            let searchResults = null;
-            if (api && api.searchTracks) {
-              searchResults = await api.searchTracks(randomQuery, 'soundcloud');
-            } else if (api && api.invoke) {
-              searchResults = await api.invoke('search_tracks', { query: randomQuery, provider: 'soundcloud' });
-            }
-            if (searchResults && Array.isArray(searchResults)) {
-              searchResults.forEach(t => {
-                const sid = String(t.id);
-                if (!seenIds.has(sid) && !isWaveTrackRecentlyPlayed(sid)) {
-                  seenIds.add(sid);
-                  candidatePool.push(t);
-                }
-              });
-            }
-          } catch (_) {}
-        }
-
-        // Source 4: Blend with a few fresh favorites for mood 'all' or 'favorites'
-        if (mood !== 'new' && (mood === 'all' || mood === 'favorites' || candidatePool.length < 15) && allTracks && allTracks.length > 0) {
-          const randomLikes = pickRandomSample(allTracks.filter(t => !seenIds.has(String(t.id)) && !isWaveTrackRecentlyPlayed(t.id)), 8);
-          randomLikes.forEach(t => {
-            const sid = String(t.id);
-            seenIds.add(sid);
-            candidatePool.push(t);
-          });
-        }
-
-        // Thoroughly shuffle the candidate pool
-        shuffleArray(candidatePool);
-
-        // Take 25-30 diverse tracks
-        const finalWaveTracks = [seed, ...candidatePool.slice(0, 28)];
-        currentQueue = finalWaveTracks;
-        if (isShuffle) originalQueue = [...finalWaveTracks];
-        currentTrackIndex = 0;
-
-        updateQueueDrawer();
-        renderWaveTrackList();
-        saveSessionState();
-      } catch (err) {
-        console.warn("Wave stream loading error:", err);
-      }
+      const playback = playTrack(0, [seed], true);
+      checkWaveReplenish();
+      await playback;
     }
     window.startWave = startWave;
 
+    function personalWaveSeeds(taste, anchor, mood, cursor) {
+      const seeds = [anchor];
+      const artists = new Set([waveArtistKey(anchor) || String(anchor.id)]);
+      const genre = waveGenreKey(anchor);
+      const nearby = genre ? taste.filter(track => waveGenreKey(track) === genre).slice(0, 8) : [];
+      const contrasting = mood === 'all' ? taste.filter(track => waveGenreKey(track) !== genre) : [];
+      const pools = mood === 'all' ? [contrasting, taste] : [nearby, taste.slice(0, 18)];
+      for (const pool of pools) {
+        for (let offset = 0; offset < pool.length && seeds.length < 4; offset++) {
+          const track = pool[(cursor + offset) % pool.length];
+          const artist = waveArtistKey(track) || String(track.id);
+          if (artists.has(artist)) continue;
+          artists.add(artist);
+          seeds.push(track);
+          if (pool === nearby && seeds.length === 3) break;
+        }
+      }
+      return seeds;
+    }
+
+    async function replenishPersonalWave(queue) {
+      const mood = waveCurrentMood || 'all';
+      const taste = waveTasteSeeds(mood);
+      const anchor = queue.find(track => track?.id != null);
+      if (!anchor) return;
+      const seen = new Set(queue.map(track => String(track.id)));
+      for (const { track } of recentlyPlayed.slice(0, 60)) seen.add(String(track.id));
+      const liked = new Set(allTracks.map(track => String(track.id)));
+      const recommendations = [];
+      const canRecommend = track => track?.id != null && !seen.has(String(track.id))
+        && !isWaveTrackRecentlyPlayed(track.id) && waveMoodFit(track, mood) >= 0;
+      const appendRecommendations = (tracks, limit) => {
+        let added = 0;
+        for (const track of tracks) {
+          if (added >= limit || recommendations.length >= 12) break;
+          if (!canRecommend(track)) continue;
+          seen.add(String(track.id));
+          recommendations.push(track);
+          added++;
+        }
+      };
+
+      if (mood !== 'favorites') {
+        const cursor = waveSeedCursor++;
+        const seeds = personalWaveSeeds(taste, anchor, mood, cursor);
+        const batches = seeds.map(() => []);
+        const discoveryMoods = mood === 'all' ? ['sad', 'happy', 'energetic', 'calm'] : [];
+        if (mood === 'sad' || mood === 'calm' || mood === 'energetic') discoveryMoods.push(mood);
+        const discoveries = new Map();
+        let timeout;
+        try {
+          await Promise.race([
+            Promise.allSettled([
+              ...seeds.map(async (track, index) => {
+                const results = await api.getRelatedTracks(track.id);
+                if (Array.isArray(results)) batches[index] = results.slice(0, 18);
+              }),
+              ...discoveryMoods.map(async option => {
+                discoveries.set(option, await searchWaveMood(option, cursor));
+              })
+            ]),
+            new Promise(resolve => { timeout = setTimeout(resolve, 3500); })
+          ]);
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (!isWaveActive || currentStationUrn !== 'my_wave' || currentQueue !== queue) return;
+
+        const anchorGenre = waveGenreKey(anchor);
+        const preferredGenres = new Set(taste.slice(0, 50).map(waveGenreKey).filter(Boolean));
+        const evidence = new Map();
+        batches.forEach((batch, source) => {
+          const sourceIds = new Set();
+          batch.forEach((track, rank) => {
+            if (!canRecommend(track)) return;
+            const id = String(track.id);
+            if (sourceIds.has(id) || liked.has(id)) return;
+            sourceIds.add(id);
+            const match = evidence.get(id) || { track, sources: 0, score: 0 };
+            match.sources++;
+            match.score += (18 - rank) * (source === 0 && mood !== 'all' ? 2 : 1);
+            evidence.set(id, match);
+          });
+        });
+        const ranked = [];
+        for (const match of evidence.values()) {
+          const genre = waveGenreKey(match.track);
+          const nearAnchor = Boolean(anchorGenre && genre === anchorGenre);
+          const familiar = preferredGenres.has(genre);
+          const preserveGenre = mood === 'energetic' || mood === 'new';
+          if (preserveGenre && genre && !nearAnchor && !familiar && (anchorGenre || preferredGenres.size) && match.sources === 1) continue;
+          const anchorBonus = nearAnchor && mood !== 'all' ? 18 : 0;
+          const score = match.score + anchorBonus + (familiar ? 10 : 0) + 10 * waveMoodFit(match.track, mood);
+          ranked.push({ track: match.track, score });
+        }
+        ranked.sort((a, b) => b.score - a.score);
+        const related = ranked.map(({ track }) => track);
+        if (mood === 'all') {
+          for (const option of discoveryMoods) {
+            const known = [...related, ...taste].filter(track => waveTrackMood(track) === option);
+            appendRecommendations([...known, ...(discoveries.get(option) || [])], 2);
+          }
+        }
+        appendRecommendations(related, 12);
+        for (const tracks of discoveries.values()) appendRecommendations(tracks, 12);
+      }
+
+      if (mood === 'favorites' || (mood !== 'new' && recommendations.length < 6)) {
+        const anchorGenre = waveGenreKey(anchor);
+        const favorites = taste.filter(track => liked.has(String(track.id)) && canRecommend(track));
+        favorites.sort((a, b) => waveMoodFit(b, mood) - waveMoodFit(a, mood)
+          || Number(Boolean(anchorGenre && waveGenreKey(b) === anchorGenre)) - Number(Boolean(anchorGenre && waveGenreKey(a) === anchorGenre)));
+        appendRecommendations(favorites, 12);
+      }
+
+      const next = orderWaveRecommendations(recommendations, 12, queue.at(-1), mood === 'all');
+      waveRefillAfter = Date.now() + (next.length ? 1500 : 10000);
+      if (!next.length) return;
+      queue.push(...next);
+      if (isShuffle && originalQueue) originalQueue.push(...next);
+      prefetchNextTrack(currentTrackIndex + 1);
+      updateQueueDrawer();
+      renderWaveTrackList();
+      saveSessionState();
+    }
+
     // Endless auto-replenish for My Wave with diverse recommendations
-    async function checkWaveReplenish() {
+    let waveReplenishPromise;
+    function checkWaveReplenish() {
+      if (isWaveActive && currentStationUrn === 'my_wave' && currentQueue.length) {
+        const queue = currentQueue;
+        const remaining = isShuffle
+          ? queue.filter(track => !shufflePlayedTrackIds.has(String(track.id))).length
+          : queue.length - currentTrackIndex - 1;
+        if (waveRefillQueue === queue && personalWaveRefill) return personalWaveRefill;
+        if (remaining > 10 || (waveRefillQueue === queue && Date.now() < waveRefillAfter)) return;
+        waveRefillQueue = queue;
+        waveRefillAfter = 0;
+        const refill = replenishPersonalWave(queue).catch(console.warn).finally(() => {
+          if (personalWaveRefill === refill) personalWaveRefill = null;
+        });
+        personalWaveRefill = refill;
+        return refill;
+      }
+      if (waveReplenishPromise) return waveReplenishPromise;
+      waveReplenishPromise = replenishWave().finally(() => { waveReplenishPromise = null; });
+      return waveReplenishPromise;
+    }
+
+    setInterval(() => {
+      if (isWaveActive && currentStationUrn === 'my_wave') checkWaveReplenish();
+    }, 5000);
+
+    async function replenishWave() {
       if (!isWaveActive || isWaveLoadingMore || !currentQueue || currentQueue.length === 0) return;
       const remaining = isShuffle
         ? currentQueue.filter(track => track?.id != null && !shufflePlayedTrackIds.has(String(track.id))).length
         : currentQueue.length - currentTrackIndex;
-      if (remaining <= 4) {
+      if (remaining <= (currentStationUrn === 'my_wave' ? 8 : 4)) {
         isWaveLoadingMore = true;
         try {
           const currentT = currentQueue[currentTrackIndex] || currentQueue[currentQueue.length - 1];
           const mood = waveCurrentMood || 'all';
           const existingIds = new Set(currentQueue.map(t => String(t.id)));
+          const queue = currentQueue;
 
           const newBatch = [];
 
@@ -21896,11 +22048,12 @@
             } catch (_) {}
           }
 
-          if (newBatch.length > 0) {
-            shuffleArray(newBatch);
-            const replenishedTracks = newBatch.slice(0, 18);
+          if (newBatch.length > 0 && isWaveActive && currentQueue === queue) {
+            const firstNewIndex = currentQueue.length;
+            const replenishedTracks = orderWaveRecommendations(newBatch, 18, currentQueue.at(-1));
             currentQueue = [...currentQueue, ...replenishedTracks];
             if (isShuffle && originalQueue) originalQueue = [...originalQueue, ...replenishedTracks];
+            prefetchNextTrack(firstNewIndex);
             updateQueueDrawer();
             renderWaveTrackList();
             console.log(`[Моя Волна] Поток пополнен ${newBatch.length} новыми треками`);
