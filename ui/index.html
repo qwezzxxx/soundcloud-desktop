@@ -4368,11 +4368,11 @@
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      gap: clamp(14px, 3vw, 36px);
-      padding: clamp(18px, 3vw, 32px);
-      border: 1px solid var(--wave-line);
+      gap: clamp(12px, 2vw, 24px);
+      padding: clamp(14px, 2vw, 22px);
+      border: 1px solid var(--panel-border, var(--wave-line));
       border-radius: var(--app-radius);
-      background: radial-gradient(ellipse at right center, var(--wave-tint), transparent 60%), var(--panel-bg);
+      background: var(--card-bg, var(--panel-bg));
       color: var(--wave-text);
     }
 
@@ -4380,9 +4380,6 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: var(--wave-surface);
       color: var(--wave-muted);
       font-size: 11px;
     }
@@ -4399,75 +4396,56 @@
       background: #10b981;
     }
 
-    #wave-card-desc,
     #wave-queue-count {
       color: var(--wave-muted);
     }
 
-    .wave-mood-chip,
-    #wave-feed-refresh {
+    #wave-mood-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      width: fit-content;
+      max-width: 100%;
+      padding: 3px;
       border: 1px solid var(--wave-line);
       border-radius: 10px;
       background: var(--wave-surface);
+    }
+
+    .wave-mood-chip,
+    #wave-feed-refresh {
       color: var(--wave-muted);
       cursor: pointer;
-      transition: background-color 160ms, border-color 160ms, color 160ms;
+      transition: background-color 160ms, color 160ms;
     }
 
     .wave-mood-chip {
-      padding: 6px 10px;
+      padding: 5px 9px;
+      border-radius: 6px;
       white-space: nowrap;
     }
+
+    #wave-feed-refresh { border-radius: 8px; }
 
     .wave-mood-chip:hover,
     #wave-feed-refresh:hover {
       color: var(--wave-text);
-      background: var(--wave-tint);
+      background: var(--wave-surface);
     }
 
-    .wave-mood-chip[aria-pressed="true"] {
-      color: var(--wave-text);
-      background: var(--wave-tint);
-      border-color: color-mix(in srgb, var(--accent) 65%, var(--wave-line));
-    }
-
-    #wave-play-control {
-      display: grid;
-      place-items: center;
-      padding: 12px clamp(0px, 2vw, 24px);
-      isolation: isolate;
-    }
-
-    #wave-play-control > * { grid-area: 1 / 1; }
-
-    .wave-display {
-      z-index: -1;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      color: var(--accent);
-      opacity: 0.22;
-      pointer-events: none;
-    }
-
-    #wave-hero-card[data-playing="true"] .wave-display { opacity: 0.45; }
-
-    .wave-display span {
-      width: 3px;
-      height: var(--wave-bar-height);
-      border-radius: 999px;
-      background: currentColor;
+    .wave-mood-chip[aria-pressed="true"],
+    #wave-main-btn,
+    .wave-track-playing-icon {
+      background: var(--accent);
+      color: var(--accent-contrast, #fff);
     }
 
     #wave-main-btn {
       display: grid;
       place-items: center;
-      width: clamp(48px, 8vw, 72px);
+      width: clamp(42px, 6vw, 54px);
       aspect-ratio: 1;
       border-radius: 50%;
-      background: var(--accent);
-      color: var(--accent-contrast, #fff);
-      box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 22%, transparent);
       cursor: pointer;
       transition: transform 160ms;
     }
@@ -4487,16 +4465,6 @@
       outline: 1px solid var(--wave-line);
       outline-offset: -1px;
       color: var(--wave-text);
-    }
-
-    .wave-track-playing-icon {
-      background: var(--accent);
-      color: var(--accent-contrast, #fff);
-    }
-
-    @media (max-width: 560px) {
-      #wave-play-control { padding-inline: 0; }
-      .wave-display { display: none; }
     }
 
 </style>
@@ -6068,17 +6036,14 @@
       <div id="tab-wave" class="tab-content space-y-6">
         
         <section id="wave-hero-card" aria-labelledby="wave-card-title">
-          <div class="min-w-0 space-y-3">
+          <div class="min-w-0 space-y-2.5">
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h2 id="wave-card-title" class="text-2xl sm:text-3xl font-bold tracking-tight">Моя волна</h2>
+              <h2 id="wave-card-title" class="text-2xl font-bold tracking-tight">Моя волна</h2>
               <span id="wave-stream-indicator-container">
                 <span id="wave-stream-indicator">Готова к эфиру</span>
               </span>
             </div>
-            <p id="wave-card-desc" class="text-xs sm:text-sm leading-relaxed">
-              Знакомые треки и новые находки по вашим лайкам.
-            </p>
-            <div class="flex flex-wrap items-center gap-1.5 pt-1" role="group" aria-label="Настроение волны">
+            <div id="wave-mood-container" role="group" aria-label="Настроение волны">
               <button type="button" onclick="setWaveMood('all')" class="wave-mood-chip text-xs font-semibold" data-mood="all" aria-pressed="true">Всё подряд</button>
               <button type="button" onclick="setWaveMood('energetic')" class="wave-mood-chip text-xs font-semibold" data-mood="energetic" aria-pressed="false">Бодрое</button>
               <button type="button" onclick="setWaveMood('calm')" class="wave-mood-chip text-xs font-semibold" data-mood="calm" aria-pressed="false">Спокойное</button>
@@ -6087,34 +6052,15 @@
               <button type="button" onclick="setWaveMood('new')" class="wave-mood-chip text-xs font-semibold" data-mood="new" aria-pressed="false">Новое</button>
             </div>
           </div>
-          <div id="wave-play-control">
-            <div class="wave-display" aria-hidden="true">
-              <span style="--wave-bar-height: 14px"></span>
-              <span style="--wave-bar-height: 28px"></span>
-              <span style="--wave-bar-height: 47px"></span>
-              <span style="--wave-bar-height: 66px"></span>
-              <span style="--wave-bar-height: 44px"></span>
-              <span style="--wave-bar-height: 68px"></span>
-              <span style="--wave-bar-height: 48px"></span>
-              <span style="--wave-bar-height: 72px"></span>
-              <span style="--wave-bar-height: 96px"></span>
-              <span style="--wave-bar-height: 65px"></span>
-              <span style="--wave-bar-height: 43px"></span>
-              <span style="--wave-bar-height: 61px"></span>
-              <span style="--wave-bar-height: 36px"></span>
-              <span style="--wave-bar-height: 21px"></span>
-              <span style="--wave-bar-height: 12px"></span>
-            </div>
-            <button id="wave-main-btn" type="button" onclick="toggleWavePlayback()" title="Запустить волну" aria-label="Запустить волну">
-              <svg id="wave-play-svg" class="w-7 h-7 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 5.5v13a.75.75 0 0 0 1.16.63l10-6.5a.75.75 0 0 0 0-1.26l-10-6.5A.75.75 0 0 0 8 5.5z"/>
-              </svg>
-              <svg id="wave-pause-svg" class="w-7 h-7 fill-current hidden" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="6.5" y="5" width="3.5" height="14" rx="1.5"/>
-                <rect x="14" y="5" width="3.5" height="14" rx="1.5"/>
-              </svg>
-            </button>
-          </div>
+          <button id="wave-main-btn" type="button" onclick="toggleWavePlayback()" title="Запустить волну" aria-label="Запустить волну">
+            <svg id="wave-play-svg" class="w-6 h-6 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 5.5v13a.75.75 0 0 0 1.16.63l10-6.5a.75.75 0 0 0 0-1.26l-10-6.5A.75.75 0 0 0 8 5.5z"/>
+            </svg>
+            <svg id="wave-pause-svg" class="w-6 h-6 fill-current hidden" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="6.5" y="5" width="3.5" height="14" rx="1.5"/>
+              <rect x="14" y="5" width="3.5" height="14" rx="1.5"/>
+            </svg>
+          </button>
         </section>
 
         <!-- Секция: Список треков волны -->
@@ -6132,9 +6078,7 @@
 
           <!-- Контейнер треков волны -->
           <div id="wave-track-list" class="space-y-1">
-            <div class="text-center py-12 text-xs text-neutral-500">
-              Нажмите «Запустить волну», чтобы сформировать поток музыки по вашему вкусу.
-            </div>
+            <div class="text-center py-12 text-xs text-neutral-500">Запустите волну, чтобы увидеть очередь.</div>
           </div>
         </div>
 
@@ -21653,7 +21597,7 @@
       if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0) {
         container.innerHTML = `
           <div class="text-center py-12 text-xs ${isLight ? 'text-slate-400' : 'text-neutral-500'}">
-            Нажмите кнопку запуска, чтобы сгенерировать умную волну по вашему вкусу.
+            Запустите волну, чтобы увидеть очередь.
           </div>
         `;
         if (countEl) countEl.textContent = "0 треков";
