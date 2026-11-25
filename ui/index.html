@@ -21500,6 +21500,29 @@
     // (Wave variables isWaveActive, waveCurrentMood, wavePlayedIds initialized globally at top)
 
     const waveThemes = {
+      get custom() {
+        const base = document.documentElement.style.backgroundColor;
+        const ink = document.documentElement.classList.contains('light') ? '#0f172a' : '#ffffff';
+        const accent = 'var(--accent)';
+        const accentInk = 'var(--accent-contrast)';
+        const tint = percent => `color-mix(in srgb, ${accent} ${percent}%, transparent)`;
+        const button = `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 90%, ${base}))`;
+        const glow = `radial-gradient(circle, ${tint(50)}, transparent 70%)`;
+        return {
+          cardBg: `radial-gradient(ellipse at 85% 20%, ${tint(22)}, transparent 78%), linear-gradient(${base}, ${base})`,
+          cardBorder: tint(30),
+          cardShadow: `0 20px 60px -15px ${tint(24)}`,
+          blob1: glow, blob2: glow,
+          aiMixBg: tint(12), aiMixText: ink, aiMixBorder: tint(30),
+          statusBg: tint(12), statusText: ink, statusBorder: tint(30),
+          btnGradient: button, btnTextColor: accentInk, btnShadow: `0 0 35px ${tint(45)}`,
+          glowRing: glow,
+          activeChipBg: button, activeChipText: accentInk, activeChipShadow: `0 0 15px ${tint(35)}`,
+          inactiveChipBg: tint(8), inactiveChipBorder: tint(20), inactiveChipText: ink,
+          activeTrackBg: tint(12), activeTrackBorder: tint(30), activeTrackShadow: `0 0 20px ${tint(15)}`,
+          activeTrackTitle: ink, activeTrackBtn: button, activeTrackBtnText: accentInk
+        };
+      },
       wine: {
         cardBg: 'radial-gradient(ellipse at 80% 20%, rgba(225, 29, 72, 0.35) 0%, rgba(136, 19, 55, 0.2) 50%, rgba(10, 8, 14, 0.96) 90%)',
         cardBorder: 'rgba(244, 63, 94, 0.28)',
@@ -21764,14 +21787,14 @@
     };
 
     function updateWaveTheme(themeKey) {
-      if (!themeKey || !waveThemes[themeKey]) themeKey = currentThemeKey || 'wine';
+      if (!themeKey || !Object.hasOwn(waveThemes, themeKey)) themeKey = currentThemeKey || 'wine';
       let wt = waveThemes[themeKey] || waveThemes.wine;
       const isLight = (themeKey === 'light');
       let acc = currentAccent || (appConfig && appConfig.accent_color) || '#6366f1';
       const isWhiteAcc = (acc.toLowerCase() === '#ffffff' || acc.toLowerCase() === '#fff' || acc.toLowerCase() === '#f8fafc');
       const isBlackAcc = (acc.toLowerCase() === '#000000' || acc.toLowerCase() === '#0f172a');
 
-      if (isLight) {
+      if (themeKey === 'light') {
 
         function hexToRgba(hex, alpha) {
           let clean = (hex || '').replace('#', '');
@@ -21992,7 +22015,7 @@
       const streamIndicator = document.getElementById('wave-stream-indicator');
       const glowRing = document.getElementById('wave-glow-ring');
       const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
-      const isLight = (currentThemeKey === 'light');
+      const isLight = document.documentElement.classList.contains('light');
 
       if (isWaveActive && currentStationUrn === "my_wave" && playing) {
         if (playSvg) { playSvg.style.display = 'none'; playSvg.classList.add('hidden'); }
@@ -22038,7 +22061,7 @@
       if (!container) return;
 
       const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
-      const isLight = (currentThemeKey === 'light');
+      const isLight = document.documentElement.classList.contains('light');
 
       if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0) {
         container.innerHTML = `
