@@ -11689,6 +11689,7 @@
 
 
     let currentlyPlayingTrackId = null;
+    let playerSessionTrack = null;
 
 
 
@@ -16694,14 +16695,11 @@
     function saveSessionState(sync = false) {
       try {
         const curTime = audioEngine ? (audioEngine.currentTime || 0) : (window._pendingSeekTime || 0);
-        let curTrack = null;
-        if (currentQueue && currentTrackIndex >= 0 && currentTrackIndex < currentQueue.length) {
-          curTrack = currentQueue[currentTrackIndex];
-        } else if (currentlyPlayingTrackId && allTracks) {
-          curTrack = allTracks.find(t => String(t.id) === String(currentlyPlayingTrackId));
-        }
+        const curTrack = playerSessionTrack;
+        if (!curTrack || curTrack.id == null) return;
 
         const sessionData = {
+          userId: currentUser?.id == null ? null : String(currentUser.id),
           trackIndex: currentTrackIndex,
           trackId: curTrack ? curTrack.id : currentlyPlayingTrackId,
           track: curTrack ? {
@@ -16727,13 +16725,20 @@
           savedAt: Date.now()
         };
 
-        // 1. Always persist to primary desktop session
-        localStorage.setItem('sc_desktop_session', JSON.stringify(sessionData));
-
-        // 2. Persist to per-user storage if logged in
+        const serialized = JSON.stringify(sessionData);
+        function persistSession(key) {
+          try {
+            localStorage.setItem(key, serialized);
+          } catch (_) {
+            try {
+              localStorage.setItem(key, JSON.stringify({ ...sessionData, trackIndex: 0, queue: [sessionData.track] }));
+            } catch (_) {}
+          }
+        }
+        persistSession('sc_desktop_session');
         if (currentUser && currentUser.id) {
           const uid = String(currentUser.id);
-          localStorage.setItem(`sc_user_${uid}_session`, JSON.stringify(sessionData));
+          persistSession(`sc_user_${uid}_session`);
           if (typeof saveUserSettings === 'function') {
             saveUserSettings(uid, { session: sessionData });
           }
@@ -16754,33 +16759,20 @@
 
     function restoreSessionState() {
       try {
-        let session = null;
-        // 1. Try per-user session if logged in
-        if (currentUser && currentUser.id) {
-          const uid = String(currentUser.id);
-          const userSess = localStorage.getItem(`sc_user_${uid}_session`);
-          if (userSess) {
-            try { session = JSON.parse(userSess); } catch (_) {}
-          }
-          if (!session && typeof loadUserSettings === 'function') {
-            const uSettings = loadUserSettings(uid);
-            if (uSettings && uSettings.session) session = uSettings.session;
-          }
+        function readSession(key) {
+          try { return JSON.parse(localStorage.getItem(key)); } catch (_) { return null; }
         }
-
-        // 2. Fallback to desktop session
-        if (!session) {
-          const localSess = localStorage.getItem('sc_desktop_session');
-          if (localSess) {
-            try { session = JSON.parse(localSess); } catch (_) {}
-          }
-        }
-
-        // 3. Fallback to appConfig.session
-        if (!session && appConfig && appConfig.session) {
-          session = appConfig.session;
-        }
-
+        const uid = currentUser?.id;
+        const userSessions = uid ? [
+          readSession(`sc_user_${uid}_session`),
+          loadUserSettings(uid)?.session
+        ] : [];
+        const desktopSessions = [readSession('sc_desktop_session'), appConfig?.session];
+        const newest = sessions => sessions.filter(s => s && (s.track || s.trackId != null || s.queue?.length))
+          .sort((a, b) => (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0))[0];
+        const matchingDesktop = desktopSessions.filter(s => uid != null && s?.userId === String(uid));
+        const session = newest([...userSessions, ...matchingDesktop]) || newest(desktopSessions.filter(s =>
+          uid == null || s?.userId == null || s.userId === String(uid)));
         if (!session) return;
 
         // Restore Volume
@@ -16845,6 +16837,7 @@
         }
 
         if (track) {
+          playerSessionTrack = track;
           currentlyPlayingTrackId = track.id;
           if (session.trackIndex !== undefined && session.trackIndex >= 0 && session.trackIndex < currentQueue.length) {
             currentTrackIndex = session.trackIndex;
@@ -16940,6 +16933,7 @@
         const track = currentQueue[currentTrackIndex];
         if (!track) return;
         if (isShuffle && track.id != null) shufflePlayedTrackIds.add(String(track.id));
+        playerSessionTrack = track;
         currentlyPlayingTrackId = track.id;
         discordPlaybackTrack = null;
         const requestId = ++currentPlayRequestId;
@@ -25055,6 +25049,7 @@
       if (playerTitleEl) playerTitleEl.textContent = "Трек не выбран";
       if (playerArtistEl) playerArtistEl.textContent = "SoundCloud";
       if (playerCoverEl) playerCoverEl.src = "logo.png";
+      playerSessionTrack = null;
       currentlyPlayingTrackId = null;
 
       // 4. Reset Immersive Player & close it if open
