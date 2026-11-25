@@ -1,0 +1,128 @@
+@scope (#tab-settings) {
+
+:scope{color-scheme:dark;--base:#000;--panel:#111;--ink:#f2f2f2;--muted:#aaa;--accent:#fff;--line:#8883}
+*{box-sizing:border-box}
+:scope{color:var(--ink);font:14px/1.5 "Segoe UI",Arial,sans-serif}
+.settings-shell{max-width:1120px;margin:auto;padding:4px 0 24px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:28px}
+header h1{font-weight:630;font-size:clamp(26px,3.4vw,38px);line-height:1.2;letter-spacing:-.045em}
+.wordmark{font-size:14px;letter-spacing:.18em;font-weight:750;color:var(--muted)}
+.layout{display:grid;grid-template-columns:176px minmax(0,1fr);gap:clamp(20px,3vw,44px);align-items:start}
+nav{display:grid;gap:4px;position:sticky;top:20px}nav button{text-align:left;padding:10px 12px;border-radius:7px;font-weight:530;color:var(--muted);display:flex;align-items:center;gap:10px}nav button svg{width:17px;height:17px}nav button:hover,nav button[aria-pressed=true]{background:color-mix(in srgb,var(--ink) 9%,var(--base));color:var(--ink)}nav button[aria-pressed=true]{box-shadow:inset 2px 0 var(--ink)}
+#settings-cards{max-width:none}#settings-cards>.card-glass{background:color-mix(in srgb,var(--panel) var(--density,100%),transparent);padding:clamp(17px,2.6vw,28px);margin:0 0 16px;border:1px solid var(--line);border-radius:var(--app-radius,12px)}
+#settings-cards h2,#settings-cards label[for=crossfade-duration]{font-size:19px;font-weight:620;letter-spacing:-.035em}
+#settings-cards .text-xs{font-size:13px}#settings-cards [class*="text-neutral-4"],#settings-cards [class*="text-neutral-5"]{color:var(--muted)}#settings-cards .text-white,#settings-cards .text-neutral-300{color:var(--ink)}
+#settings-cards svg{color:var(--muted)}#settings-cards h2 svg{display:none}
+#settings-cards .card-glass:has(#settings-username)>div:has(#settings-avatar-circle){padding:20px 0;border:0;border-block:1px solid var(--line);border-radius:0;background:transparent}
+#settings-username{font-size:16px!important}#settings-avatar-circle{width:48px;height:48px}#settings-cards #settings-login-btn{background:var(--ink);color:var(--base)}#settings-cards #settings-login-btn svg{color:inherit}
+details{border-top:1px solid var(--line);padding-top:15px}summary{cursor:pointer;font-weight:550;color:var(--muted)}details[open] summary{margin-bottom:12px}
+#settings-cards .card-glass:has(#discord-opt-track) .space-y-2\.5>div{padding-block:5px}
+#settings-cards .card-glass:has(#whisper-auto-toggle) .bg-gradient-to-br{background:#8882;border-color:var(--line)}#settings-cards .card-glass:has(#whisper-auto-toggle) .text-rose-300{display:none}
+input[type=text],input[type=password]{min-width:0}input[type=range]{accent-color:var(--accent)}input[type=checkbox]:not(.sr-only){appearance:none;width:34px;height:20px;border:1px solid #8886;border-radius:20px;background:radial-gradient(circle at 9px center,#aaa 0 6px,transparent 7px),#303030;flex-shrink:0}input:checked[type=checkbox]:not(.sr-only){background:radial-gradient(circle at 23px center,#222 0 6px,transparent 7px),var(--accent)}
+#glass-toggle:checked+div{background:var(--accent)}#glass-toggle:checked+div:after{background:#333}
+#settings-cards button:hover{filter:brightness(1.15)}:focus-visible{outline:2px solid var(--ink);outline-offset:3px}[hidden]{display:none!important}.card-glass [aria-pressed=true]{outline:2px solid var(--ink);outline-offset:2px}
+#notice:not(:empty){padding:10px 0;color:var(--muted)}.content{min-width:0}
+@media(max-width:800px){.layout{display:block}header{margin-bottom:14px}nav{position:static;display:flex;flex-wrap:wrap;margin-bottom:17px;gap:2px}nav button{padding:8px 11px}nav button[aria-pressed=true]{box-shadow:inset 0 -2px var(--ink)}}
+@media(max-width:560px){.settings-shell{padding:16px 12px}nav button svg{display:none}nav button{font-size:12px;padding:8px}#settings-cards .grid-cols-2{grid-template-columns:1fr}#settings-cards .grid-cols-4{grid-template-columns:repeat(2,1fr)}#settings-cards .flex:has(>#custom-bg-input){flex-wrap:wrap}#custom-bg-input{flex-basis:100%}#settings-cards .card-glass:has(#settings-username)>div:has(#settings-avatar-circle){flex-wrap:wrap;gap:14px}}
+/* Surfaces and controls share a neutral scale across themes. */
+:scope{--surface:color-mix(in srgb,var(--panel) 94%,var(--ink));--edge:color-mix(in srgb,var(--ink) 14%,transparent);--silver:color-mix(in srgb,var(--ink) 82%,var(--panel))}
+header{border-color:var(--edge)}.wordmark{font-size:12px;letter-spacing:.23em}
+nav button{min-height:41px;transition:background .15s,color .15s}
+nav button[aria-pressed=true]{box-shadow:inset 0 0 0 1px var(--edge);background:linear-gradient(120deg,var(--surface),var(--panel))}
+#settings-cards>.card-glass{background-image:linear-gradient(150deg,color-mix(in srgb,var(--ink) 3%,transparent),transparent 58%);box-shadow:inset 0 1px 0 #ffffff07,0 8px 24px #0001}
+#settings-cards h2{gap:11px}#settings-cards h2 svg{display:block;width:31px;height:31px;padding:7px;color:var(--silver);background:var(--surface);border:1px solid var(--edge);border-radius:9px}
+#settings-cards #settings-avatar-circle{background:linear-gradient(145deg,var(--surface),var(--panel));border:1px solid var(--edge)}
+#settings-cards #settings-login-btn{background:var(--silver);border:1px solid transparent;border-radius:9px}
+#btn-export-likes-json,#btn-copy-likes-list{background:transparent;border-color:var(--edge);min-height:46px}
+#settings-cards button:not(.accent-btn):hover{filter:none;box-shadow:inset 0 0 0 1px var(--muted)}
+#settings-cards summary{list-style:none;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+summary::after{content:"";width:7px;height:7px;border:solid currentColor;border-width:0 1px 1px 0;transform:rotate(45deg);margin-right:5px}details[open] summary::after{transform:rotate(225deg)}
+#settings-cards .theme-presets-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,108px),1fr));gap:6px}
+#settings-cards .theme-select-btn{flex-direction:row;justify-content:flex-start;gap:8px;padding:9px;background:transparent;border:1px solid var(--edge);border-radius:8px}
+#settings-cards .theme-select-btn>div{width:13px;height:13px;border-radius:50%;flex:none}
+#settings-cards .theme-select-btn>span{color:var(--muted);text-align:left;font-size:11px}
+#settings-cards :is(.radius-btn,.bar-style-btn,.theme-select-btn)[aria-pressed=true]{outline:0;background:var(--surface);border:1px solid var(--muted);color:var(--ink)}
+#settings-cards .accent-btn{width:20px;height:20px;box-shadow:inset 0 0 0 1px #80808060}
+#settings-cards .bar-style-btn>span:first-child{background:var(--silver);box-shadow:none}
+#settings-cards #clear-bg-btn{color:var(--muted);background:transparent;border:1px solid var(--edge)}
+#settings-cards input[type=text],#settings-cards input[type=password]{color:var(--ink);background:var(--base);border-color:var(--edge)}
+#settings-cards input[type=range]{appearance:none;display:block;height:20px;background:transparent;cursor:pointer}
+#settings-cards input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:5px;background:linear-gradient(to right,var(--silver) var(--fill),var(--edge) var(--fill))}
+#settings-cards input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;border-radius:50%;margin-top:-4.5px;background:var(--ink);box-shadow:0 0 0 2px var(--panel)}
+#settings-cards input[type=checkbox]:checked:not(.sr-only){background:radial-gradient(circle at 23px center,var(--panel) 0 6px,transparent 7px),var(--silver)}
+#settings-cards #glass-toggle:checked+div{background:var(--silver)}#settings-cards #glass-toggle:checked+div:after{background:var(--panel)}
+#settings-cards button:focus-visible,#settings-cards input:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+#btn-reset-customization,#current-accent-label{font-family:inherit;font-size:13px;font-weight:500;line-height:1.45}
+#settings-cards .accent-btn{width:32px;height:32px;flex:none}
+#settings-cards .theme-presets-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+#settings-cards .theme-select-btn{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:12px;min-height:58px;padding:9px 20px 9px 10px;background:transparent;border:1px solid var(--edge);border-radius:10px}
+#settings-cards .theme-select-btn>div{position:relative;isolation:isolate;overflow:hidden;flex:none;width:39px;height:39px;border-radius:9px;border:1px solid #8885;background:var(--sample-base)}
+#settings-cards .theme-select-btn>div::before,#settings-cards .theme-select-btn>div::after{content:"";position:absolute;width:150%;height:86%;left:-17%;top:34%;transform:rotate(-24deg);border-radius:30%;background:var(--sample-mid)}
+#settings-cards .theme-select-btn>div::after{left:8%;top:64%;background:var(--sample-tip)}
+#settings-cards .theme-select-btn>span{width:auto;font-size:13px;font-weight:550;color:var(--ink);text-align:left}
+#settings-cards .theme-select-btn[aria-pressed=true]{background:var(--surface);border-color:var(--muted)}
+#settings-cards .theme-select-btn[aria-pressed=true]::after{content:"";position:absolute;right:10px;width:6px;height:11px;border:solid var(--ink);border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
+@media(max-width:600px){#settings-cards .theme-presets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#settings-cards .theme-select-btn{gap:7px;padding-left:7px}#settings-cards .theme-select-btn>span{font-size:12px}}
+#settings-cards :is(#glow-slider,#ui-opacity-slider){height:26px}
+#settings-cards :is(#glow-slider,#ui-opacity-slider)::-webkit-slider-runnable-track{height:6px}
+#settings-cards :is(#glow-slider,#ui-opacity-slider)::-webkit-slider-thumb{width:17px;height:17px;margin-top:-5.5px}
+#wallpaper-layer{position:fixed;inset:calc(-3 * var(--wall-blur,0px));background-position:center;background-size:cover;filter:blur(var(--wall-blur,0px));pointer-events:none}
+.settings-shell{position:relative}
+@media(max-width:480px){#settings-cards .theme-presets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#custom-theme-editor{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+#custom-theme-editor label{display:flex;align-items:center;gap:12px;padding:5px 10px;border:1px solid var(--edge);border-radius:7px;font-size:13px}
+#custom-theme-editor input{width:26px;height:26px;cursor:pointer;background:transparent;border:0}
+#theme-save-status{color:var(--muted);font-size:12px}
+:is(#color-menu,#accent-menu){width:min(100%,264px);padding:0;border:1px solid var(--edge);border-radius:12px;background:var(--surface);overflow:hidden}
+#settings-cards :is(#color-menu,#accent-menu) summary{display:flex;justify-content:flex-start;gap:10px;margin:0;padding:9px 12px;color:var(--ink)}
+:is(#color-menu,#accent-menu) summary::after{margin-left:auto}
+.color-chip{height:22px;width:22px;background:var(--seed);border-radius:7px;border:1px solid #8886}
+.color-tools{padding:0 12px 12px;display:grid;gap:10px}
+:is(#color-plane,#accent-plane){position:relative;height:118px;border-radius:7px;overflow:hidden;touch-action:none;cursor:crosshair;background:linear-gradient(rgb(0 0 0 / var(--shade)),rgb(0 0 0 / var(--shade))),linear-gradient(0deg,#fff,transparent),linear-gradient(90deg,red,#ff0,#0f0,#0ff,#00f,#f0f,red)}
+:is(#color-plane,#accent-plane) i{position:absolute;left:clamp(5px,var(--sat),calc(100% - 5px));top:clamp(5px,var(--top),calc(100% - 5px));width:12px;height:12px;border:2px solid #fff;border-radius:100%;box-shadow:0 0 0 1px #333;transform:translate(-50%,-50%);pointer-events:none}
+#settings-cards :is(#color-value,#accent-value){width:100%;height:20px}
+#settings-cards :is(#color-value,#accent-value)::-webkit-slider-runnable-track{height:7px;background:linear-gradient(90deg,#000,var(--bright-color))}
+#settings-cards :is(#color-value,#accent-value)::-webkit-slider-thumb{margin-top:-3px}
+#custom-theme-editor .color-tools label{justify-content:space-between;color:var(--muted);font-size:11px;letter-spacing:.07em}
+#custom-theme-editor #color-code{width:9ch;height:auto;text-align:right;color:var(--ink);cursor:text;font:500 13px "Segoe UI",sans-serif}
+#settings-cards div:has(> .accent-btn){display:grid;grid-template-columns:repeat(10,32px);gap:10px;align-items:center}
+#settings-cards .accent-btn ~ .w-px{display:none}
+#settings-cards div:has(> #custom-accent-picker){grid-column:1/-1;justify-self:start;height:32px;margin-top:2px;background:var(--surface);border:1px solid var(--edge);border-radius:8px;padding:0 5px;gap:7px}
+#settings-cards #custom-accent-hex{background:transparent;border:0;width:8ch}
+#settings-cards #custom-accent-picker{padding:0;width:22px;height:22px}
+#settings-cards #custom-accent-picker::-webkit-color-swatch-wrapper{padding:2px}
+#settings-cards #custom-accent-picker::-webkit-color-swatch{border:1px solid var(--edge);border-radius:4px}
+:scope[data-theme="custom"]{--glow-tone:white}
+@media(max-width:620px){#settings-cards div:has(> .accent-btn){grid-template-columns:repeat(5,32px)}}
+
+#settings-cards #accent-menu{grid-column:1/-1;min-width:0;width:min(264px,100%);justify-self:start}
+#settings-cards #accent-menu .color-tools label{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--edge);border-radius:7px;color:var(--muted);font-size:12px}
+#settings-cards #custom-accent-hex{text-align:right;color:var(--ink)}
+#settings-cards>.card-glass{--edge:color-mix(in srgb,var(--ink) 25%,transparent);--line:color-mix(in srgb,var(--ink) 19%,transparent)}
+#settings-cards .card-glass .border-t{border-top-color:var(--line)}
+#settings-cards :is(.radius-btn,.bar-style-btn,.theme-select-btn){background-color:var(--surface);border:1px solid var(--edge);color:var(--ink)}
+#settings-cards :is(.radius-btn,.bar-style-btn,.theme-select-btn)[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+#settings-cards .card-glass input[type=text]:not(#color-code):not(#custom-accent-hex),#settings-cards .card-glass input[type=password]{background:var(--surface);color:var(--ink)}
+:scope[data-theme=custom] header,:scope[data-theme=custom] nav{color:var(--outer-ink)}
+:scope[data-theme=custom] :is(nav button:not([aria-pressed=true]),.wordmark){color:var(--outer-ink)}
+:scope[data-theme=custom] nav button[aria-pressed=true]{color:var(--ink);background:var(--panel)}
+#settings-cards #settings-login-btn{color:var(--panel)}
+header,.wordmark,nav button:not([aria-pressed=true]){color:var(--outer-ink)}
+#settings-cards input::placeholder{color:var(--muted);opacity:1}
+#settings-cards :is(#settings-save-token-btn,#discord-save-client-id-btn,#custom-bg-browse-btn,#apply-custom-bg){color:var(--ink);background:var(--surface);border:1px solid var(--edge)}
+#settings-cards input[type=checkbox]:not(.sr-only):not(:checked){background:radial-gradient(circle at 9px center,var(--muted) 0 6px,transparent 7px),var(--surface);border-color:var(--muted)}
+#settings-cards #glass-toggle:not(:checked)+div{background:var(--surface);border:1px solid var(--muted)}
+#settings-cards #glass-toggle:not(:checked)+div:after{background:var(--muted)}
+#settings-cards :is(#glow-intensity-val,#ui-opacity-val){background:var(--surface);border-color:var(--edge);color:var(--ink)}
+#settings-cards .theme-select-btn:focus-visible,#settings-cards summary:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+#settings-cards > .card-glass{background-color:color-mix(in srgb,var(--panel) var(--density,100%),transparent)!important;color:var(--ink)}
+#settings-cards button.theme-select-btn>span{color:var(--ink)!important}
+:scope{container-type:inline-size}
+@container (max-width:800px){.layout{display:block}nav{position:static;display:flex;flex-wrap:wrap;margin-bottom:16px}}
+@container (max-width:560px){#settings-cards div:has(>.accent-btn){grid-template-columns:repeat(5,32px)}#settings-cards .theme-presets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+}
+body.has-custom-bg #app-bg-overlay{backdrop-filter:blur(var(--settings-wall-blur,0px));opacity:1!important;background-color:rgb(0 0 0 / var(--bg-dim,.4))!important}
+
+/* An offscreen drawer must not shift the player when settings navigation receives focus. */
+#player-content-shell:has(#tab-settings.active){overflow:clip}

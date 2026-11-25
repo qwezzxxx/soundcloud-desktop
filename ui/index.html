@@ -4238,86 +4238,6 @@
       border-color: color-mix(in srgb, currentColor 8%, transparent) !important;
     }
 
-    /* Theme preset selector buttons in Settings */
-    .theme-select-btn {
-      outline: none !important;
-      border: 2px solid transparent !important;
-      box-shadow: none !important;
-      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-                  border-color 0.25s ease,
-                  box-shadow 0.25s ease !important;
-      cursor: pointer !important;
-    }
-    .theme-select-btn:hover {
-      border-color: rgba(255, 255, 255, 0.35) !important;
-      transform: translateY(-2px) scale(1.03) !important;
-    }
-    body.theme-light .theme-select-btn:hover {
-      border-color: rgba(15, 23, 42, 0.35) !important;
-      transform: translateY(-2px) scale(1.03) !important;
-    }
-    .theme-select-btn.active-theme {
-      border: 2px solid #ffffff !important;
-      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4), 0 8px 24px rgba(0, 0, 0, 0.6) !important;
-      transform: scale(1.06) !important;
-    }
-    body.theme-light .theme-select-btn.active-theme {
-      border: 2px solid #0f172a !important;
-      box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.3), 0 8px 24px rgba(15, 23, 42, 0.2) !important;
-      transform: scale(1.06) !important;
-    }
-    .theme-presets-grid {
-      display: grid !important;
-      grid-template-columns: repeat(9, minmax(0, 1fr)) !important;
-      gap: 0.5rem !important;
-    }
-    @media (max-width: 768px) {
-      .theme-presets-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-      }
-    }
-    body.theme-light .theme-presets-grid .theme-select-btn span {
-      color: #0f172a !important;
-    }
-    body.theme-light .theme-presets-grid .theme-select-btn span.text-cyan-300 {
-      color: #0891b2 !important;
-    }
-
-
-    /* Accent preset selector buttons in Settings */
-    .accent-btn {
-      outline: none !important;
-      border: 2px solid transparent !important;
-      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-                  box-shadow 0.25s ease,
-                  border-color 0.25s ease !important;
-      cursor: pointer !important;
-    }
-    .accent-btn:hover {
-      transform: scale(1.15) !important;
-    }
-    .accent-btn[data-color="#ffffff"] {
-      border: 1.5px solid rgba(255, 255, 255, 0.45) !important;
-    }
-    body.theme-light .accent-btn[data-color="#ffffff"] {
-      border: 1.5px solid rgba(15, 23, 42, 0.35) !important;
-    }
-    .accent-btn[data-color="#000000"] {
-      border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
-    }
-    body.theme-light .accent-btn[data-color="#000000"] {
-      border: 1.5px solid rgba(15, 23, 42, 0.25) !important;
-    }
-    .accent-btn.active-accent {
-      box-shadow: 0 0 0 2.5px rgba(0, 0, 0, 0.9), 0 0 0 5px #ffffff, 0 4px 16px rgba(0, 0, 0, 0.6) !important;
-      transform: scale(1.22) !important;
-      z-index: 10 !important;
-    }
-    body.theme-light .accent-btn.active-accent {
-      box-shadow: 0 0 0 2.5px #ffffff, 0 0 0 5px #0f172a, 0 4px 16px rgba(15, 23, 42, 0.35) !important;
-      transform: scale(1.22) !important;
-      z-index: 10 !important;
-    }
     #play-btn:hover, #immersive-play-btn:hover {
       filter: brightness(1.12) !important;
       transform: scale(1.06) !important;
@@ -4359,6 +4279,7 @@
 
 
   <link rel="stylesheet" href="profile.css">
+<link rel="stylesheet" href="settings.css">
 </head>
 
 
@@ -4775,7 +4696,7 @@
 
 
 
-  <div class="flex-1 flex flex-col overflow-hidden relative">
+  <div id="player-content-shell" class="flex-1 flex flex-col overflow-hidden relative">
 
 
 
@@ -6347,630 +6268,84 @@
 
 
 
-      <div id="tab-settings" class="tab-content space-y-6 max-w-3xl">
-
-
-
-
-
-
-
+      <div id="tab-settings" class="tab-content"><div class="settings-shell"><header><h1>Настройки приложения</h1><span class="wordmark">ONYX</span></header><div class="layout"><nav aria-label="Разделы настроек"><button data-group="account">Аккаунт</button><button data-group="sound">Звук и караоке</button><button data-group="discord">Discord</button><button data-group="look">Оформление</button></nav><div class="content"><div id="settings-notice" role="status"></div><div id="settings-cards">
         <div class="flex items-center justify-between">
-
-
-
-
-
-
-
           <h1 class="text-xl font-bold text-white">Настройки приложения</h1>
-
-
-
-
-
-
-
           <span id="settings-app-version" class="text-xs text-neutral-400 font-mono">ONYX Edition</span>
-
-
-
-
-
-
-
         </div>
-
-
-
-
-
-
-
         <!-- Section 1: Аккаунт SoundCloud -->
-
-
-
-
-
-
-
         <div class="card-glass p-5 space-y-4">
-
-
-
-
-
-
-
           <div class="flex items-center justify-between">
-
-
-
-
-
-
-
             <h2 class="text-sm font-bold text-white flex items-center gap-2">
-
-
-
-
-
-
-
               <svg class="w-4 h-4 text-rose-500" viewBox="0 0 24 24" fill="currentColor">
-
-
-
-
-
-
-
                 <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd" />
-
-
-
-
-
-
-
               </svg>
-
-
-
-
-
-
-
               <span>Профиль SoundCloud</span>
-
-
-
-
-
-
-
             </h2>
-
-
-
-
-
-
-
             <span id="settings-sync-badge" class="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium flex items-center gap-1.5">
-
-
-
-
-
-
-
               <span id="settings-sync-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-
-
-
-
-
-
-
               <span id="settings-sync-text">Подключен</span>
-
-
-
-
-
-
-
             </span>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
           <!-- Account Details Box -->
-
-
-
-
-
-
-
           <div class="flex items-center justify-between p-3.5 rounded-xl bg-black/40 border border-white/5">
-
-
-
-
-
-
-
             <div class="flex items-center gap-3.5">
-
-
-
-
-
-
-
               <div id="settings-avatar-circle" class="w-11 h-11 rounded-full bg-neutral-800/80 border border-white/10 flex items-center justify-center font-bold text-white text-sm overflow-hidden shrink-0">
-
-
-
-
-
-
-
                 <svg class="w-5 h-5 text-neutral-400" viewBox="0 0 24 24" fill="currentColor">
-
-
-
-
-
-
-
                   <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd" />
-
-
-
-
-
-
-
                 </svg>
-
-
-
-
-
-
-
               </div>
-
-
-
-
-
-
-
               <div>
-
-
-
-
-
-
-
                 <div class="flex items-center gap-2">
-
-
-
-
-
-
-
                   <span id="settings-username" class="text-xs font-semibold text-white">Не авторизован</span>
-
-
-
-
-
-
-
                   <span id="settings-user-id" class="text-[10px] text-neutral-400 font-mono">ID: —</span>
-
-
-
-
-
-
-
                 </div>
-
-
-
-
-
-
-
                 <div class="text-[11px] text-neutral-400 mt-0.5">
-
-
-
-
-
-
-
                   В библиотеке: <strong id="settings-likes-count" class="text-white font-medium">0 треков</strong>
-
-
-
-
-
-
-
                 </div>
-
-
-
-
-
-
-
               </div>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
             <div class="flex items-center gap-2">
-
-
-
-
-
-
-
               <button id="settings-login-btn" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors cursor-pointer border border-white/10 flex items-center gap-1.5" style="display: none;">
-
-
-
-
-
-
-
                 <svg class="w-3.5 h-3.5 text-neutral-400" viewBox="0 0 24 24" fill="currentColor">
-
-
-
-
-
-
-
                   <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd" />
-
-
-
-
-
-
-
                 </svg>
-
-
-
-
-
-
-
                 <span>Войти в аккаунт</span>
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
               <button id="btn-logout" class="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer border border-rose-500/20 flex items-center gap-1.5" title="Выйти из аккаунта">
-
-
-
-
-
-
-
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-
-
-
-
-
-
-
                 <span>Выйти</span>
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
           <!-- Quick Actions & Backup -->
-
-
-
-
-
-
-
           <div class="grid grid-cols-2 gap-3 pt-1">
-
-
-
-
-
-
-
             <button id="btn-export-likes-json" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-between text-xs text-neutral-300 hover:text-white transition-colors cursor-pointer">
-
-
-
-
-
-
-
               <span class="flex items-center gap-2">
-
-
-
-
-
-
-
                 <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-
-
-
-
-
-
-
-                <span>Экспорт лайков (JSON бэкап)</span>
-
-
-
-
-
-
-
+                <span>Скачать лайки в JSON</span>
               </span>
-
-
-
-
-
-
-
               <span id="settings-export-count" class="text-[10px] text-neutral-500 font-mono">0 tracks</span>
-
-
-
-
-
-
-
             </button>
-
-
-
-
-
-
-
             <button id="btn-copy-likes-list" class="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-between text-xs text-neutral-300 hover:text-white transition-colors cursor-pointer">
-
-
-
-
-
-
-
               <span class="flex items-center gap-2">
-
-
-
-
-
-
-
                 <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
-
-
-
-
-
-
-
                 <span>Скопировать список треков</span>
-
-
-
-
-
-
-
               </span>
-
-
-
-
-
-
-
               <span class="text-[10px] text-neutral-500 font-mono">Текст</span>
-
-
-
-
-
-
-
             </button>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
           <!-- Token Input -->
-
-
-
-
-
-
-
           <div class="border-t border-white/5 pt-3">
-
-
-
-
-
-
-
             <label class="block text-xs text-neutral-400 mb-1.5">OAuth Token (oauth_token)</label>
-
-
-
-
-
-
-
             <div class="flex gap-2">
-
-
-
-
-
-
-
               <input id="settings-token-input" type="password" value="" placeholder="Вставьте токен SoundCloud при необходимости..."
-
-
-
-
-
-
-
                 class="flex-1 bg-black/40 text-xs text-neutral-300 font-mono px-3 py-2 rounded-xl border border-white/5 focus:outline-none focus:border-white/20">
-
-
-
-
-
-
-
               <button id="settings-save-token-btn" class="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-neutral-300 hover:text-white transition-colors cursor-pointer">Сохранить</button>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
             <p class="text-[11px] text-neutral-500 mt-1">Используется для взаимодействия с официальным API SoundCloud.</p>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
         </div>
-
-
-
-
-
-
-
         <div class="card-glass p-5 space-y-3">
           <div class="flex items-center justify-between gap-3">
             <label for="crossfade-duration" class="text-sm font-bold text-white">Плавный переход</label>
@@ -6979,384 +6354,54 @@
           <input id="crossfade-duration" type="range" min="0" max="10" step="1" value="4"
             class="custom-range-slider w-full" aria-describedby="crossfade-duration-value">
         </div>
-
         <!-- Section 2: Discord RPC Section -->
-
-
-
-
-
-
-
         <div class="card-glass p-5 space-y-4">
-
-
-
-
-
-
-
           <div class="flex items-center justify-between">
-
-
-
-
-
-
-
             <h2 class="text-sm font-bold text-white flex items-center gap-2">
-
-
-
-
-
-
-
               <svg class="w-4 h-4 text-indigo-400" viewBox="0 0 24 24" fill="currentColor">
-
-
-
-
-
-
-
                 <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
-
-
-
-
-
-
-
               </svg>
-
-
-
-
-
-
-
               <span>Discord Rich Presence</span>
-
-
-
-
-
-
-
             </h2>
-
-
-
-
-
-
-
             <label class="flex items-center gap-2 cursor-pointer">
-
-
-
-
-
-
-
               <span class="text-xs text-neutral-400">Включить RPC</span>
-
-
-
-
-
-
-
               <input id="discord-rpc-toggle" type="checkbox" checked class="accent-indigo-500 w-4 h-4 cursor-pointer">
-
-
-
-
-
-
-
             </label>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
           <div class="space-y-3">
-
-
-
-
-
-
-
             <div>
-
-
-
-
-
-
-
               <label class="block text-xs text-neutral-400 mb-1.5">Кастомный Discord Client ID (необязательно)</label>
-
-
-
-
-
-
-
               <div class="flex gap-2">
-
-
-
-
-
-
-
                 <input id="discord-client-id-input" type="text" placeholder="802958833214423081 (по умолчанию)"
-
-
-
-
-
-
-
                   class="flex-1 bg-black/40 text-xs text-neutral-300 font-mono px-3 py-2 rounded-xl border border-white/5 focus:outline-none focus:border-white/20">
-
-
-
-
-
-
-
                 <button id="discord-save-client-id-btn" class="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs text-neutral-300 hover:text-white transition-colors cursor-pointer">Применить ID</button>
-
-
-
-
-
-
-
               </div>
-
-
-
-
-
-
-
               <p class="text-[11px] text-neutral-500 mt-1">Оставьте поле пустым для стандартного Client ID или укажите ID своего приложения Discord.</p>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
           <div class="space-y-2.5 border-t border-white/5 pt-3">
-
-
-
-
-
-
-
             <div class="flex items-center justify-between">
-
-
-
-
-
-
-
               <span class="text-xs text-neutral-300">Показывать название трека</span>
-
-
-
-
-
-
-
               <input id="discord-opt-track" type="checkbox" checked class="accent-indigo-500 w-4 h-4 cursor-pointer">
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
             <div class="flex items-center justify-between">
-
-
-
-
-
-
-
               <span class="text-xs text-neutral-300">Показывать имя исполнителя</span>
-
-
-
-
-
-
-
               <input id="discord-opt-artist" type="checkbox" checked class="accent-indigo-500 w-4 h-4 cursor-pointer">
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
             <div class="flex items-center justify-between">
-
-
-
-
-
-
-
               <span class="text-xs text-neutral-300">Показывать обложку альбома</span>
-
-
-
-
-
-
-
               <input id="discord-opt-cover" type="checkbox" checked class="accent-indigo-500 w-4 h-4 cursor-pointer">
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
             <div class="flex items-center justify-between">
-
-
-
-
-
-
-
               <div>
-
-
-
-
-
-
-
                 <div class="text-xs text-neutral-300">Показывать ONYX SOUND в профиле</div>
-
-
-
-
-
-
-
                 <div class="text-[11px] text-neutral-500">Включено — ONYX SOUND, выключено — название трека.</div>
-
-
-
-
-
-
-
               </div>
-
-
-
-
-
-
-
               <input id="discord-opt-status" type="checkbox" checked class="accent-indigo-500 w-4 h-4 cursor-pointer">
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
         </div>
-
-
-
-
-
-
-
-        <!-- Section: Локальный Whisper AI (Караоке) -->
+        <!-- Section: Караоке с Whisper -->
         <div class="card-glass p-5 rounded-2xl space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -7365,7 +6410,7 @@
               </div>
               <div>
                 <div class="text-xs font-bold text-white flex items-center gap-2">
-                  <span>Локальный Whisper AI (Караоке)</span>
+                  <span>Караоке с Whisper</span>
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">AI</span>
                 </div>
                 <div class="text-[11px] text-neutral-400 mt-0.5">Автоматически готовить караоке и сверять слова с найденным текстом</div>
@@ -7386,632 +6431,153 @@
             <input id="whisper-precise-toggle" type="checkbox" class="accent-rose-500 w-4 h-4 shrink-0 cursor-pointer">
           </label>
         </div>
-
-        <!-- Section 3: Глубокая кастомизация интерфейса -->
-
-
-
-
-
-
-
+        <!-- Section 3: Оформление -->
         <div class="card-glass p-5 space-y-5">
-
-
-
-
-
-
-
           <div class="flex items-center justify-between">
-
-
-
-
-
-
-
             <h2 class="text-sm font-bold text-white flex items-center gap-2">
-
-
-
-
-
-
-
               <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
-
-
-
-
-
-
-
-              <span>Глубокая кастомизация интерфейса</span>
-
-
-
-
-
-
-
+              <span>Оформление</span>
             </h2>
-
-
-
-
-
-
-
             <button id="btn-reset-customization" class="text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer">Сбросить по умолчанию</button>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
           <!-- 1. Ambient Themes (8 вариантов) -->
-
-
-
-
-
-
-
           <div>
-
-
-
-
-
-
-
-            <label class="block text-xs font-semibold text-white mb-2">Фоновая атмосфера (9 пресетов)</label>
-
-
-
-
-
-
-
+            <label class="block text-xs font-semibold text-white mb-2">Тема приложения</label>
             <div class="theme-presets-grid grid grid-cols-3 sm:grid-cols-9 gap-2">
-
-
-
-
-
-
-
-              
-
-
-
-
-
-
-
               <!-- 1. Wine -->
-
-
-
-
-
-
-
-                            <button onclick="applyTheme('wine', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="wine">
+                            <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="wine">
                 <div class="w-full h-7 rounded-lg bg-gradient-to-tr from-[#821c3e] to-[#370f26] border border-white/10 pointer-events-none"></div>
                 <span class="text-[10px] text-white font-medium truncate w-full text-center pointer-events-none">Wine Glow</span>
               </button>
-              <button onclick="applyTheme('oled', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="oled">
+              <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="oled">
                 <div class="w-full h-7 rounded-lg bg-black border border-white/10 pointer-events-none"></div>
                 <span class="text-[10px] text-white font-medium truncate w-full text-center pointer-events-none">Pure OLED</span>
               </button>
-              <button onclick="applyTheme('light', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="light">
+              <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="light">
                 <div class="w-full h-7 rounded-lg bg-[#f8fafc] border border-slate-300 pointer-events-none"></div>
                 <span class="text-[10px] text-white font-medium truncate w-full text-center pointer-events-none">Светлая</span>
               </button>
-              <button onclick="applyTheme('flame', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="flame">
+              <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="flame">
                 <div class="w-full h-7 rounded-lg bg-gradient-to-tr from-[#ff5500] to-[#b43200] border border-white/10 pointer-events-none"></div>
                 <span class="text-[10px] text-white font-medium truncate w-full text-center pointer-events-none">SC Flame</span>
               </button>
-              <button onclick="applyTheme('cyan', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="cyan">
+              <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="cyan">
                 <div class="w-full h-7 rounded-lg bg-gradient-to-tr from-[#00f5ff] to-[#d946ef] border border-cyan-400/30 pointer-events-none"></div>
                 <span class="text-[10px] text-cyan-300 font-medium truncate w-full text-center pointer-events-none">Cyber Neon</span>
               </button>
-              <button onclick="applyTheme('emerald', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="emerald">
+              <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="emerald">
                 <div class="w-full h-7 rounded-lg bg-gradient-to-tr from-[#10b981] to-[#047857] border border-emerald-400/20 pointer-events-none"></div>
                 <span class="text-[10px] text-white font-medium truncate w-full text-center pointer-events-none">Emerald</span>
               </button>
-              <button onclick="applyTheme('amethyst', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="amethyst">
+              <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="amethyst">
                 <div class="w-full h-7 rounded-lg bg-gradient-to-tr from-[#a855f7] to-[#6b21a8] border border-purple-400/20 pointer-events-none"></div>
                 <span class="text-[10px] text-white font-medium truncate w-full text-center pointer-events-none">Amethyst</span>
               </button>
-              <button onclick="applyTheme('sunset', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="sunset">
+              <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="sunset">
                 <div class="w-full h-7 rounded-lg bg-gradient-to-tr from-[#f43f5e] to-[#f59e0b] border border-white/10 pointer-events-none"></div>
                 <span class="text-[10px] text-white font-medium truncate w-full text-center pointer-events-none">Sunset</span>
               </button>
-              <button onclick="applyTheme('midnight', true); event.stopPropagation();" class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="midnight">
+              <button class="theme-select-btn p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-1.5 transition-all cursor-pointer" data-theme="midnight">
                 <div class="w-full h-7 rounded-lg bg-gradient-to-tr from-[#1e3a8a] to-[#0f172a] border border-blue-400/20 pointer-events-none"></div>
                 <span class="text-[10px] text-white font-medium truncate w-full text-center pointer-events-none">Midnight</span>
               </button>
-
-
-
-
-
-
-
+<button type="button" class="theme-select-btn" data-theme="custom" aria-controls="custom-theme-editor"><div></div><span>Своя тема</span></button>
             </div>
-
-
-
-
-
-
-
+<div hidden id="custom-theme-editor" aria-label="Цвета своей темы">
+<input type="hidden" id="theme-color">
+<details id="color-menu"><summary><i class="color-chip"></i>Цвет темы</summary>
+<div class="color-tools">
+<div id="color-plane" aria-hidden="true"><i></i></div>
+<input id="color-value" type="range" min="0" max="100" step="1" aria-label="Яркость цвета" title="Яркость цвета">
+<label for="color-code">HEX <input id="color-code" maxlength="7" spellcheck="false" autocomplete="off"></label>
+</div></details>
+</div>
           </div>
-
-
-
-
-
-
-
           <!-- 2. Accent Color Palette -->
-
-
-
-
-
-
-
           <div class="border-t border-white/5 pt-4">
-
-
-
-
-
-
-
             <div class="flex items-center justify-between mb-2">
-
-
-
-
-
-
-
-              <label class="text-xs font-semibold text-white">Акцентный цвет (Кнопка Play, сердечки, индикаторы, прогресс)</label>
-
-
-
-
-
-
-
+              <label class="text-xs font-semibold text-white">Акцентный цвет</label>
               <span id="current-accent-label" class="text-[11px] font-mono text-neutral-400">#f43f5e (Rose Neon)</span>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
             <div class="flex items-center gap-2.5 flex-wrap">
-
-
-
-
-
-
-
-                            <button onclick="applyAccent('#f43f5e', 'Rose Neon', true); event.stopPropagation();" class="accent-btn w-7 h-7 rounded-full bg-[#f43f5e] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#f43f5e" data-name="Rose Neon" title="Rose Neon"></button>
-              <button onclick="applyAccent('#ff5500', 'SoundCloud Flame', true); event.stopPropagation();" class="accent-btn w-7 h-7 rounded-full bg-[#ff5500] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#ff5500" data-name="SoundCloud Flame" title="SoundCloud Flame"></button>
-              <button onclick="applyAccent('#a855f7', 'Cyber Violet', true); event.stopPropagation();" class="accent-btn w-7 h-7 rounded-full bg-[#a855f7] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#a855f7" data-name="Cyber Violet" title="Cyber Violet"></button>
-              <button onclick="applyAccent('#06b6d4', 'Electric Cyan', true); event.stopPropagation();" class="accent-btn w-7 h-7 rounded-full bg-[#06b6d4] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#06b6d4" data-name="Electric Cyan" title="Electric Cyan"></button>
-              <button onclick="applyAccent('#10b981', 'Emerald Mint', true); event.stopPropagation();" class="accent-btn w-7 h-7 rounded-full bg-[#10b981] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#10b981" data-name="Emerald Mint" title="Emerald Mint"></button>
-              <button onclick="applyAccent('#f59e0b', 'Amber Gold', true); event.stopPropagation();" class="accent-btn w-7 h-7 rounded-full bg-[#f59e0b] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#f59e0b" data-name="Amber Gold" title="Amber Gold"></button>
-              <button onclick="applyAccent('#ffffff', 'Pure White', true); event.stopPropagation();" class="accent-btn w-7 h-7 rounded-full bg-[#ffffff] border border-black/20 hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#ffffff" data-name="Pure White" title="Pure White"></button>
-              <button onclick="applyAccent('#000000', 'Obsidian Black', true); event.stopPropagation();" class="accent-btn w-7 h-7 rounded-full bg-[#000000] border border-white/25 hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#000000" data-name="Obsidian Black" title="Obsidian Black"></button>
-
-
-
-
-
-
-
+                            <button class="accent-btn w-7 h-7 rounded-full bg-[#f43f5e] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#f43f5e" data-name="Rose Neon" title="Rose Neon"></button>
+              <button class="accent-btn w-7 h-7 rounded-full bg-[#ff5500] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#ff5500" data-name="SoundCloud Flame" title="SoundCloud Flame"></button>
+              <button class="accent-btn w-7 h-7 rounded-full bg-[#a855f7] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#a855f7" data-name="Cyber Violet" title="Cyber Violet"></button>
+              <button class="accent-btn w-7 h-7 rounded-full bg-[#06b6d4] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#06b6d4" data-name="Electric Cyan" title="Electric Cyan"></button>
+              <button class="accent-btn w-7 h-7 rounded-full bg-[#10b981] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#10b981" data-name="Emerald Mint" title="Emerald Mint"></button>
+              <button class="accent-btn w-7 h-7 rounded-full bg-[#f59e0b] hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#f59e0b" data-name="Amber Gold" title="Amber Gold"></button>
+              <button class="accent-btn w-7 h-7 rounded-full bg-[#ffffff] border border-black/20 hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#ffffff" data-name="Pure White" title="Pure White"></button>
+              <button class="accent-btn w-7 h-7 rounded-full bg-[#000000] border border-white/25 hover:ring-2 hover:ring-white/50 transition-transform active:scale-90 cursor-pointer shadow-lg" data-color="#000000" data-name="Obsidian Black" title="Obsidian Black"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#dc2626" data-color="#dc2626" data-name="Рубин" title="Рубин" aria-label="Рубин"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#fb7185" data-color="#fb7185" data-name="Коралл" title="Коралл" aria-label="Коралл"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#fdba74" data-color="#fdba74" data-name="Персик" title="Персик" aria-label="Персик"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#facc15" data-color="#facc15" data-name="Лимон" title="Лимон" aria-label="Лимон"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#84cc16" data-color="#84cc16" data-name="Лайм" title="Лайм" aria-label="Лайм"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#5eead4" data-color="#5eead4" data-name="Мята" title="Мята" aria-label="Мята"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#38bdf8" data-color="#38bdf8" data-name="Голубой" title="Голубой" aria-label="Голубой"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#2563eb" data-color="#2563eb" data-name="Синий" title="Синий" aria-label="Синий"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#6366f1" data-color="#6366f1" data-name="Индиго" title="Индиго" aria-label="Индиго"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#c4b5fd" data-color="#c4b5fd" data-name="Сирень" title="Сирень" aria-label="Сирень"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#d946ef" data-color="#d946ef" data-name="Фуксия" title="Фуксия" aria-label="Фуксия"></button>
+<button type="button" class="accent-btn rounded-full" style="background:#94a3b8" data-color="#94a3b8" data-name="Серебро" title="Серебро" aria-label="Серебро"></button>
               <div class="h-6 w-px bg-white/10 mx-1"></div>
-
-
-
-
-
-
-
-              <!-- Custom Arbitrary Color Picker -->
-
-
-
-
-
-
-
-              <div class="flex items-center gap-2 bg-black/40 border border-white/10 px-2.5 py-1 rounded-xl">
-
-
-
-
-
-
-
-                <input type="color" id="custom-accent-picker" value="#f43f5e" class="w-6 h-6 rounded-md bg-transparent border-none cursor-pointer" title="Выбрать свой цвет">
-
-
-
-
-
-
-
-                <input type="text" id="custom-accent-hex" placeholder="#ff5500" value="#f43f5e" maxlength="7" class="w-20 bg-transparent text-xs font-mono text-white focus:outline-none">
-
-
-
-
-
-
-
-                <button id="apply-custom-accent-btn" class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-semibold text-white transition-colors cursor-pointer">OK</button>
-
-
-
-
-
-
-
-              </div>
-
-
-
-
-
-
-
+              <details id="accent-menu"><summary><i class="color-chip"></i>Свой акцент</summary>
+<div class="color-tools">
+<div id="accent-plane" aria-hidden="true"><i></i></div>
+<input id="accent-value" type="range" min="0" max="100" step="1" aria-label="Яркость цвета" title="Яркость цвета">
+<label for="custom-accent-hex">HEX <input id="custom-accent-hex" maxlength="7" spellcheck="false" autocomplete="off"></label>
+</div></details>
             </div>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
           <!-- 3. Corner Radius Geometry -->
-
-
-
-
-
-
-
           <div class="border-t border-white/5 pt-4">
-
-
-
-
-
-
-
-            <label class="block text-xs font-semibold text-white mb-2">Геометрия скругления углов (UI Corner Radius)</label>
-
-
-
-
-
-
-
+            <label class="block text-xs font-semibold text-white mb-2">Скругление углов</label>
             <div class="grid grid-cols-4 gap-2">
-
-
-
-
-
-
-
               <button class="radius-btn p-2 rounded-md bg-white/5 hover:bg-white/10 border border-white/5 text-xs text-neutral-300 font-medium transition-all cursor-pointer" data-radius="6px">
-
-
-
-
-
-
-
                 Sharp (6px)
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
               <button class="radius-btn p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs text-neutral-300 font-medium transition-all cursor-pointer" data-radius="12px">
-
-
-
-
-
-
-
                 Modern (12px)
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
               <button class="radius-btn p-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs text-neutral-300 font-medium transition-all cursor-pointer" data-radius="18px">
-
-
-
-
-
-
-
                 Smooth (18px)
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
               <button class="radius-btn p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 text-xs text-neutral-300 font-medium transition-all cursor-pointer" data-radius="26px">
-
-
-
-
-
-
-
                 Pill (26px)
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
           <!-- 4. Progress Bar & Visualizer Style -->
-
-
-
-
-
-
-
           <div class="border-t border-white/5 pt-4">
-
-
-
-
-
-
-
             <label class="block text-xs font-semibold text-white mb-2">Стиль прогресс-бара трека</label>
-
-
-
-
-
-
-
             <div class="grid grid-cols-3 gap-2">
-
-
-
-
-
-
-
               <button class="bar-style-btn p-2.5 rounded-xl bg-white/10 border-2 border-white/80 text-xs text-white font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all" data-style="glow">
-
-
-
-
-
-
-
                 <span class="w-2 h-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500/80"></span>
-
-
-
-
-
-
-
                 <span>Неоновый Glow</span>
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
               <button class="bar-style-btn p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs text-neutral-300 font-medium flex items-center justify-center gap-2 cursor-pointer transition-all" data-style="gradient">
-
-
-
-
-
-
-
                 <span class="w-2 h-2 rounded-full bg-gradient-to-r from-rose-500 to-amber-400"></span>
-
-
-
-
-
-
-
                 <span>Градиентный</span>
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
               <button class="bar-style-btn p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-xs text-neutral-300 font-medium flex items-center justify-center gap-2 cursor-pointer transition-all" data-style="minimal">
-
-
-
-
-
-
-
                 <span class="w-2 h-2 rounded-full bg-white"></span>
-
-
-
-
-
-
-
                 <span>Минимал 2px</span>
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
           </div>
-
-
-
-
-
-
-
                     <!-- 5. Fine-Tuning Sliders -->
           <div class="border-t border-white/5 pt-3 space-y-3">
-            
             <!-- Parameter 1: Ambient Glow -->
             <div class="py-1 transition-colors">
               <div class="flex items-center justify-between text-xs mb-1.5">
                 <span class="text-white font-medium flex items-center gap-2">
-                  <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                  Яркость фонового свечения (Ambient Glow)
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h18M6 14a6 6 0 0 1 12 0M9 14a3 3 0 0 1 6 0"/></svg>
+                  Подсветка фона
                 </span>
                 <span id="glow-intensity-val" class="px-2 py-0.5 rounded-md bg-white/5 text-neutral-300 font-mono text-[11px] font-semibold border border-white/5">100%</span>
               </div>
               <input id="glow-slider" type="range" min="0" max="160" value="100" class="custom-range-slider w-full cursor-pointer">
             </div>
-
             <!-- Parameter 2: UI Glass Opacity -->
             <div class="py-1 transition-colors">
               <div class="flex items-center justify-between text-xs mb-1.5">
@@ -8027,13 +6593,12 @@
                 <span>100% (Стекло)</span>
               </div>
             </div>
-
             <!-- Parameter 4: Glassmorphism Toggle (Compact Switch) -->
             <div class="py-1.5 flex items-center justify-between transition-colors">
               <div class="flex items-center gap-2">
-                <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-5 9 5-9 5-9-5Zm0 5 9 5 9-5"/></svg>
                 <div>
-                  <div class="text-xs font-semibold text-white">Эффект матового стекла (Glassmorphism)</div>
+                  <div class="text-xs font-semibold text-white">Матовое стекло</div>
                   <div class="text-[10px] text-neutral-400">Размытие фона под карточками и плеером</div>
                 </div>
               </div>
@@ -8042,273 +6607,47 @@
                 <div class="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-rose-500 hover:bg-white/15 transition-colors"></div>
               </label>
             </div>
-
           </div>
-
           <!-- 6. Custom Wallpaper Background -->
-
-
-
-
-
-
-
           <div class="border-t border-white/5 pt-4 space-y-3">
-
-
-
-
-
-
-
             <div class="flex items-center justify-between">
-
-
-
-
-
-
-
               <div>
-
-
-
-
-
-
-
                 <label class="text-xs font-semibold text-white">Собственные обои и фон приложения</label>
-
-
-
-
-
-
-
                 <div class="text-[11px] text-neutral-400">Прямая ссылка на картинку или локальный файл с ПК</div>
-
-
-
-
-
-
-
               </div>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
             <div class="flex gap-2">
-
-
-
-
-
-
-
               <input id="custom-bg-input" type="text" placeholder="Ссылка на изображение (https://...)..." 
-
-
-
-
-
-
-
                 class="flex-1 bg-black/40 text-xs text-white placeholder-neutral-500 px-3 py-2 rounded-xl border border-white/5 focus:outline-none focus:border-white/20 font-mono">
-
-
-
-
-
-
-
               <button type="button" id="custom-bg-browse-btn" class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs text-white font-medium transition-colors cursor-pointer flex items-center gap-1.5 shrink-0" title="Выбрать картинку с диска">
-
-
-
-
-
-
-
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-
-
-
-
-
-
-
                 <span>Обзор...</span>
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
               <input type="file" id="custom-bg-file" accept="image/*" style="display: none;">
-
-
-
-
-
-
-
               <button id="apply-custom-bg" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors cursor-pointer shrink-0">Применить</button>
-
-
-
-
-
-
-
               <button id="clear-bg-btn" class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer shrink-0 border border-rose-500/20 flex items-center gap-1.5" title="Убрать обои и вернуть тему">
-
-
-
-
-
-
-
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-
-
-
-
-
-
-
                 <span>Убрать обои</span>
-
-
-
-
-
-
-
               </button>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
             <!-- Dimming slider -->
-
-
-
-
-
-
-
             <div class="flex items-center justify-between text-xs pt-1">
-
-
-
-
-
-
-
               <span class="text-neutral-400 font-medium">Затемнение обоев:</span>
-
-
-
-
-
-
-
               <div class="flex items-center gap-2 w-48">
-
-
-
-
-
-
-
                 <input id="bg-dim-slider" type="range" min="0" max="95" value="40" class="flex-1 h-1 bg-white/10 rounded-lg cursor-pointer" style="accent-color: var(--accent);">
-
-
-
-
-
-
-
                 <span id="bg-dim-val" class="text-[10px] font-mono text-neutral-400 w-8 text-right">40%</span>
-
-
-
-
-
-
-
               </div>
-
-
-
-
-
-
-
             </div>
-
-
-
-
-
-
-
+<div class="flex items-center justify-between text-xs pt-1">
+              <span class="text-neutral-400 font-medium">Размытие обоев</span>
+              <div class="flex items-center gap-2 w-48">
+                <input id="bg-blur-slider" type="range" min="0" max="32" value="0" aria-label="Размытие обоев" class="flex-1 h-1 bg-white/10 rounded-lg cursor-pointer" style="accent-color: var(--accent);">
+                <span id="bg-blur-val" class="text-[10px] font-mono text-neutral-400 w-8 text-right">0 px</span>
+              </div>
+            </div>
           </div>
-
-
-
-
-
-
-
         </div>
-
-
-
-
-
-
-
-      </div>
-
-
-
-
-
-
-
+      </div></div></div></div></div>
       <!-- ========================================== -->
 
 
@@ -11404,6 +9743,7 @@
 
 
 
+  <script src="settings.js"></script>
   <script>
 
 
@@ -13586,6 +11926,7 @@
 
 
 
+    themeDefinitions.custom={...themeDefinitions.oled,name:'Своя тема',bg:'none'};
     const themes = themeDefinitions;
 
 
@@ -13676,6 +12017,8 @@
 
         function applyTheme(themeKey, notifyUser = false, accent = null) {
       if (!themeKey || !themeDefinitions[themeKey]) themeKey = 'oled';
+      settingsView.applyTheme(themeKey);
+      if(themeKey==='custom') themeDefinitions.custom.bgColor=settingsView.palettes.custom[0];
       currentThemeKey = themeKey;
       try {
         localStorage.setItem('sc_desktop_theme', themeKey);
@@ -13684,10 +12027,10 @@
         if (typeof customBgInput !== 'undefined' && customBgInput) customBgInput.value = '';
       } catch (_) {}
       const theme = themeDefinitions[themeKey];
-      const isLight = (themeKey === 'light');
+      const isLight = themeKey === 'light' || (themeKey==='custom' && settingsView.customIsLight());
       const isOled = (themeKey === 'oled');
 
-      const allThemeClasses = ['theme-wine', 'theme-flame', 'theme-cyan', 'theme-emerald', 'theme-amethyst', 'theme-sunset', 'theme-midnight', 'theme-oled', 'theme-light'];
+      const allThemeClasses = ['theme-wine', 'theme-flame', 'theme-cyan', 'theme-emerald', 'theme-amethyst', 'theme-sunset', 'theme-midnight', 'theme-oled', 'theme-light','theme-custom'];
 
       const root = document.documentElement;
       const body = document.body;
@@ -13706,14 +12049,15 @@
 
       // 3. Set background and colors definitively
       if (isLight) {
+        body.classList.add('theme-light');root.classList.add('theme-light');
         root.classList.add('light');
         body.classList.add('light');
 
-        root.style.setProperty('background-color', '#f8fafc', 'important');
+        root.style.setProperty('background-color', themeKey==='custom'?theme.bgColor:'#f8fafc', 'important');
         root.style.setProperty('background-image', 'none', 'important');
         root.style.setProperty('color', '#0f172a', 'important');
 
-        body.style.setProperty('background-color', '#f8fafc', 'important');
+        body.style.setProperty('background-color', themeKey==='custom'?theme.bgColor:'#f8fafc', 'important');
         body.style.setProperty('background-image', 'none', 'important');
         body.style.setProperty('color', '#0f172a', 'important');
       } else {
@@ -13784,6 +12128,7 @@
     function applyAccent(color, name = '', notifyUser = false) {
       if (!color) return;
       currentAccent = color;
+      if(/^#[0-9a-f]{6}$/i.test(color))settingsView.syncAccentMenu(color);
 
       document.documentElement.style.setProperty('--accent', color);
       document.documentElement.style.setProperty('--accent-glow', color + '73');
@@ -13836,6 +12181,7 @@
       document.querySelectorAll('.accent-btn').forEach(btn => {
         const cAttr = (btn.getAttribute('data-color') || '').toLowerCase();
         const targetColor = color.toLowerCase();
+        btn.setAttribute('aria-pressed',cAttr===targetColor);
         const isMatch = (cAttr === targetColor) || (cAttr === '#000000' && targetColor === '#0f172a');
         if (isMatch) {
           btn.classList.add('active-accent');
@@ -13943,7 +12289,11 @@
       }
 
       const themeKey = (typeof currentThemeKey !== 'undefined' && currentThemeKey) ? currentThemeKey : 'wine';
-      const rgb = themeRgbMap[themeKey] || themeRgbMap.wine;
+      const panel=settingsView.palettes[themeKey]?.[1];
+      const channels=panel?.slice(1).match(/../g)?.map(c=>parseInt(c,16)).join(', ');
+      const rgb=themeKey==='custom'?{panel:channels,card:channels}:themeRgbMap[themeKey] || themeRgbMap.wine;
+      document.getElementById('tab-settings').style.setProperty('--density', (100-transparencyPct*.65)+'%');
+      if(uiOpacitySlider)settingsView.renderRange(uiOpacitySlider);
       const isLight = themeKey === 'light';
 
       const panelAlpha = isLight
@@ -13964,7 +12314,7 @@
         el.style.setProperty('background-color', panelBgVal, 'important');
       });
       document.querySelectorAll('.card-glass, .settings-card').forEach(el => {
-        el.style.setProperty('background-color', cardBgVal, 'important');
+        if (!el.closest('#settings-cards')) el.style.setProperty('background-color', cardBgVal, 'important');
       });
 
       try { localStorage.setItem('sc_desktop_ui_opacity', String(num)); } catch(_) {}
@@ -14047,6 +12397,7 @@
 
 
         const isThis = btn.getAttribute('data-radius') === r;
+        btn.setAttribute('aria-pressed',isThis);
 
 
 
@@ -14135,6 +12486,7 @@
 
 
     function applyProgressStyle(style, notifyUser = false) {
+      document.querySelectorAll(".bar-style-btn").forEach(b=>b.setAttribute("aria-pressed",b.dataset.style===style));
 
 
 
@@ -21789,7 +20141,7 @@
     function updateWaveTheme(themeKey) {
       if (!themeKey || !Object.hasOwn(waveThemes, themeKey)) themeKey = currentThemeKey || 'wine';
       let wt = waveThemes[themeKey] || waveThemes.wine;
-      const isLight = (themeKey === 'light');
+      const isLight = themeKey === 'light' || (themeKey==='custom' && settingsView.customIsLight());
       let acc = currentAccent || (appConfig && appConfig.accent_color) || '#6366f1';
       const isWhiteAcc = (acc.toLowerCase() === '#ffffff' || acc.toLowerCase() === '#fff' || acc.toLowerCase() === '#f8fafc');
       const isBlackAcc = (acc.toLowerCase() === '#000000' || acc.toLowerCase() === '#0f172a');
