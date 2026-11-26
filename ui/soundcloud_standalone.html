@@ -26564,7 +26564,6 @@
             applyUserProfile(currentUser, allTracks.length);
             renderHomeFeed(allTracks, res.mixed || lastMixedData || null);
             notify("Аккаунт SoundCloud подключен", "👤");
-            restoreSessionState();
           }
         } else {
           // GUEST / OFFLINE MODE: preserve saved liked tracks!
@@ -26596,7 +26595,6 @@
           if (playerTitle) playerTitle.textContent = "Трек не выбран";
           if (playerArtist) playerArtist.textContent = "SoundCloud";
           if (playerCover) playerCover.src = "logo.png";
-          restoreSessionState();
 
           // Automatically prompt for account login on startup when not authenticated
           setTimeout(() => {
@@ -26629,7 +26627,6 @@
 
 
 
-        currentUser = null;
 
 
 
@@ -26661,7 +26658,7 @@
 
 
 
-        currentQueue = [...allTracks];
+        if (!currentPlayRequestId) currentQueue = [...allTracks];
 
 
 
@@ -26709,6 +26706,8 @@
 
 
 
+      } finally {
+        if (!currentPlayRequestId) restoreSessionState();
       }
 
 
@@ -35636,7 +35635,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-        restoreSessionState();
 
 
 

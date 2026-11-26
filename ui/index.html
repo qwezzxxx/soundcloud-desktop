@@ -25585,7 +25585,6 @@
             applyUserProfile(currentUser, allTracks.length);
             renderHomeFeed(allTracks, res.mixed || lastMixedData || null);
             notify("Аккаунт SoundCloud подключен", "👤");
-            if (!currentPlayRequestId) restoreSessionState();
           }
         } else {
           // GUEST / OFFLINE MODE: preserve saved liked tracks!
@@ -25609,7 +25608,6 @@
           renderHomeFeed(allTracks, res.mixed || lastMixedData || null);
           applyUserProfile(null, allTracks.length);
 
-          if (!currentPlayRequestId) restoreSessionState();
 
           // Automatically prompt for account login on startup when not authenticated
           setTimeout(() => {
@@ -25642,7 +25640,6 @@
 
 
 
-        currentUser = null;
 
 
 
@@ -25674,7 +25671,7 @@
 
 
 
-        currentQueue = [...allTracks];
+        if (!currentPlayRequestId) currentQueue = [...allTracks];
 
 
 
@@ -25722,6 +25719,8 @@
 
 
 
+      } finally {
+        if (!currentPlayRequestId) restoreSessionState();
       }
 
 
@@ -33616,7 +33615,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
     }
-    restoreSessionState();
 
     window.addEventListener('beforeunload', () => {
       try {
