@@ -12019,7 +12019,12 @@
         function applyTheme(themeKey, notifyUser = false, accent = null) {
       if (!themeKey || !themeDefinitions[themeKey]) themeKey = 'oled';
       settingsView.applyTheme(themeKey);
-      if(themeKey==='custom') themeDefinitions.custom.bgColor=settingsView.palettes.custom[0];
+      if (themeKey === 'custom') {
+        const [base, panel] = settingsView.palettes.custom;
+        themeDefinitions.custom.bgColor = base;
+        document.documentElement.style.setProperty('--custom-profile-base', base);
+        document.documentElement.style.setProperty('--custom-profile-panel', panel);
+      }
       currentThemeKey = themeKey;
       try {
         localStorage.setItem('sc_desktop_theme', themeKey);
@@ -15277,6 +15282,10 @@
       } catch (e) {
         console.warn('saveLocalDatabase error:', e);
       }
+    }
+
+    function syncQueueFromLikes() {
+      if (!isWaveActive) currentQueue = [...allTracks];
     }
 
     function loadLocalDatabase() {
@@ -23339,7 +23348,7 @@
 
             if (Array.isArray(freshLikes)) {
               allTracks = mergePendingLikes(freshLikes);
-              currentQueue = [...allTracks];
+              syncQueueFromLikes();
               saveLocalDatabase();
             }
             try {
@@ -23601,7 +23610,7 @@
 
 
 
-            currentQueue = [...allTracks];
+            syncQueueFromLikes();
 
 
 
@@ -23836,7 +23845,7 @@
 
 
 
-            currentQueue = [...allTracks];
+            syncQueueFromLikes();
 
 
 
@@ -24449,7 +24458,7 @@
 
 
 
-            if (getActiveTabId() === 'tab-library') currentQueue = [...allTracks];
+            if (getActiveTabId() === 'tab-library') syncQueueFromLikes();
 
 
 
@@ -24997,7 +25006,7 @@
 
           fresh.forEach(t => { if (t) t.liked = true; });
           allTracks = mergePendingLikes(fresh);
-          if (getActiveTabId() === 'tab-library') currentQueue = [...allTracks];
+          if (getActiveTabId() === 'tab-library') syncQueueFromLikes();
           saveLocalDatabase();
           renderLikedTable();
           applyUserProfile(currentUser, allTracks.length);
@@ -25064,7 +25073,7 @@
               if (Array.isArray(event.payload)) {
                 allTracks = mergePendingLikes(event.payload);
                 allTracks.forEach(t => { if (t) t.liked = true; });
-                if (!currentQueue.length) currentQueue = [...allTracks];
+                if (!currentQueue.length) syncQueueFromLikes();
                 saveLocalDatabase();
                 renderLikedTable();
                 applyUserProfile(currentUser, allTracks.length);
@@ -25080,7 +25089,7 @@
                   if (Array.isArray(data.likes)) {
                     allTracks = mergePendingLikes(data.likes);
                     allTracks.forEach(t => { if (t) t.liked = true; });
-                    currentQueue = [...allTracks];
+                    syncQueueFromLikes();
                   }
                   try {
                     if (currentUser) localStorage.setItem('sc_local_user_profile', JSON.stringify(currentUser));
@@ -25578,7 +25587,7 @@
             }
             allTracks = mergePendingLikes(initialLikes);
             allTracks.forEach(t => { if (t) t.liked = true; });
-            if (!currentQueue.length) currentQueue = [...allTracks];
+            if (!currentQueue.length) syncQueueFromLikes();
             saveLocalDatabase();
             renderLikedTable();
 
@@ -25600,7 +25609,7 @@
           }
           allTracks = mergePendingLikes(initialLikes);
           allTracks.forEach(t => { if (t) t.liked = true; });
-          if (!currentQueue.length) currentQueue = [...allTracks];
+          if (!currentQueue.length) syncQueueFromLikes();
           originalQueue = null;
           saveLocalDatabase();
 
@@ -25671,7 +25680,7 @@
 
 
 
-        if (!currentPlayRequestId) currentQueue = [...allTracks];
+        if (!currentPlayRequestId) syncQueueFromLikes();
 
 
 
@@ -33540,7 +33549,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       const initLikes = loadLocalDatabase();
       if (initLikes && Array.isArray(initLikes) && initLikes.length > 0) {
         allTracks = initLikes;
-        currentQueue = [...allTracks];
+        syncQueueFromLikes();
       }
     } catch (_) {}
     if (allTracks.length > 0) {

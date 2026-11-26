@@ -99,6 +99,20 @@
   --profile-pattern: path("M95 139 C174 35 520 -40 570 24 S395 172 309 131 371 27 569 9");
 }
 
+.theme-custom .profile-header-card {
+  --profile-surface: var(--custom-profile-panel);
+  --profile-hero: linear-gradient(110deg, var(--custom-profile-base) 30%, var(--profile-surface));
+  --profile-text: #fff;
+  --profile-line: color-mix(in srgb, var(--profile-text) 20%, var(--profile-surface));
+  --profile-muted: color-mix(in srgb, var(--profile-text) 80%, var(--profile-surface));
+  --profile-tint: var(--accent);
+  --profile-button-text: var(--accent-contrast);
+}
+.theme-custom.light .profile-header-card {
+  --profile-text: #101010;
+  --profile-danger: #781a36;
+}
+
 .profile-identity {
   position: relative;
   isolation: isolate;
