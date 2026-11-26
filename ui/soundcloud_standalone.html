@@ -130,6 +130,7 @@
 
 
   <script defer src="cached_tracks.js"></script>
+  <script src="wave_engine.js"></script>
 
 
 
@@ -5825,7 +5826,7 @@
               <span>Эфир волны</span>
               <span id="wave-queue-count" class="text-xs text-neutral-500 font-normal">0 треков</span>
             </h3>
-            <button onclick="refreshWaveFeed()" class="text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1">
+            <button id="wave-feed-refresh" onclick="refreshWaveFeed()" class="text-xs text-neutral-400 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center gap-1">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
               <span>Сменить треки</span>
             </button>
@@ -6422,7 +6423,7 @@
 
 
 
-                <div class="flex items-center gap-2">
+                <div class="flex items-baseline gap-2.5">
 
 
 
@@ -6438,7 +6439,7 @@
 
 
 
-                  <span id="settings-user-id" class="text-[10px] text-neutral-400 font-mono">ID: —</span>
+                  <span id="settings-user-id" class="text-xs font-medium text-neutral-400 tabular-nums">ID: —</span>
 
 
 
@@ -8220,9 +8221,9 @@
                 <svg class="w-3.5 h-3.5" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
                 <span>Любимые</span>
               </button>
-              <button type="button" id="profile-open-web-btn" class="profile-action">
-                <svg class="w-3.5 h-3.5" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
-                <span>soundcloud.com</span>
+              <button type="button" id="profile-open-web-btn" class="profile-action" title="Открыть профиль на SoundCloud">
+                <svg class="w-4 h-4" aria-hidden="true" fill="currentColor" viewBox="0 0 24 24"><path d="M11.56 8.87V17h8.76c1.5 0 2.68-1.15 2.68-2.62 0-1.39-1.08-2.54-2.46-2.61a4.18 4.18 0 0 0-4.08-3.51c-.62 0-1.22.14-1.76.4-.28-1.64-1.68-2.88-3.14-2.79zm-1.45 1.15a.65.65 0 0 0-.65.65v5.68a.65.65 0 1 0 1.3 0v-5.68a.65.65 0 0 0-.65-.65zm-2.25 1.25a.65.65 0 0 0-.65.65v4.43a.65.65 0 1 0 1.3 0v-4.43a.65.65 0 0 0-.65-.65zm-2.25 1.13a.65.65 0 0 0-.65.65v3.3a.65.65 0 1 0 1.3 0v-3.3a.65.65 0 0 0-.65-.65zm-2.25 1.35a.65.65 0 0 0-.65.65v1.95a.65.65 0 1 0 1.3 0V14.4a.65.65 0 0 0-.65-.65z"/></svg>
+                <span>SoundCloud</span>
               </button>
               <button type="button" id="profile-to-settings-btn" class="profile-action">
                 <svg class="w-3.5 h-3.5" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -11337,7 +11338,7 @@
 
 
 
-      searchTracks: (query, provider = 'all') => api.invoke('search_tracks', { query, provider }),
+      searchTracks: (query, provider = 'all', offset = 0) => api.invoke('search_tracks', offset ? { query, provider, offset } : { query, provider }),
 
 
 
@@ -11616,6 +11617,12 @@
 
     });
 
+    document.addEventListener('contextmenu', (e) => {
+      const target = e.target;
+      const editable = target instanceof Element && target.closest('textarea, [contenteditable="true"], input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="color"])');
+      if (!editable) e.preventDefault();
+    });
+
 
 
 
@@ -11768,11 +11775,18 @@
 
     // Global Wave & Player variables (Declared early to prevent TDZ ReferenceError)
     var isWaveActive = false;
+    var waveDesiredActive = false;
+    var needsWaveQueueRefresh = false;
     var waveCurrentMood = 'all';
+    var waveActiveMood = null;
+    var isWaveStarting = false;
+    var lastNonWavePlayRequestId = 0;
+    const waveSelectionVersion = 3;
     var wavePlayedIds = new Set();
     var isWaveLoadingMore = false;
     window.isWaveActive = false;
     window.waveCurrentMood = 'all';
+    window.waveActiveMood = null;
 
 
 
@@ -16087,6 +16101,7 @@
 
 
           duration: track.duration || '0:00',
+          duration_ms: track.duration_ms || 0,
 
 
 
@@ -16103,6 +16118,17 @@
 
 
           permalink_url: track.permalink_url || null,
+          waveform_url: track.waveform_url || null,
+          genre: track.genre || null,
+          tag_list: track.tag_list || null,
+          description: track.description || null,
+          user_id: track.user_id ?? null,
+          user_permalink: track.user_permalink || null,
+          user_avatar: track.user_avatar || null,
+          created_at: track.created_at || null,
+          playback_count: track.playback_count ?? null,
+          likes_count: track.likes_count ?? null,
+          provider: track.provider || null,
 
 
 
@@ -16263,6 +16289,7 @@
 
 
       if (lastMixedData) renderHomeFeed(allTracks, lastMixedData);
+      if (typeof renderWaveTrackList === 'function' && isWaveActive) renderWaveTrackList();
 
 
 
@@ -16724,7 +16751,9 @@
           shufflePlayedTrackIds: isShuffle ? Array.from(shufflePlayedTrackIds).slice(-200) : [],
           isRepeat: Boolean(isRepeat),
           isWaveActive: Boolean(window.isWaveActive),
-          waveCurrentMood: window.waveCurrentMood || 'all',
+          waveCurrentMood: window.WaveEngine ? WaveEngine.normalizeWaveMood(window.waveCurrentMood) : (window.waveCurrentMood || 'all'),
+          waveActiveMood: window.waveActiveMood || null,
+          waveSelectionVersion,
           currentStationUrn: currentStationUrn || null,
           savedAt: Date.now()
         };
@@ -16801,7 +16830,10 @@
         }
 
         // Restore Wave state
-        if (session.isWaveActive && session.currentStationUrn === "my_wave" && Array.isArray(session.queue) && session.queue.length <= 35) {
+        const savedWave = session.isWaveActive && session.currentStationUrn === 'my_wave'
+          && Array.isArray(session.queue) && session.queue.length > 0;
+        waveDesiredActive = Boolean(savedWave);
+        if (savedWave) {
           window.isWaveActive = true;
           currentStationUrn = "my_wave";
           if (typeof syncWavePlayButton === 'function') syncWavePlayButton(false);
@@ -16810,13 +16842,32 @@
           currentStationUrn = null;
           if (typeof syncWavePlayButton === 'function') syncWavePlayButton(false);
         }
-        if (session.waveCurrentMood && typeof setWaveMood === 'function') {
-          window.waveCurrentMood = session.waveCurrentMood;
+        if (session.waveCurrentMood !== undefined) {
+          const restoredMood = window.WaveEngine
+            ? WaveEngine.normalizeWaveMood(session.waveCurrentMood)
+            : (typeof session.waveCurrentMood === 'string' ? session.waveCurrentMood : 'all');
+          waveCurrentMood = restoredMood;
+          window.waveCurrentMood = restoredMood;
+        }
+        window.waveActiveMood = session.waveActiveMood && window.WaveEngine
+          ? WaveEngine.normalizeWaveMood(session.waveActiveMood)
+          : (savedWave ? waveCurrentMood : null);
+        waveActiveMood = window.waveActiveMood;
+        if (typeof updateWaveTheme === 'function') {
+          try { updateWaveTheme(currentThemeKey); } catch (_) {}
         }
 
         // Restore Queue
-        if (Array.isArray(session.queue) && session.queue.length > 0) {
-          currentQueue = [...session.queue];
+        let savedQueue = Array.isArray(session.queue) ? session.queue : [];
+        needsWaveQueueRefresh = Boolean(savedWave && (session.waveSelectionVersion !== waveSelectionVersion || savedQueue.length <= 1));
+        if (savedWave && session.waveSelectionVersion !== waveSelectionVersion) {
+          const savedWaveTrackId = session.track?.id ?? session.trackId;
+          const previousTrack = savedQueue.find(track => savedWaveTrackId != null && String(track?.id) === String(savedWaveTrackId))
+            || session.track || savedQueue[session.trackIndex] || savedQueue[0];
+          savedQueue = previousTrack ? [previousTrack] : [];
+        }
+        if (savedQueue.length > 0) {
+          currentQueue = [...savedQueue];
           currentTrackIndex = (session.trackIndex >= 0 && session.trackIndex < currentQueue.length) ? session.trackIndex : 0;
           if (isShuffle && shufflePlayedTrackIds.size === 0) {
             currentQueue.slice(0, currentTrackIndex + 1).forEach(track => {
@@ -16895,15 +16946,59 @@
 
     // Fast audio stream cache & idle prefetcher
     const streamUrlCache = new Map();
+    const streamUrlCacheAt = new Map();
+    const STREAM_URL_TTL_MS = 5 * 60 * 1000;
+
+    function streamUrlExpiresAtMs(url) {
+      if (typeof url !== 'string' || !url) return null;
+      try {
+        const parsed = new URL(url);
+        const policyParam = parsed.searchParams.get('Policy');
+        if (policyParam) {
+          const b64 = policyParam.replace(/-/g, '+').replace(/_/g, '/').replace(/~/g, '=');
+          const json = JSON.parse(atob(b64));
+          const epoch = Number(json?.Statement?.[0]?.Condition?.DateLessThan?.['AWS:EpochTime']);
+          if (Number.isFinite(epoch) && epoch > 0) return epoch * 1000;
+        }
+        const exp = Number(parsed.searchParams.get('expires'));
+        if (Number.isFinite(exp) && exp > 0) return exp * 1000;
+      } catch (_) {}
+      return null;
+    }
+
+    function cacheStreamUrl(trackId, url) {
+      if (!trackId || !url) return;
+      streamUrlCache.set(String(trackId), url);
+      streamUrlCacheAt.set(String(trackId), Date.now());
+    }
+
+    function invalidateStreamUrl(trackId) {
+      if (!trackId) return;
+      streamUrlCache.delete(String(trackId));
+      streamUrlCacheAt.delete(String(trackId));
+    }
+
+    function getCachedStreamUrl(trackId) {
+      if (!trackId || !streamUrlCache.has(String(trackId))) return null;
+      const url = streamUrlCache.get(String(trackId));
+      const cachedAt = streamUrlCacheAt.get(String(trackId)) || 0;
+      const expiresAt = streamUrlExpiresAtMs(url);
+      if (Date.now() - cachedAt > STREAM_URL_TTL_MS || (expiresAt != null && expiresAt - Date.now() < 60 * 1000)) {
+        invalidateStreamUrl(trackId);
+        return null;
+      }
+      return url;
+    }
+
     function prefetchNextTrack(index) {
       if (!currentQueue || index < 0 || index >= currentQueue.length) return;
       const nextT = currentQueue[index];
-      if (!nextT || !nextT.id || streamUrlCache.has(nextT.id)) return;
+      if (!nextT || !nextT.id || getCachedStreamUrl(nextT.id)) return;
       setTimeout(async () => {
         try {
           if (api && api.getStreamUrl) {
             const res = await api.getStreamUrl(nextT.id);
-            if (res) streamUrlCache.set(nextT.id, res);
+            if (res) cacheStreamUrl(nextT.id, res);
           }
         } catch (_) {}
       }, 1200);
@@ -16914,6 +17009,8 @@
         if (newQueue && Array.isArray(newQueue) && newQueue.length > 0) {
           if (!fromWave) {
             isWaveActive = false;
+            waveDesiredActive = false;
+            needsWaveQueueRefresh = false;
             currentStationUrn = null;
           }
           if (isShuffle) {
@@ -16941,6 +17038,9 @@
         currentlyPlayingTrackId = track.id;
         discordPlaybackTrack = null;
         const requestId = ++currentPlayRequestId;
+        if (!fromWave && newQueue && Array.isArray(newQueue) && newQueue.length > 0) {
+          lastNonWavePlayRequestId = requestId;
+        }
 
         // Wave tracking
         if (isWaveActive) {
@@ -17004,10 +17104,10 @@
 
         if (!track.id) return;
 
-        let streamInfo = streamUrlCache.get(track.id);
+        let streamInfo = getCachedStreamUrl(track.id);
         if (!streamInfo) {
           streamInfo = await api.getStreamUrl(track.id);
-          if (streamInfo) streamUrlCache.set(track.id, streamInfo);
+          if (streamInfo) cacheStreamUrl(track.id, streamInfo);
         }
         if (requestId !== currentPlayRequestId) return;
         prefetchNextTrack(currentTrackIndex + 1);
@@ -17061,6 +17161,7 @@
           });
           hls.on(Hls.Events.ERROR, (event, data) => {
             if (data.fatal && requestId === currentPlayRequestId) {
+              invalidateStreamUrl(track.id);
               console.log('HLS fatal, switching to native fallback:', data.type);
               try {
                 hls.destroy();
@@ -17380,6 +17481,7 @@
 
 
       if (lastMixedData) renderHomeFeed(allTracks, lastMixedData);
+      if (typeof renderWaveTrackList === 'function' && isWaveActive) renderWaveTrackList();
 
 
 
@@ -17468,6 +17570,7 @@
 
 
       if (lastMixedData) renderHomeFeed(allTracks, lastMixedData);
+      if (typeof renderWaveTrackList === 'function' && isWaveActive) renderWaveTrackList();
 
 
 
@@ -20835,6 +20938,8 @@
 
 
     let currentDisplayedTrackMixes = [];
+    let currentQuickCardTracks = [];
+    let currentHomeFavoriteTracks = [];
 
 
 
@@ -20923,27 +21028,57 @@
 
 
     function refreshMixSelection(sourceTracks, forceNew = true) {
-      let source = (sourceTracks && sourceTracks.length > 0) ? sourceTracks : (allTracks && allTracks.length > 0 ? allTracks : []);
-      if (source.length === 0) {
-        if (lastMixedData && Array.isArray(lastMixedData)) {
-          for (const item of lastMixedData) {
-            if (item.tracks && Array.isArray(item.tracks) && item.tracks.length > 0) {
-              source.push(...item.tracks);
-            }
-          }
+      let pool = [];
+      const seenPoolIds = new Set();
+      const pushPool = (list) => {
+        for (const t of (Array.isArray(list) ? list : [])) {
+          if (!t || t.id == null) continue;
+          const id = String(t.id);
+          if (seenPoolIds.has(id)) continue;
+          seenPoolIds.add(id);
+          pool.push(t);
+        }
+      };
+
+      pushPool((sourceTracks && sourceTracks.length > 0) ? sourceTracks : allTracks);
+      if (pool.length === 0 && lastMixedData && Array.isArray(lastMixedData)) {
+        for (const item of lastMixedData) {
+          pushPool(item?.tracks);
         }
       }
 
-      if (source.length === 0) {
+      if (pool.length === 0) {
         currentDisplayedTrackMixes = [];
+      currentQuickCardTracks = [];
+      currentHomeFavoriteTracks = [];
         return [];
       }
 
-      // Filter out currently displayed base tracks to guarantee brand new mixes on refresh
       const currentIds = new Set(currentDisplayedTrackMixes.map(m => String(m.baseTrack.id)));
-      let pool = source.filter(t => !currentIds.has(String(t.id)));
-      if (pool.length < 5) pool = source;
-      const chosenBaseTracks = pickRandomSample(pool, 5);
+      let recentMixIds = [];
+      try {
+        const stored = JSON.parse(localStorage.getItem('onyx_recent_track_mix_ids') || '[]');
+        if (Array.isArray(stored)) recentMixIds = stored.map(String);
+      } catch (_) {}
+
+      const chosenBaseTracks = (typeof WaveEngine?.pickHomeTracks === 'function')
+        ? WaveEngine.pickHomeTracks(pool, 5, {
+            excludeIds: currentIds,
+            recentIds: recentMixIds,
+            excludeTracks: currentDisplayedTrackMixes.map(m => m.baseTrack)
+          })
+        : pickRandomSample(pool.filter(t => !currentIds.has(String(t.id))), 5);
+
+      try {
+        const nextRecent = [...recentMixIds.filter(id => !chosenBaseTracks.some(t => String(t.id) === id)), ...chosenBaseTracks.map(t => String(t.id))].slice(-120);
+        localStorage.setItem('onyx_recent_track_mix_ids', JSON.stringify(nextRecent));
+      } catch (_) {}
+
+      if (forceNew) {
+        currentQuickCardTracks = [];
+        currentHomeFavoriteTracks = [];
+      }
+
       currentDisplayedTrackMixes = chosenBaseTracks.map(t => ({
         id: t.id,
         baseTrack: t,
@@ -21461,8 +21596,9 @@
       const glowRing = document.getElementById('wave-glow-ring');
       const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
       const isLight = (currentThemeKey === 'light');
+      const isRealWave = isWaveActive && currentStationUrn === "my_wave";
 
-      if (isWaveActive && currentStationUrn === "my_wave" && playing) {
+      if (isRealWave && playing) {
         if (playSvg) { playSvg.style.display = 'none'; playSvg.classList.add('hidden'); }
         if (pauseSvg) { pauseSvg.style.display = 'block'; pauseSvg.classList.remove('hidden'); }
         if (waveBtn) waveBtn.title = "Пауза";
@@ -21471,7 +21607,7 @@
           subtext.style.color = wt.activeTrackTitle;
           subtext.className = "text-xs font-semibold select-none transition-colors";
         }
-        if (streamIndicator) streamIndicator.textContent = "В эфире";
+        if (streamIndicator) streamIndicator.textContent = isWaveStarting ? "Подбираем треки..." : "В эфире";
         if (glowRing) {
           glowRing.style.background = wt.glowRing;
           glowRing.className = "absolute -inset-2.5 rounded-full opacity-75 blur-xl animate-pulse pointer-events-none";
@@ -21480,18 +21616,15 @@
         if (playSvg) { playSvg.style.display = 'block'; playSvg.classList.remove('hidden'); }
         if (pauseSvg) { pauseSvg.style.display = 'none'; pauseSvg.classList.add('hidden'); }
         if (waveBtn) {
-          const isRealWave = isWaveActive && currentStationUrn === "my_wave";
           waveBtn.title = isRealWave ? "Продолжить волну" : "Запустить волну";
         }
         if (subtext) {
-          const isRealWave = isWaveActive && currentStationUrn === "my_wave";
-          subtext.textContent = isRealWave ? "На паузе" : "Моя волна";
+          subtext.textContent = isWaveStarting ? "Подбор..." : (isRealWave ? "На паузе" : "Моя волна");
           subtext.style.color = isLight ? '#64748b' : '#a3a3a3';
           subtext.className = "text-xs font-medium select-none transition-colors";
         }
         if (streamIndicator) {
-          const isRealWave = isWaveActive && currentStationUrn === "my_wave";
-          streamIndicator.textContent = isRealWave ? "На паузе" : "Готов к эфиру";
+          streamIndicator.textContent = isWaveStarting ? "Подбираем треки..." : (isRealWave ? "На паузе" : "Готов к эфиру");
         }
         if (glowRing) {
           glowRing.style.background = wt.glowRing;
@@ -21508,7 +21641,7 @@
       const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
       const isLight = (currentThemeKey === 'light');
 
-      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0 || currentQueue.length > 35) {
+      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0) {
         container.innerHTML = `
           <div class="text-center py-12 text-xs ${isLight ? 'text-slate-400' : 'text-neutral-500'}">
             Нажмите кнопку запуска, чтобы сгенерировать умную волну по вашему вкусу.
@@ -21596,7 +21729,9 @@
     }
 
     async function setWaveMood(btn, mood) {
-      waveCurrentMood = mood;
+      const normalized = WaveEngine.normalizeWaveMood(mood);
+      waveCurrentMood = normalized;
+      window.waveCurrentMood = normalized;
       const wt = waveThemes[currentThemeKey || 'wine'] || waveThemes.wine;
       document.querySelectorAll('.wave-mood-chip').forEach(b => {
         b.style.background = wt.inactiveChipBg;
@@ -21612,17 +21747,20 @@
         btn.style.boxShadow = wt.activeChipShadow;
         btn.style.borderColor = 'transparent';
       }
-      if (isWaveActive) {
-        await startWave(mood);
+      if (isWaveActive || waveDesiredActive) {
+        await startWave(normalized);
       }
     }
     window.setWaveMood = setWaveMood;
 
     async function toggleWavePlayback() {
-      const incompatible = ['sad', 'calm', 'energetic'].includes(waveCurrentMood)
-        && waveMoodFit(currentQueue?.[currentTrackIndex], waveCurrentMood) < 0;
-      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0 || incompatible) {
-        await startWave(waveCurrentMood);
+      const targetMood = WaveEngine.normalizeWaveMood(waveCurrentMood);
+      if (isWaveStarting && waveCurrentMood === targetMood) return;
+      const sectionChanged = Boolean(waveActiveMood && waveActiveMood !== targetMood);
+      const incompatible = ['sad', 'calm', 'energetic'].includes(targetMood)
+        && WaveEngine.waveMoodFit(currentQueue?.[currentTrackIndex], targetMood) < 0;
+      if (!isWaveActive || currentStationUrn !== "my_wave" || !currentQueue || currentQueue.length === 0 || needsWaveQueueRefresh || sectionChanged || incompatible) {
+        await startWave(targetMood);
       } else {
         togglePlay();
         syncWavePlayButton(isPlaying);
@@ -21643,7 +21781,7 @@
       originalQueue = [...currentQueue];
       isShuffle = true;
       shufflePlayedTrackIds.clear();
-        shuffleUpcomingTracks = [];
+      shuffleUpcomingTracks = [];
       if (currentQueue[currentTrackIndex]?.id != null) {
         shufflePlayedTrackIds.add(String(currentQueue[currentTrackIndex].id));
       }
@@ -21656,447 +21794,421 @@
     window.shuffleWaveQueue = shuffleWaveQueue;
 
     async function refreshWaveFeed() {
-      await startWave(true);
+      ensureWaveMemoryLoaded();
+      const mood = WaveEngine.normalizeWaveMood(waveCurrentMood);
+      const previousIds = (currentStationUrn === 'my_wave' && Array.isArray(currentQueue))
+        ? currentQueue.map(t => String(t?.id)).filter(Boolean)
+        : [];
+      if (currentStationUrn === 'my_wave' && Array.isArray(currentQueue)) {
+        rememberWaveServedTracks(currentQueue);
+      }
+      waveSessionSalt = (waveSessionSalt + 1 + Math.floor(Math.random() * 997)) >>> 0;
+      await startWave(mood, { excludeIds: previousIds });
     }
     window.refreshWaveFeed = refreshWaveFeed;
 
-    const MOOD_SEARCH_KEYWORDS = {
-      energetic: ['phonk', 'drum and bass', 'bass house', 'edm festival', 'synthwave electro', 'trap banger', 'cyberpunk club', 'techno bounce'],
-      calm: ['lo-fi hip hop', 'ambient chill', 'acoustic indie', 'chillout session', 'chillhop beats', 'calm piano', 'dream pop', 'relaxing beats'],
-      sad: ['sad indie', 'emo rap', 'melancholy songs', 'sad acoustic', 'heartbreak songs', 'sad piano'],
-      new: ['fresh tracks 2026', 'new soundcloud premiere', 'trending remix', 'new wave music', 'underground discovery', 'breakthrough artists'],
-      all: ['electronic hits', 'indie alternative', 'hip hop beats', 'club dance', 'deep house', 'hyperpop', 'rock anthems', 'lofi beats'],
-      favorites: []
-    };
-
+    const WAVE_MEMORY_KEY_PREFIX = 'sc_wave_memory_v1_';
+    const MAX_RECENT_WAVE = 120;
+    const MAX_SERVED_WAVE = 240;
     let waveRecentPlayedList = [];
-    const MAX_RECENT_WAVE = 35;
+    let waveRecentServedList = [];
+    const waveSessionTracksById = new Map();
+    let waveSessionSalt = Math.floor(Math.random() * 1000000) + 1;
+    let waveSeedCursor = Math.floor(Math.random() * 64);
+    let waveMemoryLoadedFor = null;
+
+    function waveMemoryUserKey() {
+      const uid = currentUser?.id != null ? String(currentUser.id) : 'guest';
+      return WAVE_MEMORY_KEY_PREFIX + uid;
+    }
+
+    function pushCappedHistory(list, value, maxSize) {
+      if (value == null) return;
+      const sid = String(value);
+      if (!sid) return;
+      const idx = list.indexOf(sid);
+      if (idx !== -1) list.splice(idx, 1);
+      list.push(sid);
+      while (list.length > maxSize) list.shift();
+    }
+
+    function ensureWaveMemoryLoaded() {
+      const key = waveMemoryUserKey();
+      if (waveMemoryLoadedFor === key) return;
+      waveMemoryLoadedFor = key;
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return;
+        if (Number.isFinite(parsed.cursor) && parsed.cursor >= 0) {
+          waveSeedCursor = Math.max(waveSeedCursor, Math.floor(parsed.cursor));
+        }
+        if (Array.isArray(parsed.playedIds)) {
+          const merged = [];
+          for (const id of parsed.playedIds) pushCappedHistory(merged, id, MAX_RECENT_WAVE);
+          for (const id of waveRecentPlayedList) pushCappedHistory(merged, id, MAX_RECENT_WAVE);
+          waveRecentPlayedList = merged;
+        }
+        if (Array.isArray(parsed.servedIds)) {
+          const merged = [];
+          for (const id of parsed.servedIds) pushCappedHistory(merged, id, MAX_SERVED_WAVE);
+          for (const id of waveRecentServedList) pushCappedHistory(merged, id, MAX_SERVED_WAVE);
+          waveRecentServedList = merged;
+        }
+        if (typeof waveCandidateCache?.hydrate === 'function') {
+          waveCandidateCache.hydrate(parsed);
+        }
+      } catch (_) {}
+    }
+
+    function persistWaveMemory() {
+      try {
+        const cacheState = typeof waveCandidateCache?.exportState === 'function' ? waveCandidateCache.exportState() : {};
+        localStorage.setItem(waveMemoryUserKey(), JSON.stringify({
+          cursor: waveSeedCursor,
+          playedIds: waveRecentPlayedList.slice(-MAX_RECENT_WAVE),
+          servedIds: waveRecentServedList.slice(-MAX_SERVED_WAVE),
+          ...cacheState,
+          updatedAt: Date.now()
+        }));
+      } catch (_) {}
+    }
+
+    function rememberWaveServedTracks(tracks) {
+      ensureWaveMemoryLoaded();
+      for (const track of (Array.isArray(tracks) ? tracks : [])) {
+        if (!track || track.id == null) continue;
+        const sid = String(track.id);
+        waveSessionTracksById.set(sid, track);
+        if (waveSessionTracksById.size > 400) {
+          const oldest = waveSessionTracksById.keys().next().value;
+          waveSessionTracksById.delete(oldest);
+        }
+        pushCappedHistory(waveRecentServedList, sid, MAX_SERVED_WAVE);
+      }
+      persistWaveMemory();
+    }
 
     function markWaveTrackPlayed(trackId) {
       if (!trackId) return;
-      const sid = String(trackId);
-      waveRecentPlayedList = waveRecentPlayedList.filter(id => id !== sid);
-      waveRecentPlayedList.push(sid);
-      if (waveRecentPlayedList.length > MAX_RECENT_WAVE) {
-        waveRecentPlayedList.shift();
-      }
+      ensureWaveMemoryLoaded();
+      pushCappedHistory(waveRecentPlayedList, trackId, MAX_RECENT_WAVE);
+      pushCappedHistory(waveRecentServedList, trackId, MAX_SERVED_WAVE);
+      persistWaveMemory();
     }
     window.markWaveTrackPlayed = markWaveTrackPlayed;
 
     function isWaveTrackRecentlyPlayed(trackId) {
+      ensureWaveMemoryLoaded();
       return waveRecentPlayedList.includes(String(trackId));
     }
     window.isWaveTrackRecentlyPlayed = isWaveTrackRecentlyPlayed;
 
-    function waveArtistKey(track) {
-      return String(track?.artist || '').trim().toLowerCase();
-    }
-
-    function orderWaveRecommendations(tracks, limit, precedingTrack, mixMoods = false) {
-      const artistCounts = new Map();
-      let previousArtist = waveArtistKey(precedingTrack);
-      if (previousArtist) artistCounts.set(previousArtist, 1);
-      let previousMood = mixMoods ? waveTrackMood(precedingTrack) : '';
-      const remaining = tracks.map((track, rank) => ({
-        track, rank, artist: waveArtistKey(track), mood: mixMoods ? waveTrackMood(track) : ''
-      }));
-      const ordered = [];
-      while (remaining.length && ordered.length < limit) {
-        const hasAlternative = remaining.some(({ artist }) => artist && artist !== previousArtist);
-        const hasNewArtist = ordered.length < 5 && remaining.some(({ artist }) => artist && !artistCounts.has(artist));
-        let bestIndex = 0;
-        let bestScore = Infinity;
-        remaining.forEach(({ rank, artist, mood }, index) => {
-          if (hasNewArtist && (!artist || artistCounts.has(artist))) return;
-          if (hasAlternative && artist === previousArtist) return;
-          const repeatMood = mood && mood === previousMood ? 6 : 0;
-          const score = rank + 5 * (artistCounts.get(artist) || 0) + repeatMood;
-          if (score < bestScore) {
-            bestScore = score;
-            bestIndex = index;
-          }
-        });
-        const [{ track, artist, mood }] = remaining.splice(bestIndex, 1);
-        ordered.push(track);
-        if (artist) artistCounts.set(artist, (artistCounts.get(artist) || 0) + 1);
-        previousArtist = artist;
-        previousMood = mood;
-      }
-      return ordered;
-    }
+    const waveArtistKey = WaveEngine.waveArtistKey;
+    const isAiSlopTrack = WaveEngine.isAiSlopTrack;
+    const waveGenreKey = WaveEngine.waveGenreKey;
+    const waveTrackMood = WaveEngine.waveTrackMood;
+    const waveMoodFit = WaveEngine.waveMoodFit;
+    const orderWaveRecommendations = WaveEngine.orderWaveRecommendations;
+    window.isAiSlopTrack = isAiSlopTrack;
 
     let waveStartRequest = 0;
-    let waveSeedCursor = 0;
     let personalWaveRefill;
     let waveRefillQueue;
     let waveRefillAfter = 0;
+    const waveCandidateCache = WaveEngine.createWaveCache();
 
-    function isAiSlopTrack(track) {
-      if (!track) return true;
-      if (track.duration_ms && track.duration_ms < 50000) return true;
-
-      const textToScan = [
-        track.title,
-        track.artist,
-        track.author,
-        track.genre,
-        track.tag_list,
-        track.description,
-        track.user_permalink,
-        track.permalink_url
-      ].filter(Boolean).join(' ').toLowerCase();
-
-      // Explicit AI platforms and generators
-      if (/\b(?:suno(?:\.ai|ai)?|udio(?:\.ai|ai)?|soundraw|boomy|aimusic|chatgpt|openai|stableaudio|stable audio|midjourney)\b/i.test(textToScan)) return true;
-
-      // AI voice/cover models
-      if (/\b(?:rvc|diff-svc|so-vits|so-vits-svc|voice model|ai cover|ai version|ai remake|weights\.gg)\b/i.test(textToScan)) return true;
-
-      // General AI generation markers in English
-      if (/\b(?:ai generated|generated by ai|created with ai|made with ai|ai vocals?|ai song|ai music|ai rap|ai beat|ai phonk|ai rock|ai pop|ai lo-?fi|ai artist|ai voice)\b/i.test(textToScan)) return true;
-
-      // Russian AI markers
-      if (/(?:^|[^\p{L}\p{N}])(?:нейросет\p{L}*|нейромузык\p{L}*|сгенерирован\p{L}*|создано ии|ии вокал|ии кавер|ии трек|ии музык\p{L}*)(?:$|[^\p{L}\p{N}])/iu.test(textToScan)) return true;
-
-      // Suspicious hashtags
-      if (/#(?:suno|udio|ai|aimusic|aigenerated|aicover|aivoice|neural|ии|нейросеть)\b/iu.test(textToScan)) return true;
-
-      // Suspicious artist name
-      const artist = String(track.artist || '').trim().toLowerCase();
-      if (/^(?:suno|udio|ai[ _]|.*[ _]ai$|.*[ _]suno$|.*[ _]udio$)/i.test(artist)) return true;
-
-      return false;
-    }
-    window.isAiSlopTrack = isAiSlopTrack;
-
-    function waveMetadataText(value) {
-      return String(value || '').normalize('NFKC').toLowerCase().replace(/ё/g, 'е')
-        .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    function waveRecentHistory() {
+      return (typeof recentlyPlayed !== 'undefined' && Array.isArray(recentlyPlayed)) ? recentlyPlayed : [];
     }
 
-    function waveGenreKey(track) {
-      const genre = waveMetadataText(track?.genre);
-      if (!genre || genre === 'music' || genre === 'other') return '';
-      if (/^(?:hip ?hop(?: rap)?|rap(?: hip ?hop)?)$/.test(genre)) return 'hip hop';
-      if (/^(?:drum (?:and )?bass|dnb)$/.test(genre)) return 'drum and bass';
-      if (/^(?:dance (?:and )?edm|edm)$/.test(genre)) return 'dance';
-      return genre;
-    }
-
-    function waveTrackMood(track) {
-      if (isAiSlopTrack(track)) return '';
-      const metadata = waveMetadataText([track?.genre, track?.tag_list, track?.title, track?.artist].filter(Boolean).join(' '));
-      if (/(?:^| )(?:sad(?:core|rap|ness)?|sorrow|melanchol(?:y|ic|ia)|emo|depress(?:ed|ing|ion)|heartbrok(?:en|e)|heartbreak|breakup|lonely|груст\p{L}*|печаль\p{L}*|тоск\p{L}*|меланхол\p{L}*)(?: |$)/u.test(metadata)) return 'sad';
-      if (/(?:^| )(?:calm|relax(?:ing|ation)?|peaceful|ambient|chill(?:hop|out|wave)?|downtempo|lo fi|lofi|smooth jazz|sleep|спокой\p{L}*|расслаб\p{L}*|уют\p{L}*)(?: |$)/u.test(metadata)) return 'calm';
-      if (/(?:^| )(?:happy|upbeat|uplifting|joyful|cheerful|feel good|весел\p{L}*|радост\p{L}*)(?: |$)/u.test(metadata)) return 'happy';
-      const genre = waveGenreKey(track);
-      if (/\b(?:breakcore|dance|drum and bass|hardcore|house|phonk|punk|techno|trance|rock|metal|trap|edm)\b/.test(genre) ||
-          /(?:^| )(?:phonk|drift|bass|energy|club|dance|edm|rave|hardcore|party|techno|synthwave|drum and bass|dnb|fast|бодр\p{L}*|энерг\p{L}*|кач\p{L}*|драйв\p{L}*)(?: |$)/u.test(metadata)) return 'energetic';
-      if (/\b(?:acoustic|piano|ambient|chill)\b/.test(genre)) return 'calm';
-      return 'all';
-    }
-
-    function waveMoodFit(track, mood) {
-      if (!track || isAiSlopTrack(track)) return -1;
-      if (!mood || mood === 'all') return 0;
-      if (mood === 'sad' || mood === 'calm') return waveTrackMood(track) === mood ? 1 : -1;
-      if (mood === 'energetic') {
-        const trackMood = waveTrackMood(track);
-        if (trackMood === 'calm' || trackMood === 'sad') return -1;
-        return trackMood === 'energetic' || trackMood === 'happy' ? 1 : 0;
+    function buildWaveRecentSet(extraIds = []) {
+      ensureWaveMemoryLoaded();
+      const recent = new Set(waveRecentPlayedList);
+      for (const item of waveRecentHistory().slice(0, 60)) {
+        const tid = item?.track?.id;
+        if (tid != null) recent.add(String(tid));
       }
-      return 0;
-    }
-
-    async function searchWaveMood(mood, offset) {
-      const keywords = MOOD_SEARCH_KEYWORDS[mood] || MOOD_SEARCH_KEYWORDS.all;
-      if (!keywords || !keywords.length) return [];
-      const query = keywords[offset % keywords.length];
-      let results = [];
-      try {
-        if (api && api.searchTracks) {
-          results = await api.searchTracks(query, 'soundcloud');
-        } else if (api && api.invoke) {
-          results = await api.invoke('search_tracks', { query, provider: 'soundcloud' });
-        }
-      } catch (_) {}
-      return Array.isArray(results)
-        ? results.filter(track => track?.id != null && !isAiSlopTrack(track) && (mood === 'all' || waveMoodFit(track, mood) >= 0))
-        : [];
-    }
-
-    function waveTasteSeeds(mood) {
-      const likes = new Map(allTracks.filter(track => track?.id != null && !isAiSlopTrack(track)).map(track => [String(track.id), track]));
-      if (likes.size) {
-        const recentLikes = recentlyPlayed.slice(0, 50).map(({ track }) => track?.id != null ? likes.get(String(track.id)) : null).filter(Boolean);
-        return [...new Set([...recentLikes, ...likes.values()])]
-          .filter(t => !isAiSlopTrack(t))
-          .sort((a, b) => waveMoodFit(b, mood) - waveMoodFit(a, mood));
+      for (const id of extraIds) {
+        if (id != null) recent.add(String(id));
       }
-      if (mood === 'favorites') return [];
-      return (lastMixedData || []).flatMap(mix => mix.tracks || []).filter(track => track?.id != null && !isAiSlopTrack(track));
+      return recent;
     }
 
-    async function startWave(mood = waveCurrentMood) {
+    function buildWaveServedSet(extraIds = []) {
+      ensureWaveMemoryLoaded();
+      const served = new Set(waveRecentServedList);
+      for (const id of (Array.isArray(extraIds) ? extraIds : [])) {
+        if (id != null) served.add(String(id));
+      }
+      return served;
+    }
+
+    function buildWaveRecentSongKeys(extraTracks = []) {
+      const recentTracks = waveRecentHistory().slice(0, 60).map(item => item?.track).filter(Boolean);
+      const sessionTracks = Array.from(waveSessionTracksById.values());
+      const queueTracks = Array.isArray(currentQueue) ? currentQueue : [];
+      return WaveEngine.collectSongKeys([...recentTracks, ...sessionTracks, ...queueTracks, ...(Array.isArray(extraTracks) ? extraTracks : [])]);
+    }
+
+    function extractMixedTracks(mixedData) {
+      const list = Array.isArray(mixedData)
+        ? mixedData
+        : (Array.isArray(mixedData?.collection) ? mixedData.collection : []);
+      const tracks = [];
+      for (const mix of list) {
+        if (Array.isArray(mix?.tracks)) tracks.push(...mix.tracks);
+      }
+      return tracks;
+    }
+
+    function buildWaveTasteProfile(extraFallback = []) {
+      const mixedFallback = extractMixedTracks(lastMixedData);
+      const preloaded = Array.isArray(window.PRELOADED_TRACKS) ? window.PRELOADED_TRACKS : [];
+      const extra = Array.isArray(extraFallback) ? extraFallback : [];
+      const likes = Array.isArray(allTracks) ? allTracks : [];
+      return WaveEngine.buildTasteProfile(likes, waveRecentHistory(), [...extra, ...mixedFallback, ...preloaded]);
+    }
+
+    async function startWave(mood = waveCurrentMood, options = {}) {
+      ensureWaveMemoryLoaded();
+      const targetMood = WaveEngine.normalizeWaveMood(mood);
       const request = ++waveStartRequest;
-      const playbackBeforeSearch = currentPlayRequestId;
-      waveCurrentMood = mood;
+      const nonWaveBaseline = lastNonWavePlayRequestId;
+      const isCancelled = () => request !== waveStartRequest || lastNonWavePlayRequestId !== nonWaveBaseline;
+      waveCurrentMood = targetMood;
+      window.waveCurrentMood = targetMood;
+      waveDesiredActive = true;
+      needsWaveQueueRefresh = false;
       isWaveActive = true;
+      window.isWaveActive = true;
       currentStationUrn = 'my_wave';
+      isWaveStarting = true;
+      if (typeof updateWaveTheme === 'function') updateWaveTheme(currentThemeKey);
       syncWavePlayButton(true);
 
-      const taste = waveTasteSeeds(mood);
-      const targeted = mood === 'sad' || mood === 'calm' || mood === 'energetic';
-      const local = taste.length || mood === 'favorites'
-        ? taste
-        : (currentQueue.length ? currentQueue.filter(t => !isAiSlopTrack(t)) : ((window.PRELOADED_TRACKS || []).filter(t => !isAiSlopTrack(t))));
-
-      const recent = new Set(recentlyPlayed.slice(0, 60).map(({ track }) => String(track.id)));
-      const isFresh = track => track?.id != null && !recent.has(String(track.id)) && !isWaveTrackRecentlyPlayed(track.id) && !isAiSlopTrack(track);
-
-      let seedCandidates = local.filter(t => isFresh(t) && waveMoodFit(t, mood) >= 0);
-      if (!seedCandidates.length) seedCandidates = local.filter(t => !isAiSlopTrack(t) && waveMoodFit(t, mood) >= 0);
-
-      // If targeted mood and very few local tracks, supplement with search
-      if (targeted && seedCandidates.length < 3) {
-        notify('Подбираем треки под настроение…', '🌊');
-        const cursor = waveSeedCursor++;
-        const batches = await Promise.all([searchWaveMood(mood, cursor), searchWaveMood(mood, cursor + 1)]);
-        if (request !== waveStartRequest || playbackBeforeSearch !== currentPlayRequestId) return;
-        const found = [...new Map(batches.flat().map(t => [String(t.id), t])).values()].filter(t => !isAiSlopTrack(t));
-        const freshFound = found.filter(isFresh);
-        seedCandidates = [...seedCandidates, ...(freshFound.length ? freshFound : found)];
-      }
-
-      if (!seedCandidates.length) {
-        const message = targeted ? 'Пока не удалось найти треки под это настроение' : 'Для запуска волны добавьте любимые треки в медиатеку';
-        notify(message, 'ℹ️');
-        isWaveActive = false;
-        syncWavePlayButton(false);
-        return;
-      }
-
-      // 1. Pick 3-5 DIVERSE seeds from DIFFERENT artists across the taste pool
-      // This guarantees the wave is NOT anchored to just 1 single track!
-      const distinctSeeds = [];
-      const chosenArtists = new Set();
-      const shuffledSeeds = [...seedCandidates].sort(() => Math.random() - 0.5);
-      for (const t of shuffledSeeds) {
-        const art = waveArtistKey(t) || String(t.id);
-        if (!chosenArtists.has(art)) {
-          chosenArtists.add(art);
-          distinctSeeds.push(t);
-          if (distinctSeeds.length >= 4) break;
-        }
-      }
-      if (!distinctSeeds.length) distinctSeeds.push(shuffledSeeds[0]);
-
-      // 2. Start playback immediately with the first chosen seed
-      const leadTrack = distinctSeeds[0];
-      currentQueue = [leadTrack];
-      currentTrackIndex = 0;
-      const playback = playTrack(0, [leadTrack], true);
-      syncWavePlayButton(true);
-
-      // 3. Immediately query recommendations from ALL distinct seeds simultaneously in parallel!
-      // This builds a diverse, non-monotonous queue of 15-20 tracks right away.
       try {
-        const relatedPromises = distinctSeeds.map(s =>
-          (api && api.getRelatedTracks) ? api.getRelatedTracks(s.id) : (api && api.invoke ? api.invoke('get_related_tracks', { trackId: s.id }) : Promise.resolve([]))
-        );
-        let timeout;
-        const results = await Promise.race([
-          Promise.allSettled(relatedPromises),
-          new Promise(r => { timeout = setTimeout(r, 3500); })
-        ]);
-        clearTimeout(timeout);
+        const excludeIds = Array.isArray(options.excludeIds) ? options.excludeIds : [];
+        const recentPlayedIds = buildWaveRecentSet(excludeIds);
+        const recentServedIds = buildWaveServedSet(excludeIds);
+        const recentSongKeys = buildWaveRecentSongKeys();
+        const profile = buildWaveTasteProfile(currentQueue);
+        const cursor = waveSeedCursor++;
+        const salt = waveSessionSalt;
 
-        if (request === waveStartRequest && playbackBeforeSearch === currentPlayRequestId && isWaveActive) {
-          const seen = new Set([String(leadTrack.id)]);
-          const candidatePool = [];
-
-          if (Array.isArray(results)) {
-            results.forEach(res => {
-              if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-                res.value.forEach(t => {
-                  const sid = String(t.id);
-                  if (!seen.has(sid) && !isWaveTrackRecentlyPlayed(sid) && !isAiSlopTrack(t) && waveMoodFit(t, mood) >= 0) {
-                    seen.add(sid);
-                    candidatePool.push(t);
-                  }
-                });
-              }
-            });
+        if (targetMood === 'favorites') {
+          if (!profile.likedTracks.length) {
+            notify('Добавьте любимые треки в медиатеку, чтобы запустить «Любимое»', 'ℹ️');
+            isWaveActive = false;
+            window.isWaveActive = false;
+            waveActiveMood = null;
+            window.waveActiveMood = null;
+            return;
           }
-
-          // Blend in favorite tracks from user's library fitting the mood
-          if (mood !== 'new' && taste.length > 0) {
-            const likedFaves = taste.filter(t => !seen.has(String(t.id)) && !isAiSlopTrack(t) && waveMoodFit(t, mood) >= 0);
-            for (const f of likedFaves.slice(0, 5)) {
-              seen.add(String(f.id));
-              candidatePool.push(f);
-            }
-          }
-
-          if (candidatePool.length > 0) {
-            const ordered = orderWaveRecommendations(candidatePool, 16, leadTrack, mood === 'all');
-            currentQueue = [leadTrack, ...ordered];
-            if (isShuffle) originalQueue = [...currentQueue];
-            prefetchNextTrack(1);
-            updateQueueDrawer();
-            renderWaveTrackList();
-            saveSessionState();
-          }
+          const favQueue = WaveEngine.selectFavoriteWaveTracks(profile, 18, {
+            excludeIds: new Set(excludeIds.map(String)),
+            recentPlayedIds,
+            recentServedIds,
+            recentSongKeys,
+            cursor,
+            salt
+          });
+          if (isCancelled() || !favQueue.length) return;
+          waveActiveMood = 'favorites';
+          window.waveActiveMood = 'favorites';
+          isWaveStarting = false;
+          currentQueue = favQueue;
+          currentTrackIndex = 0;
+          if (isShuffle) originalQueue = [...currentQueue];
+          rememberWaveServedTracks(favQueue);
+          const playback = playTrack(0, favQueue, true);
+          syncWavePlayButton(true);
+          updateQueueDrawer();
+          renderWaveTrackList();
+          saveSessionState();
+          checkWaveReplenish();
+          await playback;
+          return;
         }
-      } catch (err) {
-        console.warn('startWave multi-seed fill error:', err);
-      }
 
-      checkWaveReplenish();
-      await playback;
+        if (!profile.pool.length) {
+          notify('Для запуска волны добавьте любимые треки в медиатеку', 'ℹ️');
+          isWaveActive = false;
+          window.isWaveActive = false;
+          waveActiveMood = null;
+          window.waveActiveMood = null;
+          return;
+        }
+
+        const seenIds = new Set(excludeIds.map(String));
+        const { ranked } = await WaveEngine.collectWaveCandidates({
+          profile,
+          mood: targetMood,
+          cursor,
+          salt,
+          api,
+          cache: waveCandidateCache,
+          seenIds,
+          recentPlayedIds,
+          recentServedIds,
+          recentSongKeys,
+          timeoutMs: 3600
+        });
+
+        if (isCancelled()) return;
+
+        let finalQueue = WaveEngine.blendDiscoveryWithFavorites(ranked, profile, targetMood, 16, {
+          seenIds,
+          recentPlayedIds,
+          recentServedIds,
+          recentSongKeys,
+          cursor,
+          salt
+        });
+
+        if (!finalQueue.length && excludeIds.length) {
+          const relaxedRecent = buildWaveRecentSet();
+          const retryCursor = waveSeedCursor++;
+          const retry = await WaveEngine.collectWaveCandidates({
+            profile,
+            mood: targetMood,
+            cursor: retryCursor,
+            salt,
+            api,
+            cache: waveCandidateCache,
+            seenIds: new Set(),
+            recentPlayedIds: relaxedRecent,
+            recentServedIds: new Set(),
+            timeoutMs: 2800
+          });
+          if (isCancelled()) return;
+          finalQueue = WaveEngine.blendDiscoveryWithFavorites(retry.ranked, profile, targetMood, 16, {
+            seenIds: new Set(),
+            recentPlayedIds: relaxedRecent,
+            cursor: retryCursor,
+            salt
+          });
+        }
+
+        if (!finalQueue.length) {
+          const message = targetMood === 'new'
+            ? 'Не удалось подобрать новые похожие треки — проверьте подключение к сети'
+            : 'Не удалось подобрать треки под выбранный раздел';
+          notify(message, 'ℹ️');
+          isWaveActive = false;
+          window.isWaveActive = false;
+          waveActiveMood = null;
+          window.waveActiveMood = null;
+          return;
+        }
+
+        waveActiveMood = targetMood;
+        window.waveActiveMood = targetMood;
+        isWaveStarting = false;
+        currentQueue = finalQueue;
+        currentTrackIndex = 0;
+        if (isShuffle) originalQueue = [...currentQueue];
+        rememberWaveServedTracks(finalQueue);
+        const playback = playTrack(0, finalQueue, true);
+        syncWavePlayButton(true);
+        prefetchNextTrack(1);
+        updateQueueDrawer();
+        renderWaveTrackList();
+        saveSessionState();
+        checkWaveReplenish();
+        await playback;
+      } catch (err) {
+        console.warn('startWave error:', err);
+        if (typeof logD === 'function') logD('startWave error: ' + (err?.stack || err?.message || err));
+        if (request === waveStartRequest) {
+          isWaveActive = false;
+          window.isWaveActive = false;
+          notify('Не удалось запустить волну: ' + (err?.message || 'ошибка'), '⚠️');
+        }
+      } finally {
+        if (request === waveStartRequest) {
+          isWaveStarting = false;
+          syncWavePlayButton(Boolean(isPlaying && isWaveActive && currentStationUrn === 'my_wave'));
+          renderWaveTrackList();
+        }
+      }
     }
     window.startWave = startWave;
 
-    function personalWaveSeeds(taste, recentTracks, mood, cursor) {
-      const seeds = [];
-      const artists = new Set();
-
-      // Include 1-2 diverse recent tracks from current playback queue
-      if (Array.isArray(recentTracks)) {
-        for (const t of recentTracks) {
-          if (!t || isAiSlopTrack(t)) continue;
-          const art = waveArtistKey(t) || String(t.id);
-          if (!artists.has(art)) {
-            artists.add(art);
-            seeds.push(t);
-            if (seeds.length >= 2) break;
-          }
-        }
-      }
-
-      // Sample 2-3 diverse tracks from the user's broader taste across different artists
-      const validTaste = taste.filter(t => !isAiSlopTrack(t) && waveMoodFit(t, mood) >= 0);
-      if (validTaste.length) {
-        for (let i = 0; i < validTaste.length && seeds.length < 5; i++) {
-          const t = validTaste[(cursor + i * 4) % validTaste.length];
-          const art = waveArtistKey(t) || String(t.id);
-          if (!artists.has(art)) {
-            artists.add(art);
-            seeds.push(t);
-          }
-        }
-      }
-      return seeds;
-    }
-
     async function replenishPersonalWave(queue) {
-      const mood = waveCurrentMood || 'all';
-      const taste = waveTasteSeeds(mood);
-      const seen = new Set(queue.map(track => String(track.id)));
-      for (const { track } of recentlyPlayed.slice(0, 60)) seen.add(String(track.id));
-      const liked = new Set(allTracks.map(track => String(track.id)));
-      const recommendations = [];
+      ensureWaveMemoryLoaded();
+      const mood = WaveEngine.normalizeWaveMood(waveActiveMood || waveCurrentMood || 'all');
+      const profile = buildWaveTasteProfile(queue);
+      const seenIds = new Set(queue.map(track => String(track?.id)).filter(Boolean));
+      const recentPlayedIds = buildWaveRecentSet();
+      const recentServedIds = buildWaveServedSet();
+      const recentSongKeys = buildWaveRecentSongKeys(queue);
+      const cursor = waveSeedCursor++;
+      const salt = waveSessionSalt;
 
-      const canRecommend = track => track?.id != null
-        && !seen.has(String(track.id))
-        && !isWaveTrackRecentlyPlayed(track.id)
-        && !isAiSlopTrack(track)
-        && waveMoodFit(track, mood) >= 0;
-
-      const appendRecommendations = (tracks, limit) => {
-        let added = 0;
-        for (const track of tracks) {
-          if (added >= limit || recommendations.length >= 14) break;
-          if (!canRecommend(track)) continue;
-          seen.add(String(track.id));
-          recommendations.push(track);
-          added++;
-        }
-      };
-
-      if (mood !== 'favorites') {
-        const cursor = waveSeedCursor++;
-        // Use a window of recent queue tracks + user's taste to keep multi-seed diversity
-        const recentWindow = queue.slice(-4).reverse();
-        const seeds = personalWaveSeeds(taste, recentWindow, mood, cursor);
-        const batches = seeds.map(() => []);
-        const discoveryMoods = mood === 'all' ? ['sad', 'happy', 'energetic', 'calm'] : [];
-        if (mood === 'sad' || mood === 'calm' || mood === 'energetic') discoveryMoods.push(mood);
-        const discoveries = new Map();
-        let timeout;
-        try {
-          await Promise.race([
-            Promise.allSettled([
-              ...seeds.map(async (track, index) => {
-                const results = api.getRelatedTracks ? await api.getRelatedTracks(track.id) : (api && api.invoke ? await api.invoke('get_related_tracks', { trackId: track.id }) : []);
-                if (Array.isArray(results)) batches[index] = results.filter(t => !isAiSlopTrack(t)).slice(0, 18);
-              }),
-              ...discoveryMoods.map(async option => {
-                discoveries.set(option, await searchWaveMood(option, cursor));
-              })
-            ]),
-            new Promise(resolve => { timeout = setTimeout(resolve, 3500); })
-          ]);
-        } finally {
-          clearTimeout(timeout);
-        }
-        if (!isWaveActive || currentStationUrn !== 'my_wave' || currentQueue !== queue) return;
-
-        const preferredGenres = new Set(taste.slice(0, 50).map(waveGenreKey).filter(Boolean));
-        const evidence = new Map();
-        batches.forEach((batch) => {
-          const sourceIds = new Set();
-          batch.forEach((track, rank) => {
-            if (!canRecommend(track)) return;
-            const id = String(track.id);
-            if (sourceIds.has(id) || liked.has(id)) return;
-            sourceIds.add(id);
-            const match = evidence.get(id) || { track, sources: 0, score: 0 };
-            match.sources++;
-            match.score += (18 - rank);
-            evidence.set(id, match);
-          });
+      let next = [];
+      if (mood === 'favorites') {
+        const remaining = isShuffle
+          ? queue.filter(track => !shufflePlayedTrackIds.has(String(track.id))).length
+          : queue.length - currentTrackIndex - 1;
+        next = WaveEngine.selectFavoriteWaveTracks(profile, 12, {
+          seenIds,
+          excludeIds: new Set(queue.slice(-4).map(t => String(t?.id)).filter(Boolean)),
+          recentPlayedIds,
+          recentServedIds,
+          recentSongKeys,
+          cursor,
+          salt,
+          precedingTrack: queue.at(-1),
+          isReplenish: true,
+          allowCycle: remaining <= 1
         });
-
-        const ranked = [];
-        for (const match of evidence.values()) {
-          const genre = waveGenreKey(match.track);
-          const familiar = preferredGenres.has(genre);
-          // Reward multi-seed agreement + taste familiarity + mood fit
-          const score = match.score + (match.sources > 1 ? 15 : 0) + (familiar ? 8 : 0) + 12 * waveMoodFit(match.track, mood);
-          ranked.push({ track: match.track, score });
-        }
-        ranked.sort((a, b) => b.score - a.score);
-        const related = ranked.map(({ track }) => track);
-
-        if (mood === 'all') {
-          for (const option of discoveryMoods) {
-            const known = [...related, ...taste].filter(track => !isAiSlopTrack(track) && waveTrackMood(track) === option);
-            appendRecommendations([...known, ...(discoveries.get(option) || [])], 2);
-          }
-        }
-        appendRecommendations(related, 12);
-        for (const tracks of discoveries.values()) appendRecommendations(tracks, 12);
+      } else {
+        const { ranked } = await WaveEngine.collectWaveCandidates({
+          profile,
+          mood,
+          cursor,
+          salt,
+          api,
+          cache: waveCandidateCache,
+          seenIds,
+          recentPlayedIds,
+          recentServedIds,
+          recentSongKeys,
+          queueTracks: queue.slice(-6),
+          isReplenish: true,
+          maxQueueSeeds: 2,
+          timeoutMs: 3600
+        });
+        if (!isWaveActive || currentStationUrn !== 'my_wave' || currentQueue !== queue) return;
+        next = WaveEngine.blendDiscoveryWithFavorites(ranked, profile, mood, 12, {
+          seenIds,
+          recentPlayedIds,
+          recentServedIds,
+          recentSongKeys,
+          precedingTrack: queue.at(-1),
+          cursor,
+          salt
+        });
       }
 
-      if (mood === 'favorites' || (mood !== 'new' && recommendations.length < 6)) {
-        const favorites = taste.filter(track => liked.has(String(track.id)) && canRecommend(track));
-        favorites.sort((a, b) => waveMoodFit(b, mood) - waveMoodFit(a, mood));
-        appendRecommendations(favorites, 12);
-      }
-
-      const next = orderWaveRecommendations(recommendations, 12, queue.at(-1), mood === 'all');
+      if (!isWaveActive || currentStationUrn !== 'my_wave' || currentQueue !== queue) return;
       waveRefillAfter = Date.now() + (next.length ? 1500 : 10000);
-      if (!next.length) return;
+      if (!next.length) {
+        persistWaveMemory();
+        return;
+      }
       queue.push(...next);
       if (isShuffle && originalQueue) originalQueue.push(...next);
+      rememberWaveServedTracks(next);
       prefetchNextTrack(currentTrackIndex + 1);
       updateQueueDrawer();
       renderWaveTrackList();
       saveSessionState();
     }
 
-        // Endless auto-replenish for My Wave with diverse recommendations
+    // Endless auto-replenish for My Wave with diverse recommendations
     let waveReplenishPromise;
     function checkWaveReplenish() {
       if (isWaveActive && currentStationUrn === 'my_wave' && currentQueue.length) {
@@ -22131,62 +22243,55 @@
       if (remaining <= (currentStationUrn === 'my_wave' ? 8 : 4)) {
         isWaveLoadingMore = true;
         try {
+          ensureWaveMemoryLoaded();
           const currentT = currentQueue[currentTrackIndex] || currentQueue[currentQueue.length - 1];
-          const mood = waveCurrentMood || 'all';
           const existingIds = new Set(currentQueue.map(t => String(t.id)));
+          const recentPlayedIds = buildWaveRecentSet();
+          const recentServedIds = buildWaveServedSet();
+          const recentSongKeys = buildWaveRecentSongKeys(currentQueue);
           const queue = currentQueue;
-
-          const newBatch = [];
-
-          // 1. Fetch related tracks from current playing track
-          if (currentT) {
-            let more = null;
-            try {
-              if (api && api.getRelatedTracks) more = await api.getRelatedTracks(currentT.id);
-              else if (api && api.invoke) more = await api.invoke('get_related_tracks', { trackId: currentT.id });
-            } catch (_) {}
-
-            if (more && Array.isArray(more)) {
-              more.forEach(m => {
-                const mid = String(m.id);
-                if (!existingIds.has(mid) && !isWaveTrackRecentlyPlayed(mid)) {
-                  existingIds.add(mid);
-                  newBatch.push(m);
-                }
+          const cursor = waveSeedCursor++;
+          let newBatch = [];
+          if (typeof WaveEngine?.collectTrackRadioCandidates === 'function' && currentT) {
+            const { ranked } = await WaveEngine.collectTrackRadioCandidates({
+              baseTrack: currentT,
+              api,
+              cache: waveCandidateCache,
+              profile: buildWaveTasteProfile(currentQueue),
+              seenIds: existingIds,
+              recentPlayedIds,
+              recentServedIds,
+              recentSongKeys,
+              queueTracks: currentQueue,
+              cursor,
+              salt: waveSessionSalt,
+              isReplenish: true
+            });
+            newBatch = ranked;
+          } else {
+            const related = await waveCandidateCache.getRelated(currentT?.id, api).catch(() => []);
+            if (Array.isArray(related)) {
+              newBatch = related.filter(m => {
+                const mid = String(m?.id ?? '');
+                return mid && !existingIds.has(mid) && !recentPlayedIds.has(mid) && !isAiSlopTrack(m);
               });
             }
           }
 
-          // 2. Add fresh mood-based tracks to avoid repeating the same cluster
-          const moodKeywords = MOOD_SEARCH_KEYWORDS[mood] || MOOD_SEARCH_KEYWORDS.all;
-          if (moodKeywords && moodKeywords.length > 0 && newBatch.length < 15) {
-            const randomKeyword = moodKeywords[Math.floor(Math.random() * moodKeywords.length)];
-            try {
-              let searchResults = null;
-              if (api && api.searchTracks) searchResults = await api.searchTracks(randomKeyword, 'soundcloud');
-              else if (api && api.invoke) searchResults = await api.invoke('search_tracks', { query: randomKeyword, provider: 'soundcloud' });
-
-              if (searchResults && Array.isArray(searchResults)) {
-                searchResults.forEach(t => {
-                  const sid = String(t.id);
-                  if (!existingIds.has(sid) && !isWaveTrackRecentlyPlayed(sid)) {
-                    existingIds.add(sid);
-                    newBatch.push(t);
-                  }
-                });
-              }
-            } catch (_) {}
-          }
-
           if (newBatch.length > 0 && isWaveActive && currentQueue === queue) {
             const firstNewIndex = currentQueue.length;
-            const replenishedTracks = orderWaveRecommendations(newBatch, 18, currentQueue.at(-1));
+            const replenishedTracks = orderWaveRecommendations(newBatch, 18, currentQueue.at(-1), false, 1, {
+              cursor,
+              salt: waveSessionSalt,
+              diversifyWindow: 4
+            });
             currentQueue = [...currentQueue, ...replenishedTracks];
             if (isShuffle && originalQueue) originalQueue = [...originalQueue, ...replenishedTracks];
+            rememberWaveServedTracks(replenishedTracks);
             prefetchNextTrack(firstNewIndex);
             updateQueueDrawer();
             renderWaveTrackList();
-            console.log(`[Моя Волна] Поток пополнен ${newBatch.length} новыми треками`);
+            saveSessionState();
           }
         } catch (e) {
           console.warn("checkWaveReplenish error:", e);
@@ -22198,6 +22303,7 @@
 
     async function startTrackRadio(baseTrack) {
       if (!baseTrack) return;
+      ensureWaveMemoryLoaded();
       const trackId = String(baseTrack.id);
       
       const currentlyActive = Boolean(currentStationUrn && currentStationUrn === trackId);
@@ -22206,57 +22312,81 @@
         return;
       }
 
+      const radioRequestId = ++waveStartRequest;
       currentStationUrn = trackId;
+      waveSessionSalt = (waveSessionSalt + 1 + Math.floor(Math.random() * 997)) >>> 0;
+      const cursor = waveSeedCursor++;
       notify("Волна: " + (baseTrack.title || "Трек"), "📻");
 
       // 1. Immediately play seed track with zero latency
       await playTrack(0, [baseTrack], true);
+      if (radioRequestId !== waveStartRequest) return;
       isWaveActive = true;
       currentStationUrn = trackId;
       if (lastMixedData) renderHomeFeed(allTracks, lastMixedData);
 
-      // 2. Fetch related tracks from SoundCloud API
+      // 2. Fetch diverse multi-hop related tracks + similar artist catalogs + rotated genre/tag search
       try {
-        let related = null;
-        try {
-          if (api && api.getRelatedTracks) {
-            related = await api.getRelatedTracks(baseTrack.id);
-          }
-        } catch (_) {}
-        if (!related || !Array.isArray(related) || related.length === 0) {
-          try {
-            if (api && api.invoke) {
-              related = await api.invoke('get_related_tracks', { trackId: baseTrack.id });
-            }
-          } catch (_) {}
-        }
-
+        const recentPlayedIds = buildWaveRecentSet([trackId]);
+        const recentServedIds = buildWaveServedSet([trackId]);
+        const recentSongKeys = buildWaveRecentSongKeys([baseTrack]);
         const existingIds = new Set([trackId]);
-        const additional = [];
-        if (related && Array.isArray(related) && related.length > 0) {
-          for (const r of related) {
-            const rid = String(r.id);
-            if (!existingIds.has(rid)) {
-              existingIds.add(rid);
-              additional.push(r);
-            }
+        let additional = [];
+
+        if (typeof WaveEngine?.collectTrackRadioCandidates === 'function') {
+          const { ranked } = await WaveEngine.collectTrackRadioCandidates({
+            baseTrack,
+            api,
+            cache: waveCandidateCache,
+            profile: buildWaveTasteProfile([baseTrack]),
+            seenIds: existingIds,
+            recentPlayedIds,
+            recentServedIds,
+            recentSongKeys,
+            queueTracks: [baseTrack],
+            cursor,
+            salt: waveSessionSalt,
+            isReplenish: false
+          });
+          additional = ranked;
+        } else {
+          const related = await waveCandidateCache.getRelated(baseTrack.id, api);
+          if (Array.isArray(related)) {
+            additional = related.filter(r => {
+              const rid = String(r?.id ?? '');
+              return rid && !existingIds.has(rid) && !recentPlayedIds.has(rid) && !isAiSlopTrack(r);
+            });
           }
         }
 
-        // Blend with user's library if related has few tracks
+        if (radioRequestId !== waveStartRequest || currentStationUrn !== trackId) return;
+
+        // Blend with user's non-slop library if related has few tracks
         if (additional.length < 5 && allTracks && allTracks.length > 0) {
-          const pool = allTracks.filter(t => !existingIds.has(String(t.id)));
+          const seenAdditional = new Set([trackId, ...additional.map(t => String(t.id))]);
+          const pool = allTracks.filter(t => !seenAdditional.has(String(t.id)) && !isAiSlopTrack(t));
           const extra = pickRandomSample(pool, 15);
           for (const e of extra) {
-            existingIds.add(String(e.id));
             additional.push(e);
           }
         }
 
         if (additional.length > 0) {
-          currentQueue = [baseTrack, ...additional];
+          const ordered = orderWaveRecommendations(additional, 24, baseTrack, false, 1, {
+            cursor,
+            salt: waveSessionSalt,
+            diversifyWindow: 4
+          });
+          currentQueue = [baseTrack, ...ordered];
           currentTrackIndex = 0;
+          if (isShuffle) {
+            originalQueue = [...currentQueue];
+            shufflePlayedTrackIds = new Set([trackId]);
+          }
+          rememberWaveServedTracks(ordered);
+          prefetchNextTrack(1);
           updateQueueDrawer();
+          renderWaveTrackList();
           saveSessionState();
         }
       } catch (err) {
@@ -22287,6 +22417,10 @@
       // If NO tracks (e.g. user logged out or library empty): show absolute zero tracks on Home
       if (availableTracks.length === 0) {
         currentDisplayedTrackMixes = [];
+      currentQuickCardTracks = [];
+      currentHomeFavoriteTracks = [];
+        currentQuickCardTracks = [];
+        currentHomeFavoriteTracks = [];
         if (recGrid) recGrid.innerHTML = '';
         if (favGrid) favGrid.innerHTML = '';
         if (recSection) recSection.style.display = 'none';
@@ -22306,8 +22440,28 @@
         refreshMixSelection(availableTracks, false);
       }
 
-      // 1. Quick Cards Grid (5 tracks next to Liked Songs hero)
-      let sampleTracks = availableTracks.slice(0, 5);
+      // 1. Quick Cards Grid (5 diverse tracks next to Liked Songs hero)
+      if (!currentQuickCardTracks || currentQuickCardTracks.length === 0) {
+        const mixTracks = (currentDisplayedTrackMixes || []).map(m => m.baseTrack).filter(Boolean);
+        const mixIds = new Set(mixTracks.map(t => String(t.id)));
+        let recentQuickIds = [];
+        try {
+          const stored = JSON.parse(localStorage.getItem('onyx_recent_quick_ids') || '[]');
+          if (Array.isArray(stored)) recentQuickIds = stored.map(String);
+        } catch (_) {}
+        const recentPlayedTracks = (typeof recentlyPlayed !== 'undefined' && Array.isArray(recentlyPlayed))
+          ? recentlyPlayed.slice(0, 2).map(item => item?.track).filter(Boolean)
+          : [];
+        const quickPool = [...recentPlayedTracks, ...availableTracks];
+        currentQuickCardTracks = (typeof WaveEngine?.pickHomeTracks === 'function')
+          ? WaveEngine.pickHomeTracks(quickPool, 5, { excludeIds: mixIds, recentIds: recentQuickIds, excludeTracks: mixTracks })
+          : pickRandomSample(availableTracks, 5);
+        try {
+          const nextRecent = [...recentQuickIds.filter(id => !currentQuickCardTracks.some(t => String(t.id) === id)), ...currentQuickCardTracks.map(t => String(t.id))].slice(-80);
+          localStorage.setItem('onyx_recent_quick_ids', JSON.stringify(nextRecent));
+        } catch (_) {}
+      }
+      let sampleTracks = currentQuickCardTracks;
       sampleTracks.forEach(t => {
         const isCurrent = currentQueue[currentTrackIndex] && String(currentQueue[currentTrackIndex].id) === String(t.id);
         const card = document.createElement('div');
@@ -22388,7 +22542,29 @@
       // 3. Favorites Preview Grid (5 tracks)
       if (favGrid) {
         favGrid.innerHTML = '';
-        const favTracks = availableTracks.length >= 10 ? availableTracks.slice(5, 10) : availableTracks.slice(0, 5);
+        if (!currentHomeFavoriteTracks || currentHomeFavoriteTracks.length === 0) {
+          const usedIds = new Set([
+            ...(currentDisplayedTrackMixes || []).map(m => String(m.baseTrack.id)),
+            ...(currentQuickCardTracks || []).map(t => String(t.id))
+          ]);
+          let recentFavIds = [];
+          try {
+            const stored = JSON.parse(localStorage.getItem('onyx_recent_home_fav_ids') || '[]');
+            if (Array.isArray(stored)) recentFavIds = stored.map(String);
+          } catch (_) {}
+          currentHomeFavoriteTracks = (typeof WaveEngine?.pickHomeTracks === 'function')
+            ? WaveEngine.pickHomeTracks(availableTracks, 5, {
+                excludeIds: usedIds,
+                recentIds: recentFavIds,
+                excludeTracks: [...(currentDisplayedTrackMixes || []).map(m => m.baseTrack), ...(currentQuickCardTracks || [])]
+              })
+            : (availableTracks.length >= 10 ? availableTracks.slice(5, 10) : availableTracks.slice(0, 5));
+          try {
+            const nextRecent = [...recentFavIds.filter(id => !currentHomeFavoriteTracks.some(t => String(t.id) === id)), ...currentHomeFavoriteTracks.map(t => String(t.id))].slice(-100);
+            localStorage.setItem('onyx_recent_home_fav_ids', JSON.stringify(nextRecent));
+          } catch (_) {}
+        }
+        const favTracks = currentHomeFavoriteTracks;
         if (favTracks.length === 0) {
           if (favSection) favSection.style.display = 'none';
         } else {
@@ -25057,8 +25233,8 @@
       currentlyPlayingTrackId = null;
 
       // 4. Reset Immersive Player & close it if open
-      const immTitle = document.getElementById('immersive-player-title');
-      const immArtist = document.getElementById('immersive-player-artist');
+      const immTitle = document.getElementById('immersive-title');
+      const immArtist = document.getElementById('immersive-artist');
       const immCover = document.getElementById('immersive-cover');
       const immTimeElapsed = document.getElementById('immersive-time-elapsed');
       const immTimeTotal = document.getElementById('immersive-time-total');
@@ -25081,14 +25257,30 @@
       currentQueue = [];
       originalQueue = null;
       currentTrackIndex = -1;
+      const prevWaveKey = typeof waveMemoryUserKey === 'function' ? waveMemoryUserKey() : null;
       currentUser = null;
       currentStationUrn = null;
+      isWaveActive = false;
+      waveDesiredActive = false;
+      waveActiveMood = null;
+      window.isWaveActive = false;
+      window.waveActiveMood = null;
+      if (typeof waveRecentPlayedList !== 'undefined') waveRecentPlayedList = [];
+      if (typeof waveRecentServedList !== 'undefined') waveRecentServedList = [];
+      if (typeof waveSessionTracksById !== 'undefined') waveSessionTracksById.clear();
+      if (typeof wavePlayedIds !== 'undefined') wavePlayedIds.clear();
+      if (typeof waveCandidateCache !== 'undefined' && waveCandidateCache?.clear) waveCandidateCache.clear();
+      waveMemoryLoadedFor = null;
       lastMixedData = null;
       currentDisplayedTrackMixes = [];
+      currentQuickCardTracks = [];
+      currentHomeFavoriteTracks = [];
       if (window.cachedLikedTrackIds) window.cachedLikedTrackIds.clear();
 
       // 6. Clear all localStorage keys
       try {
+        if (prevWaveKey) localStorage.removeItem(prevWaveKey);
+        localStorage.removeItem(WAVE_MEMORY_KEY_PREFIX + 'guest');
         localStorage.removeItem('sc_desktop_session');
         localStorage.removeItem('sc_session_token');
         localStorage.removeItem('sc_session_profile');
@@ -26561,7 +26753,7 @@
             }
             allTracks = mergePendingLikes(initialLikes);
             allTracks.forEach(t => { if (t) t.liked = true; });
-            syncQueueFromLikes();
+            if (!currentQueue.length) syncQueueFromLikes();
             saveLocalDatabase();
             renderLikedTable();
 
@@ -26583,7 +26775,7 @@
           }
           allTracks = mergePendingLikes(initialLikes);
           allTracks.forEach(t => { if (t) t.liked = true; });
-          syncQueueFromLikes();
+          if (!currentQueue.length) syncQueueFromLikes();
           originalQueue = null;
           saveLocalDatabase();
 
@@ -26711,7 +26903,7 @@
 
 
       } finally {
-        if (!currentPlayRequestId) restoreSessionState();
+        if (!currentPlayRequestId && !isWaveStarting && waveStartRequest === 0) restoreSessionState();
       }
 
 

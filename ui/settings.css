@@ -14,7 +14,7 @@ nav{display:grid;gap:4px;position:sticky;top:20px}nav button{text-align:left;pad
 #settings-cards .text-xs{font-size:13px}#settings-cards [class*="text-neutral-4"],#settings-cards [class*="text-neutral-5"]{color:var(--muted)}#settings-cards .text-white,#settings-cards .text-neutral-300{color:var(--ink)}
 #settings-cards svg{color:var(--muted)}#settings-cards h2 svg{display:none}
 #settings-cards .card-glass:has(#settings-username)>div:has(#settings-avatar-circle){padding:20px 0;border:0;border-block:1px solid var(--line);border-radius:0;background:transparent}
-#settings-username{font-size:16px!important}#settings-avatar-circle{width:48px;height:48px}#settings-cards #settings-login-btn{background:var(--ink);color:var(--base)}#settings-cards #settings-login-btn svg{color:inherit}
+#settings-username{font-size:16px!important}#settings-user-id{font-family:inherit;font-size:12px;font-weight:500;letter-spacing:.01em;font-variant-numeric:tabular-nums;color:var(--muted)}#settings-avatar-circle{width:48px;height:48px}#settings-cards #settings-login-btn{background:var(--ink);color:var(--base)}#settings-cards #settings-login-btn svg{color:inherit}
 details{border-top:1px solid var(--line);padding-top:15px}summary{cursor:pointer;font-weight:550;color:var(--muted)}details[open] summary{margin-bottom:12px}
 #settings-cards .card-glass:has(#discord-opt-track) .space-y-2\.5>div{padding-block:5px}
 #settings-cards .card-glass:has(#whisper-auto-toggle) .bg-gradient-to-br{background:#8882;border-color:var(--line)}#settings-cards .card-glass:has(#whisper-auto-toggle) .text-rose-300{display:none}
@@ -26,7 +26,7 @@ input[type=text],input[type=password]{min-width:0}input[type=range]{accent-color
 @media(max-width:560px){.settings-shell{padding:16px 12px}nav button svg{display:none}nav button{font-size:12px;padding:8px}#settings-cards .grid-cols-2{grid-template-columns:1fr}#settings-cards .grid-cols-4{grid-template-columns:repeat(2,1fr)}#settings-cards .flex:has(>#custom-bg-input){flex-wrap:wrap}#custom-bg-input{flex-basis:100%}#settings-cards .card-glass:has(#settings-username)>div:has(#settings-avatar-circle){flex-wrap:wrap;gap:14px}}
 /* Surfaces and controls share a neutral scale across themes. */
 :scope{--surface:color-mix(in srgb,var(--panel) 94%,var(--ink));--edge:color-mix(in srgb,var(--ink) 14%,transparent);--silver:color-mix(in srgb,var(--ink) 82%,var(--panel))}
-header{border-color:var(--edge)}.wordmark{font-size:12px;letter-spacing:.23em}
+header{border-color:var(--edge)}.wordmark{font-size:12px;letter-spacing:.12em;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 nav button{min-height:41px;transition:background .15s,color .15s}
 nav button[aria-pressed=true]{box-shadow:inset 0 0 0 1px var(--edge);background:linear-gradient(120deg,var(--surface),var(--panel))}
 #settings-cards>.card-glass{background-image:linear-gradient(150deg,color-mix(in srgb,var(--ink) 3%,transparent),transparent 58%);box-shadow:inset 0 1px 0 #ffffff07,0 8px 24px #0001}
@@ -138,3 +138,35 @@ body:has(#tab-settings.active) footer.ui-panel-glass {
   clip-path: inset(0);
   backdrop-filter: none !important;
 }
+
+body.theme-custom :is(footer,aside,#custom-titlebar) { color:var(--custom-ink); }
+body.theme-custom :is(#player-title,#wave-card-title,#wave-feed-title) { color:var(--custom-ink) !important; }
+body.theme-custom :is(#player-artist,#wave-card-desc,#wave-btn-subtext) { color:var(--custom-muted) !important; }
+body.theme-custom :is(.liked-track-row,.search-result-row) [style*="color: var(--accent)"] { color:var(--custom-mark) !important; }
+
+body.theme-custom :is(#play-btn,#wave-main-btn,.profile-action-primary) {
+  outline:1px solid var(--custom-mark); outline-offset:-1px;
+}
+
+/* Paint the entire palette together, then restore normal interaction transitions. */
+@layer palette-paint {
+  html.applying-palette,
+  html.applying-palette *,
+  html.applying-palette *::before,
+  html.applying-palette *::after {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
+
+body.theme-custom #tab-search-input,
+body.theme-custom #search-empty-state > div,
+body.theme-custom #search-artist-result .card-dark {
+  background:var(--custom-surface) !important;
+  border-color:color-mix(in srgb,var(--custom-ink) 24%,transparent) !important;
+  color:var(--custom-ink) !important;
+}
+body.theme-custom #tab-search-input:focus { border-color:var(--custom-mark) !important; }
+body.theme-custom #tab-search-input::placeholder,
+body.theme-custom #tab-search :is(.text-neutral-400,.text-neutral-500) { color:var(--custom-muted) !important; }
+body.theme-custom #tab-search :is(h1,.text-neutral-300,.text-white) { color:var(--custom-ink) !important; }

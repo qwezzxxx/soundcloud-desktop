@@ -157,6 +157,9 @@ impl MultiProviders {
                         user_id: None,
                         user_permalink: None,
                         user_avatar: None,
+                        created_at: None,
+                        playback_count: None,
+                        likes_count: None,
                     });
                 }
             }
@@ -259,6 +262,9 @@ impl MultiProviders {
                     user_id: None,
                     user_permalink: None,
                     user_avatar: None,
+                    created_at: None,
+                    playback_count: None,
+                    likes_count: None,
                 });
             }
         }
@@ -337,6 +343,9 @@ impl MultiProviders {
                     user_id: None,
                     user_permalink: None,
                     user_avatar: None,
+                    created_at: None,
+                    playback_count: None,
+                    likes_count: None,
                 });
             }
         }
@@ -427,6 +436,9 @@ impl MultiProviders {
                     user_id: None,
                     user_permalink: None,
                     user_avatar: None,
+                    created_at: None,
+                    playback_count: None,
+                    likes_count: None,
                 });
             }
         } else {
@@ -463,6 +475,9 @@ impl MultiProviders {
                 user_id: None,
                 user_permalink: None,
                 user_avatar: None,
+                created_at: None,
+                playback_count: None,
+                likes_count: None,
             });
         }
 
@@ -474,8 +489,10 @@ impl MultiProviders {
         sc: &SoundCloudClient,
         query: &str,
         provider: Option<&str>,
+        offset: Option<usize>,
     ) -> Vec<FormattedTrack> {
         let clean = query.trim();
+        let off = offset.unwrap_or(0);
 
         // 1. Direct link detection
         if clean.contains("spotify.com/") {
@@ -487,7 +504,7 @@ impl MultiProviders {
             "yandex" => Self::search_yandex_music(http, clean).await,
             "spotify" => Self::search_spotify_catalogue(http, clean).await,
             "soundcloud" => {
-                let mut sc_tracks = sc.search_tracks(clean).await.unwrap_or_default();
+                let mut sc_tracks = sc.search_tracks_with_offset(clean, off).await.unwrap_or_default();
                 for t in &mut sc_tracks {
                     if t.provider.is_none() {
                         t.provider = Some("soundcloud".to_string());
@@ -498,7 +515,7 @@ impl MultiProviders {
             _ => {
                 // "all" - Search SoundCloud, YouTube Music, and Yandex Music in parallel!
                 let (sc_res, yt_res, ym_res) = tokio::join!(
-                    sc.search_tracks(clean),
+                    sc.search_tracks_with_offset(clean, off),
                     Self::search_youtube_music(http, clean),
                     Self::search_yandex_music(http, clean)
                 );

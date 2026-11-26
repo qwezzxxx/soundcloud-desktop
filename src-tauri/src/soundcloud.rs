@@ -366,6 +366,12 @@ pub struct FormattedTrack {
     pub user_permalink: Option<String>,
     #[serde(default)]
     pub user_avatar: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playback_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub likes_count: Option<u64>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -1106,13 +1112,10 @@ impl SoundCloudClient {
 
 
     pub async fn get_client_id(&self) -> String {
+        self.client_id_from_config(&self.load_config()).await
+    }
 
-
-
-        let cfg = self.load_config();
-
-
-
+    async fn client_id_from_config(&self, cfg: &AppConfig) -> String {
         if let Some(ref cid) = cfg.client_id {
 
 
@@ -1145,7 +1148,7 @@ impl SoundCloudClient {
 
 
 
-        cfg.client_id.unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string())
+        cfg.client_id.clone().unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string())
 
 
 
@@ -1407,6 +1410,9 @@ impl SoundCloudClient {
             user_id,
             user_permalink,
             user_avatar,
+            created_at: t.get("created_at").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned),
+            playback_count: t.get("playback_count").and_then(Value::as_u64),
+            likes_count: t.get("likes_count").and_then(Value::as_u64),
         }
 
 
@@ -2105,13 +2111,8 @@ impl SoundCloudClient {
         let username = u.get("username").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
         let permalink = u.get("permalink").and_then(|v| v.as_str()).unwrap_or("").to_string();
         
-        let mut avatar = u.get("avatar_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if avatar.contains("large.jpg") {
-            avatar = avatar.replace("large.jpg", "t500x500.jpg");
-        }
-        if avatar.is_empty() {
-            avatar = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300".to_string();
-        }
+        let avatar = u.get("avatar_url").and_then(|v| v.as_str())
+            .filter(|url| !url.contains("default_avatar")).unwrap_or("").to_string();
 
         let banner_url = u.get("visuals")
             .and_then(|v| v.get("visuals"))
@@ -2276,8 +2277,6 @@ impl SoundCloudClient {
     }
 
     pub async fn get_artist_tracks(&self, user_id: Value, limit: Option<usize>) -> Result<Vec<FormattedTrack>, String> {
-        let client_id = self.get_client_id().await;
-        let cfg = self.load_config();
         let id_str = if let Some(n) = user_id.as_i64() {
             n.to_string()
         } else if let Some(s) = user_id.as_str() {
@@ -2288,56 +2287,28 @@ impl SoundCloudClient {
         let lim = limit.unwrap_or(50);
 
         // 1. Try /toptracks first so "Популярные треки" actually shows the artist's real top hits
-        let toptracks_url = format!(
-            "https://api-v2.soundcloud.com/users/{}/toptracks?limit={}&client_id={}",
-            id_str,
-            lim,
-            client_id
-        );
-        let mut req = self.http.get(&toptracks_url);
-        if let Some(auth) = self.auth_header(&cfg) {
-            req = req.header("Authorization", auth);
-        }
-        if let Ok(res) = req.send().await {
-            if res.status().is_success() {
-                if let Ok(data) = res.json::<Value>().await {
-                    let mut tracks = Vec::new();
-                    if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
-                        for t in arr {
-                            tracks.push(Self::format_track(t, false));
-                        }
-                    }
-                    if !tracks.is_empty() {
-                        return Ok(tracks);
-                    }
+        let toptracks_url = format!("https://api-v2.soundcloud.com/users/{}/toptracks?limit={}", id_str, lim);
+        if let Ok(data) = self.public_v2_get_json(&toptracks_url).await {
+            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                let tracks: Vec<FormattedTrack> = arr.iter().map(|t| Self::format_track(t, false)).collect();
+                if !tracks.is_empty() {
+                    return Ok(tracks);
                 }
             }
         }
 
         // 2. Fall back to /tracks if /toptracks is empty or unsupported
-        let url = format!(
-            "https://api-v2.soundcloud.com/users/{}/tracks?limit={}&client_id={}",
-            id_str,
-            lim,
-            client_id
-        );
-        let mut req = self.http.get(&url);
-        if let Some(auth) = self.auth_header(&cfg) {
-            req = req.header("Authorization", auth);
-        }
-        let res = req.send().await.map_err(|e| e.to_string())?;
-        if res.status().is_success() {
-            let data: Value = res.json().await.map_err(|e| e.to_string())?;
-            let mut tracks = Vec::new();
-            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
-                for t in arr {
-                    tracks.push(Self::format_track(t, false));
-                }
+        let url = format!("https://api-v2.soundcloud.com/users/{}/tracks?limit={}", id_str, lim);
+        let data = self.public_v2_get_json(&url)
+            .await
+            .map_err(|e| format!("Get artist tracks failed: {}", e))?;
+        let mut tracks = Vec::new();
+        if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+            for t in arr {
+                tracks.push(Self::format_track(t, false));
             }
-            Ok(tracks)
-        } else {
-            Err(format!("Get artist tracks failed: status {}", res.status()))
         }
+        Ok(tracks)
     }
 
     pub async fn get_artist_albums(&self, user_id: Value, limit: Option<usize>) -> Result<Vec<FormattedAlbum>, String> {
@@ -2948,19 +2919,52 @@ impl SoundCloudClient {
         request().send().await
     }
 
-    pub async fn resolve_stream_url(&self, track_id: Value) -> Result<String, String> {
-
-
-
+    async fn public_v2_get_json(&self, base_url_without_client_id: &str) -> Result<Value, String> {
         let cfg = self.load_config();
+        let initial_cid = self.get_client_id().await;
+        let mut client_ids = std::collections::VecDeque::from([initial_cid]);
+        if client_ids.front().is_some_and(|id| id != DEFAULT_CLIENT_ID) {
+            client_ids.push_back(DEFAULT_CLIENT_ID.to_string());
+        }
+        let mut refreshed_client_id = false;
+        let session_auth = self.auth_header(&cfg);
+        let mut auth = session_auth.as_deref();
+        let sep = if base_url_without_client_id.contains('?') { '&' } else { '?' };
+        let mut last_err = "Request failed".to_string();
 
+        while let Some(cid) = client_ids.pop_front() {
+            let url = format!("{}{}client_id={}", base_url_without_client_id, sep, cid);
+            let res = match self.public_track_request(&url, &mut auth).await {
+                Ok(res) => res,
+                Err(e) => {
+                    last_err = e.to_string();
+                    continue;
+                }
+            };
 
+            if res.status().is_success() {
+                return res.json::<Value>().await.map_err(|e| e.to_string());
+            }
 
-        let client_id = self.get_client_id().await;
+            let st = res.status().as_u16();
+            last_err = format!("HTTP {}", res.status());
+            if st == 429 {
+                return Err(last_err);
+            }
+            if (st == 401 || st == 403) && !refreshed_client_id {
+                refreshed_client_id = true;
+                if let Some(fresh_cid) = self.refresh_dynamic_client_id().await {
+                    if fresh_cid != cid && !client_ids.contains(&fresh_cid) {
+                        client_ids.push_front(fresh_cid);
+                    }
+                }
+            }
+        }
 
+        Err(last_err)
+    }
 
-
-
+    pub async fn resolve_stream_url(&self, track_id: Value) -> Result<String, String> {
 
 
 
@@ -3205,6 +3209,8 @@ impl SoundCloudClient {
 
 
 
+        let cfg = self.load_config();
+        let client_id = self.client_id_from_config(&cfg).await;
         let mut client_ids = std::collections::VecDeque::from([client_id]);
         if client_ids.front().is_some_and(|id| id != DEFAULT_CLIENT_ID) {
             client_ids.push_back(DEFAULT_CLIENT_ID.to_string());
@@ -4327,6 +4333,10 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
     pub async fn search_tracks(&self, query: &str) -> Result<Vec<FormattedTrack>, String> {
+        self.search_tracks_with_offset(query, 0).await
+    }
+
+    pub async fn search_tracks_with_offset(&self, query: &str, offset: usize) -> Result<Vec<FormattedTrack>, String> {
 
 
 
@@ -4434,78 +4444,22 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
-        let cfg = self.load_config();
-
-
-
-        let client_id = self.get_client_id().await;
-
-
-
         let encoded = urlencoding_simple(query);
-
-
-
-        let url = format!("https://api-v2.soundcloud.com/search/tracks?q={}&client_id={}&limit=30", encoded, client_id);
-
-
-
-
-
-
-
-        let session_auth = self.auth_header(&cfg);
-        let mut auth = session_auth.as_deref();
-        let res = self.public_track_request(&url, &mut auth).await.map_err(|e| e.to_string())?;
-
-        if res.status().is_success() {
-
-
-
-            let data: Value = res.json().await.map_err(|e| e.to_string())?;
-
-
-
-            let items = data.get("collection").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-
-
-
-            let tracks: Vec<FormattedTrack> = items
-
-
-
-                .into_iter()
-
-
-
-                .filter(|t| t.get("id").is_some() && t.get("title").is_some())
-
-
-
-                .map(|t| Self::format_track(&t, false))
-
-
-
-                .collect();
-
-
-
-            Ok(tracks)
-
-
-
+        let url = if offset > 0 {
+            format!("https://api-v2.soundcloud.com/search/tracks?q={}&limit=30&offset={}", encoded, offset)
         } else {
-
-
-
-            Err(format!("Search failed: HTTP {}", res.status()))
-
-
-
-        }
-
-
-
+            format!("https://api-v2.soundcloud.com/search/tracks?q={}&limit=30", encoded)
+        };
+        let data = self.public_v2_get_json(&url)
+            .await
+            .map_err(|e| format!("Search failed: {}", e))?;
+        let items = data.get("collection").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let tracks: Vec<FormattedTrack> = items
+            .into_iter()
+            .filter(|t| t.get("id").is_some() && t.get("title").is_some())
+            .map(|t| Self::format_track(&t, false))
+            .collect();
+        Ok(tracks)
     }
 
 
@@ -5151,105 +5105,29 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
     pub async fn get_related_tracks(&self, track_id: Value) -> Result<Vec<FormattedTrack>, String> {
-
-
-
-        let cfg = self.load_config();
-
-
-
-        let client_id = self.get_client_id().await;
-
-
-
         let id_str = if let Some(n) = track_id.as_i64() {
-
-
-
             n.to_string()
-
-
-
         } else if let Some(s) = track_id.as_str() {
-
-
-
             s.trim_matches('"').to_string()
-
-
-
         } else {
-
-
-
             track_id.to_string().trim_matches('"').to_string()
-
-
-
         };
 
-
-
-        let url = format!("https://api-v2.soundcloud.com/tracks/{}/related?client_id={}&limit=30", id_str, client_id);
-
-
-
-
-
-
-
-        let session_auth = self.auth_header(&cfg);
-        let mut auth = session_auth.as_deref();
-        let res = self.public_track_request(&url, &mut auth).await.map_err(|e| e.to_string())?;
-
-        if res.status().is_success() {
-
-
-
-            let data: Value = res.json().await.map_err(|e| e.to_string())?;
-
-
-
-            let items = data.get("collection").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-
-
-
-            let tracks: Vec<FormattedTrack> = items
-
-
-
-                .into_iter()
-
-
-
-                .filter(|t| t.get("id").is_some() && t.get("title").is_some())
-
-
-
-                .map(|t| Self::format_track(&t, false))
-
-
-
-                .collect();
-
-
-
-            Ok(tracks)
-
-
-
-        } else {
-
-
-
-            Err(format!("Related tracks fetch failed: HTTP {}", res.status()))
-
-
-
+        if id_str.is_empty() || !id_str.chars().all(|c| c.is_ascii_digit()) {
+            return Ok(Vec::new());
         }
 
-
-
+        let url = format!("https://api-v2.soundcloud.com/tracks/{}/related?limit=50", id_str);
+        let data = self.public_v2_get_json(&url)
+            .await
+            .map_err(|e| format!("Related tracks fetch failed: {}", e))?;
+        let items = data.get("collection").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let tracks: Vec<FormattedTrack> = items
+            .into_iter()
+            .filter(|t| t.get("id").is_some() && t.get("title").is_some())
+            .map(|t| Self::format_track(&t, false))
+            .collect();
+        Ok(tracks)
     }
 
 

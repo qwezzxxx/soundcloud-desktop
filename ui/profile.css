@@ -100,8 +100,8 @@
 }
 
 .theme-custom .profile-header-card {
-  --profile-surface: var(--custom-profile-panel);
-  --profile-hero: linear-gradient(110deg, var(--custom-profile-base) 30%, var(--profile-surface));
+  --profile-surface: var(--custom-panel);
+  --profile-hero: linear-gradient(110deg, var(--custom-base) 30%, var(--profile-surface));
   --profile-text: #fff;
   --profile-line: color-mix(in srgb, var(--profile-text) 20%, var(--profile-surface));
   --profile-muted: color-mix(in srgb, var(--profile-text) 80%, var(--profile-surface));
@@ -223,3 +223,35 @@
   .profile-stat:nth-child(n+3) { border-top: 1px solid var(--profile-line); }
   .profile-actions { padding: 10px 12px; }
 }
+
+#profile-favorite-grid [aria-current="true"] {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+#profile-favorite-grid [aria-current="true"] .profile-track-title { color: var(--accent); }
+.profile-playing-dot { display: none; background-color: var(--accent); }
+.profile-track-playing .profile-playing-dot { display: block; }
+
+.theme-custom .profile-header-card {
+  --profile-text: var(--custom-ink);
+  --profile-muted: var(--custom-muted);
+}
+.theme-custom .profile-cover, .theme-custom .profile-stat svg { color: var(--custom-mark); }
+.theme-custom #profile-favorite-grid [aria-current="true"] { outline-color: var(--custom-mark); }
+.theme-custom #profile-favorite-grid [aria-current="true"] .profile-track-title { color: var(--custom-mark) !important; }
+
+#artist-avatar-wrap { display:grid; place-items:center; }
+#artist-initials { font-size:2.25rem; font-weight:700; }
+#artist-avatar-wrap [hidden] { display:none; }
+body.theme-custom #artist-hero {
+  background:linear-gradient(115deg,var(--custom-panel),var(--custom-surface)) !important;
+  border-color:color-mix(in srgb,var(--custom-ink) 18%,transparent);
+  color:var(--custom-ink);
+  box-shadow:0 8px 24px #0001;
+}
+body.theme-custom #artist-hero > .blur-3xl { opacity:.07; }
+body.theme-custom #artist-avatar-wrap { background:var(--custom-surface); color:var(--custom-mark); border:0; box-shadow:none; }
+body.theme-custom #tab-artist :is(.text-neutral-400,.text-neutral-300,.text-neutral-500) { color:var(--custom-muted) !important; }
+body.theme-custom #tab-artist .text-white { color:var(--custom-ink) !important; }
+body.theme-custom #artist-play-all-btn { background:var(--accent) !important; color:var(--accent-contrast) !important; }
+body.theme-custom #artist-play-all-btn :is(svg,span) { color:inherit !important; fill:currentColor !important; }

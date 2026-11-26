@@ -251,13 +251,13 @@ async fn toggle_like(track: FormattedTrack, should_like: bool, state: State<'_, 
 }
 
 #[tauri::command]
-async fn search_tracks(query: String, provider: Option<String>, state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
+async fn search_tracks(query: String, provider: Option<String>, offset: Option<usize>, state: State<'_, AppState>) -> Result<Vec<FormattedTrack>, String> {
     let clean = query.trim();
     if clean.is_empty() {
         return Ok(Vec::new());
     }
     let prov = provider.as_deref().unwrap_or("all");
-    let tracks = MultiProviders::search_unified(state.sc.http_client(), &state.sc, clean, Some(prov)).await;
+    let tracks = MultiProviders::search_unified(state.sc.http_client(), &state.sc, clean, Some(prov), offset).await;
     Ok(tracks)
 }
 

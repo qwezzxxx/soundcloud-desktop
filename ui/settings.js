@@ -44,13 +44,15 @@ function luminance(hex){
 }
 function updateCustomSample(){
  const color=picker.value;
- const base=color;
- const lightness=luminance(color);
- let panel;
- if(lightness<.025) panel=mixThemeColor(color,255,.91);
- else if(contrast("#ffffff",color)>contrast("#000000",color)) panel=mixThemeColor(color,5,.53);
- else if(lightness<.40) panel=mixThemeColor(color,255,.78);
- else panel=mixThemeColor(color,0,.88);
+ const rgb=color.slice(1).match(/../g).map(pair=>parseInt(pair,16));
+ const chroma=(Math.max(...rgb)-Math.min(...rgb))/255;
+ const gray=Math.round(.2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2]);
+ let base=mixThemeColor(color,gray,1-.65*chroma);
+ const light=contrast('#000000',base)>=contrast('#ffffff',base);
+ // Leave enough contrast for secondary labels on adjacent surfaces.
+ const ink=light?'#000000':'#ffffff';
+ if(contrast(ink,base)<6) base=mixThemeColor(base,light?255:0,.78);
+ const panel=mixThemeColor(base,luminance(base)<.025?255:0,light ? .92 : .82);
  const highlight=mixThemeColor(color,255,.75);
  palettes.custom=[base,panel];
  themeSamples.custom=[panel,highlight];
@@ -129,6 +131,16 @@ function contrast(a,b){
  const x=luminance(a),y=luminance(b);
  return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);
 }
+function updateCustomAccent(accent){
+ const [base,panel]=palettes.custom;
+ const ink=contrast('#000000',base)>=contrast('#ffffff',base)?0:255;
+ let mark=accent;
+ for(let step=1;step<=20 && Math.min(contrast(mark,panel),contrast(mark,base))<4.5;step++){
+  mark=mixThemeColor(accent,ink,1-step/20);
+ }
+ document.documentElement.style.setProperty('--custom-mark',mark);
+ return contrast('#000000',accent)>=contrast('#ffffff',accent)?'#000000':'#ffffff';
+}
 function applyTheme(theme){
  const [base,panel]=palettes[theme];
  const light=contrast('#000000',base)>=contrast('#ffffff',base);
@@ -144,6 +156,9 @@ function applyTheme(theme){
  const tokens={base,panel,ink,muted,surface,'outer-ink':ink,
   line:'color-mix(in srgb,var(--ink) 20%,transparent)'};
  for(const [name,value] of Object.entries(tokens))root.style.setProperty('--'+name,value);
+ if(theme==='custom'){
+  for(const [name,value] of Object.entries(tokens))document.documentElement.style.setProperty('--custom-'+name,value);
+ }
  root.dataset.theme=theme;
  root.style.colorScheme=light?'light':'dark';
  $('custom-theme-editor').hidden=theme!=='custom';
@@ -174,5 +189,5 @@ if(/^#[0-9a-f]{6}$/i.test(storedAccent)){
  select('.accent-btn',selected);
  $('current-accent-label').textContent=storedAccent+(selected?' ('+selected.dataset.name+')':'');
 }
-return {applyTheme,syncAccentMenu,palettes,renderRange,customIsLight:()=>contrast('#000000',picker.value)>=contrast('#ffffff',picker.value)};
+return {applyTheme,updateCustomAccent,syncAccentMenu,palettes,renderRange,customIsLight:()=>contrast('#000000',palettes.custom[0])>=contrast('#ffffff',palettes.custom[0])};
 })();
