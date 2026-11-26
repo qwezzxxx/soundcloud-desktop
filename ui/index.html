@@ -33633,7 +33633,9 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       document.getElementById('settings-app-version').textContent = `ONYX v${version}`;
     }).catch(error => console.warn('Не удалось получить версию ONYX:', error));
 
-    initClient();
+    initClient().finally(() => {
+      if (getInvoke()) api.winShow().catch(error => console.warn('Could not show ONYX:', error));
+    });
 
 
 

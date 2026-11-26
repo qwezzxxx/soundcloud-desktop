@@ -12,6 +12,7 @@ use discord::{DiscordManager, DiscordPlayback};
 use serde_json::Value;
 use soundcloud::{AppConfig, FormattedTrack, SoundCloudClient};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::State;
 
@@ -659,7 +660,10 @@ fn win_exit(app_handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn win_show(window: tauri::Window) -> Result<(), String> {
+fn win_show(window: tauri::Window, startup_shown: State<'_, Arc<AtomicBool>>) -> Result<(), String> {
+    if startup_shown.swap(true, Ordering::AcqRel) {
+        return Ok(());
+    }
     let _ = window.set_skip_taskbar(false);
     let _ = window.show();
     let _ = window.unminimize();
@@ -777,6 +781,7 @@ pub fn run() {
     };
 
     let state = AppState { sc, discord };
+    let startup_shown = Arc::new(AtomicBool::new(false));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -788,6 +793,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .manage(startup_shown.clone())
         .manage(state)
         .setup(move |app| {
             #[cfg(all(windows, target_arch = "x86_64"))]
@@ -802,8 +808,11 @@ pub fn run() {
                 }
                 let win_clone = window.clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(350));
-                    let _ = win_clone.show();
+                    // Keep the window accessible if the frontend fails during startup.
+                    std::thread::sleep(std::time::Duration::from_secs(10));
+                    if !startup_shown.swap(true, Ordering::AcqRel) {
+                        let _ = win_clone.show();
+                    }
                 });
             }
 

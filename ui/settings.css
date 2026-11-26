@@ -126,3 +126,15 @@ body.has-custom-bg #app-bg-overlay{backdrop-filter:blur(var(--settings-wall-blur
 
 /* An offscreen drawer must not shift the player when settings navigation receives focus. */
 #player-content-shell:has(#tab-settings.active){overflow:clip}
+
+/* Keep settings scrolling inside the viewport above the transport controls. */
+#player-content-shell > .overflow-y-auto:has(#tab-settings.active) {
+  min-height: 0;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  contain: paint;
+}
+body:has(#tab-settings.active) footer.ui-panel-glass {
+  clip-path: inset(0);
+  backdrop-filter: none !important;
+}

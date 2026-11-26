@@ -35695,7 +35695,9 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    initClient();
+    initClient().finally(() => {
+      if (getInvoke()) api.winShow().catch(error => console.warn('Could not show ONYX:', error));
+    });
 
 
 
