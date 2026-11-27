@@ -155,7 +155,12 @@ function applyTheme(theme){
  }
  const tokens={base,panel,ink,muted,surface,'outer-ink':ink,
   line:'color-mix(in srgb,var(--ink) 20%,transparent)'};
- for(const [name,value] of Object.entries(tokens))root.style.setProperty('--'+name,value);
+ const login=$('login-modal');
+ for(const [name,value] of Object.entries(tokens)){
+  root.style.setProperty('--'+name,value);
+  login.style.setProperty('--'+name,value);
+ }
+ login.style.colorScheme=light?'light':'dark';
  if(theme==='custom'){
   for(const [name,value] of Object.entries(tokens))document.documentElement.style.setProperty('--custom-'+name,value);
  }

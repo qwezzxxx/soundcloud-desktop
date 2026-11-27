@@ -24,31 +24,32 @@
     'твоя', 'твой', 'меня', 'тебя', 'трек', 'песня', 'звук', 'сниппет'
   ]);
 
-  const AI_GENERATOR_RE = /\b(?:suno(?:\.ai|\.com|ai)?|udio(?:\.ai|\.com|ai)?|soundraw|boomy|aimusic|aiva|mubert|riffusion|sonauto|producer\.ai|musicgen|audiocraft|stableaudio|stable audio|elevenlabs|loudly|beatoven|soundful|ace-step|acestep|kits\.ai|weights\.gg|chatgpt|openai|midjourney)\b/i;
+  const AI_GENERATOR_RE = /\b(?:suno(?:\.ai|\.com|ai|music)?|udio(?:\.ai|\.com|ai|music)?|soundraw|boomy|aimusic|aiva|mubert|riffusion|sonauto|producer\.ai|musicgen|audiocraft|stableaudio|stable audio|elevenlabs|loudly|beatoven|soundful|ace-step|acestep|kits\.ai|weights\.gg|chatgpt|openai|midjourney)\b/i;
   const AI_COVER_RE = /\b(?:rvc|diff-svc|so-vits(?:-svc)?|voice model|ai[- ]?cover|ai[- ]?version|ai[- ]?remake|ai[- ]?remix|ai[- ]?mashup|ai[- ]?duet|ai[- ]?feat)\b/i;
-  const AI_EN_PHRASE_RE = /\b(?:ai[- ]?generated|generated (?:by|with) ai|created (?:by|with) ai|made (?:by|with) ai|powered by ai|text[- ]?to[- ]?music|ai[- ]?vocals?|ai[- ]?song|ai[- ]?music|ai[- ]?track|ai[- ]?rap|ai[- ]?beat|ai[- ]?phonk|ai[- ]?rock|ai[- ]?pop|ai[- ]?lo-?fi|ai[- ]?jazz|ai[- ]?metal|ai[- ]?artist|ai[- ]?voice|ai[- ]?slop)\b/i;
+  const AI_EN_PHRASE_RE = /\b(?:ai[- ]?generated|generated (?:by|with|in|using) ai|created (?:by|with|in|using) ai|made (?:by|with|in|using) ai|powered by ai|text[- ]?to[- ]?music|ai[- ]?vocals?|ai[- ]?song|ai[- ]?music|ai[- ]?track|ai[- ]?rap|ai[- ]?beat|ai[- ]?phonk|ai[- ]?rock|ai[- ]?pop|ai[- ]?lo-?fi|ai[- ]?jazz|ai[- ]?metal|ai[- ]?artist|ai[- ]?band|ai[- ]?singer|ai[- ]?voice|ai[- ]?slop|neural[- ]?music)\b/i;
   const AI_PROMPT_LEAK_RE = /(?:made|created|generated)\s+(?:in|with|by|using)\s+(?:suno|udio|riffusion|ai)\b|(?:^|\n)\s*(?:style of music|prompt)\s*:/im;
   const AI_BRACKET_RE = /(?:^|[\s|/\\-])(?:\[(?:ai|ии)\]|[(](?:ai|ии)[)])(?:$|[\s|/\\-])/iu;
-  const AI_RU_PHRASE_RE = /(?:^|[^\p{L}\p{N}])(?:нейросет\p{L}*|нейромузык\p{L}*|нейрокавер\p{L}*|нейро\s+кавер\p{L}*|нейротрек\p{L}*|нейро\s+трек\p{L}*|нейропесн\p{L}*|нейрохит\p{L}*|нейрорэп\p{L}*|нейрореп\p{L}*|нейрофонк\p{L}*|сгенерирован\p{L}*|создано\s+(?:ии|нейросет\p{L}*)|генерация\s+ии|искусственн\p{L}*\s+интеллект\p{L}*|ии[- ]?вокал|ии[- ]?кавер|ии[- ]?трек|ии[- ]?верси\p{L}*|ии[- ]?музык\p{L}*|кавер\s+ии)(?:$|[^\p{L}\p{N}])/iu;
+  const AI_RU_PHRASE_RE = /(?:^|[^\p{L}\p{N}])(?:нейросет\p{L}*|нейромузык\p{L}*|нейрокавер\p{L}*|нейро\s+кавер\p{L}*|нейротрек\p{L}*|нейро\s+трек\p{L}*|нейропесн\p{L}*|нейрохит\p{L}*|нейрорэп\p{L}*|нейрореп\p{L}*|нейрофонк\p{L}*|нейроартист\p{L}*|нейробэнд\p{L}*|сгенерирован\p{L}*|создано\s+(?:ии|нейросет\p{L}*)|генерация\s+ии|искусственн\p{L}*\s+интеллект\p{L}*|ии[- ]?вокал|ии[- ]?кавер|ии[- ]?трек|ии[- ]?верси\p{L}*|ии[- ]?музык\p{L}*|ии[- ]?артист|кавер\s+ии)(?:$|[^\p{L}\p{N}])/iu;
   const AI_HASHTAG_RE = /(?:^|\s)#(?:suno|udio|sunoai|udioai|ai|aimusic|aigenerated|aicover|aivoice|aivocals|aisong|neural|нейросеть|нейромузыка|нейрокавер|нейротрек|ии|иикавер|иимузыка)\b/iu;
   const AI_GENRE_EXACT_RE = /^(?:ai|ai music|ai generated|suno|udio|нейросеть|ии)$/i;
-  const AI_ARTIST_RE = /^(?:suno|udio|ai[-_](?:music|cover|song|track|gen|bot|slop)|.*[ _-]suno$|.*[ _-]udio$|suno[ _-].*|udio[ _-].*|ai\s*covers?|нейромузык.*|нейрокавер.*)/iu;
+  const AI_ARTIST_RE = /^(?:suno|udio|ai[-_](?:music|cover|song|track|gen|bot|slop|band|artist)|.*[ _-]suno$|.*[ _-]udio$|suno[ _-].*|udio[ _-].*|ai\s*covers?|нейромузык.*|нейрокавер.*)/iu;
   const AI_HANDLE_RE = /(?:^|[-_])(?:suno|udio|aicover|aimusic|aigen|нейро)(?:$|[-_0-9])/iu;
 
-  const SAD_STRONG_RE = /(?:^| )(?:sad(?:core|rap|ness)?|sorrow|melanchol(?:y|ic|ia)|emo|midwest emo|depress(?:ed|ing|ion|ive)?|heartbrok(?:en|e)|heartbreak|breakup|lonely|loneliness|alone|solitude|despair|tears|crying|cry|miss you|broken|grief|miserable|dead inside|hurt|empty|numb|regret|pain|gloom|slowcore|restless dreams|груст\p{L}*|печал\p{L}*|тоск\p{L}*|меланхол\p{L}*|одинок\p{L}*|слез\p{L}*|разбит\p{L}*|угаса\p{L}*|пустот\p{L}*|депресс\p{L}*|боль|ностальг\p{L}*)(?: |$)/u;
-  const SAD_SOFT_RE = /(?:^| )(?:shoegaze|post punk|witch house|darkwave|coldwave|doomer|dsbm|cloud rap|slowed|reverb|nostalg\p{L}*|пост ?панк|лирик\p{L}*|думер\p{L}*|мрак|холод\p{L}*|осен\p{L}*|дожд\p{L}*)(?: |$)/u;
+  const SAD_STRONG_RE = /(?:^| )(?:sad(?:core|rap|ness)?|sorrow|melanchol(?:y|ic|ia)|emo|midwest emo|depress(?:ed|ing|ion|ive)?|heartbrok(?:en|e)|heartbreak|heartache|breakup|lonely|loneliness|solitude|despair|tears|teardrop\w*|crying|cry|miss you|grief|grieving|miserable|regret|gloom|slowcore|restless dreams|bittersweet|suffering|dsbm|doomer|груст\p{L}*|печал\p{L}*|тоск\p{L}*|меланхол\p{L}*|одинок\p{L}*|слез\p{L}*|разбит\p{L}*|угаса\p{L}*|пустот\p{L}*|депресс\p{L}*|ностальг\p{L}*|апати\p{L}*|тлен|безнадег\p{L}*|скуча\p{L}*|проща\p{L}*|разлук\p{L}*|воспоминан\p{L}*)(?: |$)/u;
+  const SAD_TITLE_RE = /(?:^| )(?:alone|broken|hurt|pain|empty|emptiness|numb|dead inside|боль|ранен\p{L}*|погиб\p{L}*)(?: |$)/u;
+  const SAD_SOFT_RE = /(?:^| )(?:shoegaze|post ?punk|witch ?house|darkwave|coldwave|пост ?панк|лирик\p{L}*|душевн\p{L}*|думер\p{L}*|мрак|холод\p{L}*|осен\p{L}*|дожд\p{L}*|тишин\p{L}*|ноч\p{L}*)(?: |$)/u;
 
   const CALM_STRONG_RE = /(?:^| )(?:calm|relax(?:ing|ation)?|peaceful|ambient|chill(?:hop|out|wave)?|downtempo|lofi|lo fi|smooth jazz|jazz|soul|sleep|soft|gentle|quiet|serene|meditat\p{L}*|study|rain|dream pop|bedroom pop|ethereal|acoustic|piano|instrumental|vaporwave|trip hop|bossa|folk|classical|спокой\p{L}*|расслаб\p{L}*|уют\p{L}*|тихо|тишин\p{L}*|сон|медляк\p{L}*|атмосфер\p{L}*|лампов\p{L}*)(?: |$)/u;
   const CALM_SOFT_RE = /(?:^| )(?:slowed|reverb|slow|night|ноч\p{L}*)(?: |$)/u;
 
-  const ENERGETIC_HARD_RE = /(?:^| )(?:phonk|drift phonk|dnb|drum and bass|breakcore|lolicore|hardcore|hardstyle|rave|techno|trance|edm|bass house|tech house|rage|drill|hoodtrap|hyperpop|glitchcore|jumpstyle|dubstep|riddim|cyberpunk|synthwave|metal|punk|pop punk|jersey club|sped up|speed up|nightcore|boosted|bass boosted|distortion|banger|workout|gym|бодр\p{L}*|энерг\p{L}*|кач\p{L}*|драйв\p{L}*|рейв\p{L}*|разгон\p{L}*|басс\p{L}*)(?: |$)/u;
+  const ENERGETIC_HARD_RE = /(?:^| )(?:phonk|drift phonk|brazilian phonk|funk carioca|memphis|dnb|drum and bass|breakcore|lolicore|hardcore|hardstyle|hardbass|харбас|rave|techno|trance|edm|bass house|tech house|slap house|big room|rage|drill|hoodtrap|trap metal|hyperpop|glitchcore|jumpstyle|dubstep|riddim|cyberpunk|synthwave|metal|punk|pop punk|jersey club|sped up|speed up|nightcore|boosted|bass boosted|distortion|banger|workout|gym|бодр\p{L}*|энерг\p{L}*|кач\p{L}*|качает|драйв\p{L}*|рейв\p{L}*|разгон\p{L}*|басс\p{L}*|агрессив\p{L}*|клубняк\p{L}*|в машину|для машины|для зала)(?: |$)/u;
   const ENERGETIC_SOFT_RE = /(?:^| )(?:dance|club|party|house|electro|rock|fast|hype|energy|fitness|running|дискотек\p{L}*|бас)(?: |$)/u;
   const HAPPY_RE = /(?:^| )(?:happy|upbeat|uplifting|joyful|cheerful|feel good|good vibes|positive|smile|sunny|sunshine|summer|disco|funk|funky|afrobeat|reggaeton|dancehall|tropical|bounce|groovy|groove|весел\p{L}*|радост\p{L}*|позитив\p{L}*|улыб\p{L}*|праздник\p{L}*|туса|тусов\p{L}*|вечеринк\p{L}*|кайф\p{L}*|танц\p{L}*|диско\p{L}*|солн\p{L}*|летн\p{L}*|лето)(?: |$)/u;
 
   const FALLBACK_MOOD_QUERIES = {
     energetic: ['drum and bass', 'phonk', 'electronic dance', 'breakcore', 'hyperpop'],
     calm: ['ambient chill', 'lofi chillhop', 'dream pop', 'acoustic indie', 'chillout'],
-    sad: ['melancholy indie', 'emo rap', 'shoegaze', 'sad acoustic', 'dark wave'],
+    sad: ['midwest emo', 'sad indie', 'emo rap', 'slowcore', 'melancholy acoustic'],
     new: ['indie electronic', 'underground hip hop', 'alternative', 'new wave'],
     all: ['electronic', 'indie alternative', 'hip hop', 'dream pop']
   };
@@ -268,6 +269,56 @@
     return false;
   }
 
+  function hasEngagementStats(track) {
+    return track != null && (typeof track.playback_count === 'number' || typeof track.likes_count === 'number');
+  }
+
+  function hasCredibleDiscoveryEngagement(track, options = {}) {
+    if (!track || track.id == null) return false;
+    if (!hasEngagementStats(track)) return !options.requireStats;
+
+    const plays = Number(track.playback_count || 0);
+    const likes = Number(track.likes_count || 0);
+    const fromSearch = Boolean(options.fromSearch);
+    const freshness = trackFreshnessScore(track);
+
+    const minPlays = options.minPlays ?? (fromSearch ? 500 : (freshness >= 0.45 ? 250 : 80));
+    const minLikes = options.minLikes ?? (fromSearch ? 10 : (freshness >= 0.45 ? 6 : 2));
+
+    if (plays < minPlays && likes < Math.max(minLikes * 2, 12)) return false;
+    if (likes < minLikes && plays < minPlays * 4) return false;
+    return true;
+  }
+
+  function isDislikedTrack(track, dislikes) {
+    if (!track || track.id == null || !dislikes) return false;
+    const sid = String(track.id);
+    if (dislikes.trackIds && dislikes.trackIds.has(sid)) return true;
+    if (dislikes.songKeys && dislikes.songKeys.size && hasMatchingSongKey(track, dislikes.songKeys)) return true;
+    if (dislikes.artistCounts && dislikes.artistCounts.size) {
+      const artists = waveEffectiveArtists(track);
+      for (const art of artists) {
+        if ((dislikes.artistCounts.get(art) || 0) >= 2) return true;
+      }
+      const primary = waveArtistKey(track);
+      if (primary && (dislikes.artistCounts.get(primary) || 0) >= 2) return true;
+    }
+    return false;
+  }
+
+  function getArtistDislikeCount(track, dislikes) {
+    if (!track || !dislikes || !dislikes.artistCounts || !dislikes.artistCounts.size) return 0;
+    let maxCount = 0;
+    for (const art of waveEffectiveArtists(track)) {
+      maxCount = Math.max(maxCount, dislikes.artistCounts.get(art) || 0);
+    }
+    const primary = waveArtistKey(track);
+    if (primary) {
+      maxCount = Math.max(maxCount, dislikes.artistCounts.get(primary) || 0);
+    }
+    return maxCount;
+  }
+
   function analyzeTrackMood(track) {
     if (!track || isAiSlopTrack(track, { allowShort: true })) {
       return { energetic: 0, calm: 0, sad: 0, happy: 0, hardEnergetic: false, primary: '' };
@@ -276,8 +327,9 @@
     const genre = waveGenreKey(track);
     const tags = parseTrackTags(track.tag_list);
     const title = waveMetadataText(track.title);
+    const descSnippet = waveMetadataText(String(track.description || '').slice(0, 220));
     const structured = [genre, ...tags].filter(Boolean).join(' ');
-    const combined = [structured, title].filter(Boolean).join(' ');
+    const combined = [structured, title, descSnippet].filter(Boolean).join(' ');
 
     let energetic = 0;
     let calm = 0;
@@ -285,9 +337,12 @@
     let happy = 0;
     let hardEnergetic = false;
 
+    const structuredAndTitle = [structured, title].filter(Boolean).join(' ');
     if (SAD_STRONG_RE.test(structured)) sad += 2;
-    else if (SAD_STRONG_RE.test(combined)) sad += 1.5;
-    if (SAD_SOFT_RE.test(combined)) sad += 0.8;
+    else if (SAD_STRONG_RE.test(structuredAndTitle) || SAD_TITLE_RE.test(title)) sad += 1.5;
+    else if (SAD_STRONG_RE.test(descSnippet)) sad += 0.7;
+    if (SAD_SOFT_RE.test(structuredAndTitle)) sad += 0.5;
+    else if (SAD_SOFT_RE.test(descSnippet)) sad += 0.25;
 
     if (CALM_STRONG_RE.test(structured)) calm += 2;
     else if (CALM_STRONG_RE.test(combined)) calm += 1.5;
@@ -352,8 +407,7 @@
       if (hardEnergetic || happy >= 0.8 || energetic >= 0.8) return -1;
       if (sad >= 2) return 2;
       if (sad >= 1) return 1;
-      if (sad >= 0.8) return 0.8;
-      if (calm >= 1.5) return 0.4;
+      if (sad >= 0.5 && calm >= 1) return 0.75;
       return 0;
     }
 
@@ -553,6 +607,7 @@
     const recentPlayedIds = options.recentPlayedIds || new Set();
     const recentSeedIds = options.recentSeedIds || new Set();
     const recentSeedArtists = options.recentSeedArtists || new Set();
+    const dislikes = options.dislikes || null;
     const queueTracks = Array.isArray(options.queueTracks) ? options.queueTracks : [];
     const maxQueueSeeds = Math.max(0, options.maxQueueSeeds ?? (queueTracks.length ? 1 : 0));
 
@@ -573,7 +628,7 @@
     const targeted = target === 'energetic' || target === 'calm' || target === 'sad';
     const compatiblePool = pool.filter(t => !isAiSlopTrack(t) && waveMoodFit(t, target) >= 0);
     const moodMatchedPool = targeted ? compatiblePool.filter(t => waveMoodFit(t, target) > 0) : [];
-    const preferredPool = moodMatchedPool.length >= 3 ? moodMatchedPool : compatiblePool;
+    const preferredPool = moodMatchedPool.length >= 1 ? moodMatchedPool : compatiblePool;
     const nonSlopPool = preferredPool.length ? preferredPool : pool.filter(t => !isAiSlopTrack(t));
     const fallbackPool = pool.filter(t => !isAiSlopTrack(t, { allowShort: true }) && waveMoodFit(t, target) >= 0);
     const candidates = nonSlopPool.length ? nonSlopPool : (fallbackPool.length ? fallbackPool : pool.filter(t => !isAiSlopTrack(t, { allowShort: true })));
@@ -624,8 +679,9 @@
     if (queueTracks.length && maxQueueSeeds > 0) {
       for (let i = queueTracks.length - 1; i >= 0; i--) {
         const qt = queueTracks[i];
-        if (!qt || qt.id == null || isAiSlopTrack(qt)) continue;
+        if (!qt || qt.id == null || isAiSlopTrack(qt) || isDislikedTrack(qt, dislikes)) continue;
         const sid = String(qt.id);
+        if (!profile.likedIds?.has(sid) && !hasCredibleDiscoveryEngagement(qt, { minPlays: 300, minLikes: 8 })) continue;
         const art = waveArtistKey(qt) || sid;
         if (recentSeedIds.has(sid) || chosenIds.has(sid) || chosenArtists.has(art)) continue;
         const qFit = waveMoodFit(qt, target);
@@ -699,8 +755,8 @@
 
     const moodModifiers = {
       energetic: ['remix', 'bass', 'fast', 'club', 'sped up'],
-      calm: ['chill', 'ambient', 'slowed', 'lofi', 'acoustic'],
-      sad: ['sad', 'melancholy', 'slowed', 'emo'],
+      calm: ['chill', 'ambient', 'lofi', 'acoustic'],
+      sad: ['sad', 'melancholy', 'emo', 'acoustic'],
       new: [String(new Date().getFullYear()), String(new Date().getFullYear() - 1), 'premiere'],
       all: ['']
     }[target] || [''];
@@ -709,7 +765,12 @@
 
     if (genres.length || tags.length || artists.length) {
       const styleTerms = [...new Set([...genres, ...tags])]
-        .filter(term => !PURE_MOOD_WORDS.has(term));
+        .filter(term => !PURE_MOOD_WORDS.has(term))
+        .filter(term => {
+          if (target === 'sad') return !ENERGETIC_HARD_RE.test(term) && !HAPPY_RE.test(term);
+          if (target === 'calm') return !ENERGETIC_HARD_RE.test(term);
+          return true;
+        });
       styleTerms.forEach((term, idx) => {
         const mod = moodModifiers[(cursor + idx) % moodModifiers.length];
         if (!mod || term.includes(mod) || mod.includes(term)) {
@@ -718,7 +779,7 @@
           pushUnique(`${term} ${mod}`);
         }
       });
-      if (!queries.length && artists.length) {
+      if (!queries.length && artists.length && target !== 'sad') {
         artists.forEach((artist, idx) => {
           if (target === 'sad' || target === 'calm' || target === 'energetic') {
             const mod = moodModifiers[(cursor + idx) % moodModifiers.length];
@@ -733,7 +794,7 @@
     const ruMoodQueries = {
       energetic: ['бодрая музыка', 'драйв', 'рейв'],
       calm: ['спокойная музыка', 'эмбиент', 'чилл'],
-      sad: ['грустная музыка', 'меланхолия', 'пост панк']
+      sad: ['грустный рэп', 'пост панк', 'меланхолия', 'лирика']
     };
     if ((profile?.scriptShare?.get('cyrillic') || 0) >= 0.2 && ruMoodQueries[target]) {
       for (const rq of ruMoodQueries[target]) pushUnique(rq);
@@ -788,6 +849,8 @@
     const salt = options.salt || 0;
     const allowLiked = Boolean(options.allowLiked);
     const strictMood = Boolean(options.strictMood);
+    const allowLowEngagement = Boolean(options.allowLowEngagement);
+    const dislikes = options.dislikes || null;
 
     const servedOrder = new Map();
     if (!excludeServed && recentServedIds.size) {
@@ -802,6 +865,7 @@
       const track = entry?.track;
       if (!track || track.id == null) continue;
       if (isAiSlopTrack(track)) continue;
+      if (isDislikedTrack(track, dislikes)) continue;
 
       const sid = String(track.id);
       if (seenIds.has(sid) || recentPlayedIds.has(sid)) continue;
@@ -811,7 +875,9 @@
 
       const fit = waveMoodFit(track, target);
       if (fit < 0) continue;
-      if (strictMood && targeted && fit <= 0) continue;
+      if (strictMood && targeted) {
+        if (target === 'sad' ? fit < 1 : fit <= 0) continue;
+      }
 
       const relatedCount = entry.relatedCount || 0;
       const bestRank = entry.bestRank ?? 25;
@@ -819,6 +885,12 @@
       const artistKey = waveArtistKey(track);
       const artistEntry = artistKey ? profile.artistWeights.get(artistKey) : null;
       const knownLikedArtist = isKnownLikedArtist(profile, track);
+
+      if (!allowLowEngagement && !profile.likedIds.has(sid) && !knownLikedArtist) {
+        const searchOnly = Boolean(entry.fromSearch && relatedCount === 0);
+        if (!hasCredibleDiscoveryEngagement(track, { fromSearch: searchOnly })) continue;
+        if (track.duration_ms && track.duration_ms > 15 * 60 * 1000) continue;
+      }
 
       let score = 0;
       // 1. Collaborative similarity evidence from SoundCloud /related (capped so cluster hubs don't monopolize every wave)
@@ -846,10 +918,11 @@
         score -= 4;
       }
 
-      // 4. User style alignment (genres, tags, title tokens, script)
+      // 4. User style alignment (genres, tags, title tokens, script, duration/beat-spam guard)
       const genre = waveGenreKey(track);
-      if (genre && profile.genreWeights.has(genre)) {
-        score += 22 * profile.genreWeights.get(genre);
+      const genreWeight = genre ? (profile.genreWeights.get(genre) || 0) : 0;
+      if (genreWeight > 0) {
+        score += 22 * genreWeight;
       }
 
       let tagMatch = 0;
@@ -858,6 +931,12 @@
       }
       score += Math.min(18, tagMatch * 12);
 
+      if (genreWeight > 0 && tagMatch > 0) {
+        score += 6;
+      } else if (genre && genreWeight === 0 && tagMatch === 0 && (profile.topGenres?.length || 0) >= 2 && relatedCount < 2) {
+        score -= 8;
+      }
+
       let tokenMatch = 0;
       for (const token of extractTitleTokens(track)) {
         tokenMatch += profile.titleTokenWeights.get(token) || 0;
@@ -865,8 +944,23 @@
       score += Math.min(10, tokenMatch * 3);
 
       const script = detectScriptBucket(track);
-      if (script && profile.scriptShare.has(script)) {
-        score += 4 * profile.scriptShare.get(script);
+      if (script) {
+        const share = profile.scriptShare.get(script) || 0;
+        if (share > 0) {
+          score += 10 * share;
+        }
+        if (script === 'cjk' && share < 0.05) {
+          score -= 10;
+        } else if (share === 0 && Math.max(0, ...profile.scriptShare.values()) >= 0.75) {
+          score -= 6;
+        }
+      }
+
+      if (!profile.likedIds.has(sid) && track.duration_ms && track.duration_ms > 8 * 60 * 1000) {
+        score -= 20;
+      }
+      if (!profile.likedIds.has(sid) && /\b(?:type\s+beat|free\s+beat|free\s+for\s+profit)\b/i.test(String(track.title || ''))) {
+        score -= 28;
       }
 
       // 5. Section / Mood alignment
@@ -878,17 +972,22 @@
         else score -= 12;
       }
 
-      // 6. Freshness boost (especially for "Новое")
+      // 6. Freshness boost (only for tracks with real engagement so fresh AI slop isn't boosted)
+      const plays = Number(track.playback_count || 0);
+      const likes = Number(track.likes_count || 0);
       const freshness = trackFreshnessScore(track);
-      if (target === 'new') {
-        score += freshness * 32;
-      } else {
-        score += freshness * 4;
+      const hasRealTraction = !hasEngagementStats(track) || plays >= 500 || likes >= 15;
+      if (hasRealTraction) {
+        if (target === 'new') {
+          score += freshness * 32;
+        } else {
+          score += freshness * 4;
+        }
+      } else if (freshness > 0) {
+        score -= 10;
       }
 
       // 7. Gentle engagement tiebreaker (helps genuine tracks beat zero-play spam)
-      const plays = Number(track.playback_count || 0);
-      const likes = Number(track.likes_count || 0);
       if (plays > 0 || likes > 0) {
         score += Math.min(4, Math.log10(1 + plays + likes * 10) * 0.7);
       }
@@ -899,7 +998,22 @@
         score -= 50 + (idx / Math.max(1, recentServedIds.size)) * 20;
       }
 
-      // 9. Meaningful deterministic variation by cursor + salt so refreshes & sessions explore varied candidates
+      // 9. Penalize tracks from artists or tags with prior dislikes
+      const artistDislikes = getArtistDislikeCount(track, dislikes);
+      if (artistDislikes > 0) {
+        score -= artistDislikes * 35;
+      }
+      if (dislikes && dislikes.tagCounts && dislikes.tagCounts.size) {
+        let tagDislikeHits = 0;
+        for (const tag of parseTrackTags(track.tag_list)) {
+          tagDislikeHits += dislikes.tagCounts.get(tag) || 0;
+        }
+        if (tagDislikeHits > 0) {
+          score -= Math.min(12, tagDislikeHits * 2);
+        }
+      }
+
+      // 10. Meaningful deterministic variation by cursor + salt so refreshes & sessions explore varied candidates
       score += ((hashString(`${sid}:${cursor}:${salt}`) % 29) - 14) * 0.9;
 
       ranked.push({ track, score, fit });
@@ -998,7 +1112,7 @@
     const isReplenish = Boolean(options.isReplenish);
     const allowCycle = options.allowCycle !== undefined ? Boolean(options.allowCycle) : !isReplenish;
 
-    const rawLiked = Array.isArray(profile?.likedTracks) ? profile.likedTracks : [];
+    const rawLiked = (profile?.likedTracks || []).filter(track => !isDislikedTrack(track, options.dislikes));
     const fullLiked = rawLiked.filter(t => t && t.id != null && !isAiSlopTrack(t));
     const liked = fullLiked.length ? fullLiked : rawLiked.filter(t => t && t.id != null && !isAiSlopTrack(t, { allowShort: true }));
     if (!liked.length) return [];
@@ -1043,28 +1157,29 @@
     });
 
     scored.sort((a, b) => b.score - a.score);
-    return orderWaveRecommendations(scored.map(s => s.track), limit, precedingTrack, true, 1, {
-      cursor,
-      salt,
-      diversifyWindow: 3,
-      recentSongKeys
+    const tracks = scored.map(item => item.track);
+    const orderOptions = { cursor, salt, diversifyWindow: 3 };
+    const fresh = orderWaveRecommendations(tracks, limit, precedingTrack, true, 1, {
+      ...orderOptions, recentSongKeys
     });
+    if (fresh.length || !allowCycle) return fresh;
+
+    // Once all favorites have been heard, prefer a different song at the cycle boundary.
+    const lastSongKeys = collectSongKeys([precedingTrack]);
+    const alternatives = tracks.filter(track => String(track.id) !== String(precedingTrack?.id)
+      && !hasMatchingSongKey(track, lastSongKeys));
+    return orderWaveRecommendations(alternatives.length ? alternatives : tracks,
+      limit, precedingTrack, true, 1, orderOptions);
   }
 
   function filterDiverseDiscoveries(discoveries, profile, limit) {
-    const freshArtists = [];
-    const knownArtists = [];
-    for (const track of discoveries) {
-      if (isKnownLikedArtist(profile, track)) {
-        knownArtists.push(track);
-      } else {
-        freshArtists.push(track);
-      }
-    }
-    const maxKnown = freshArtists.length >= Math.min(limit, 8)
-      ? Math.max(1, Math.floor(limit / 8))
-      : limit;
-    return [...freshArtists, ...knownArtists.slice(0, maxKnown)];
+    const freshCount = discoveries.filter(track => !isKnownLikedArtist(profile, track)).length;
+    const knownLimit = Math.max(Math.ceil(limit / 3), limit - freshCount);
+    let knownCount = 0;
+    return discoveries.filter(track => {
+      if (!isKnownLikedArtist(profile, track)) return true;
+      return ++knownCount <= knownLimit;
+    });
   }
 
   function blendDiscoveryWithFavorites(discoveries, profile, mood, limit, options = {}) {
@@ -1076,81 +1191,41 @@
     const precedingTrack = options.precedingTrack || null;
     const cursor = options.cursor || 0;
     const salt = options.salt || 0;
+    const dislikes = options.dislikes || null;
 
+    const likedSongKeys = collectSongKeys(profile?.likedTracks);
+    const unavailableSongs = new Set([...(recentSongKeys || []), ...likedSongKeys]);
+    const candidateIds = new Set();
     const cleanDiscoveries = filterDiverseDiscoveries(
-      (Array.isArray(discoveries) ? discoveries : []).filter(Boolean),
+      (Array.isArray(discoveries) ? discoveries : []).filter(track => {
+        if (track?.id == null || isDislikedTrack(track, dislikes)) return false;
+        const id = String(track.id);
+        if (seenIds.has(id) || recentPlayedIds.has(id) || profile?.likedIds?.has(id)
+          || candidateIds.has(id) || hasMatchingSongKey(track, unavailableSongs)) return false;
+        candidateIds.add(id);
+        addTrackSongKeys(track, unavailableSongs);
+        return true;
+      }),
       profile,
       limit
     );
-
-    // "Новое" strictly forbids already-liked tracks
-    if (target === 'new') {
-      return orderWaveRecommendations(cleanDiscoveries, limit, precedingTrack, false, 1, {
-        cursor,
-        salt,
-        diversifyWindow: 3,
-        recentSongKeys
-      });
-    }
-
-    const rawFavPool = (profile?.likedTracks || []);
-    const fullFavPool = rawFavPool.filter(t => t && t.id != null && !isAiSlopTrack(t));
-    const usableFavPool = fullFavPool.length ? fullFavPool : rawFavPool.filter(t => t && t.id != null && !isAiSlopTrack(t, { allowShort: true }));
-
-    let favorites = usableFavPool
-      .filter(t => {
-        const sid = String(t.id);
-        if (seenIds.has(sid) || recentPlayedIds.has(sid) || recentServedIds.has(sid)) return false;
-        if (recentSongKeys && hasMatchingSongKey(t, recentSongKeys)) return false;
-        if (cleanDiscoveries.some(d => String(d.id) === sid)) return false;
-        return waveMoodFit(t, target) >= 0;
-      })
-      .sort((a, b) => {
-        const diff = waveMoodFit(b, target) - waveMoodFit(a, target);
-        if (diff !== 0) return diff;
-        return (hashString(`${a.id}:${cursor}:${salt}`) % 23) - (hashString(`${b.id}:${cursor}:${salt}`) % 23);
-      });
-
-    // When external discoveries are unavailable (e.g. offline), widen to profile pool tracks matching the mood
-    if (!cleanDiscoveries.length && favorites.length < limit && Array.isArray(profile?.pool)) {
-      const used = new Set(favorites.map(t => String(t.id)));
-      const poolExtras = profile.pool
-        .filter(t => {
-          if (!t || t.id == null || isAiSlopTrack(t)) return false;
-          const sid = String(t.id);
-          return !seenIds.has(sid) && !recentPlayedIds.has(sid) && !used.has(sid) && waveMoodFit(t, target) >= 0;
-        })
-        .sort((a, b) => {
-          const fitDiff = waveMoodFit(b, target) - waveMoodFit(a, target);
-          if (fitDiff !== 0) return fitDiff;
-          return (hashString(`${a.id}:${cursor}:${salt}`) % 23) - (hashString(`${b.id}:${cursor}:${salt}`) % 23);
-        });
-      favorites = [...favorites, ...poolExtras];
-    }
-
-    // Keep wave overwhelmingly fresh (~95% new discoveries); mix at most 1 familiar favorite track mid-feed in "all" (or fallback if scarce)
-    const maxFavs = cleanDiscoveries.length >= 10
-      ? (target === 'all' ? 1 : 0)
-      : Math.max(0, limit - cleanDiscoveries.length);
-
-    const chosenFavs = favorites.slice(0, maxFavs);
-    const orderedDiscoveries = orderWaveRecommendations(
-      cleanDiscoveries,
-      Math.max(0, limit - chosenFavs.length),
-      precedingTrack,
-      target === 'all',
-      1,
-      { cursor, salt, diversifyWindow: 3, recentSongKeys }
-    );
-
-    if (!chosenFavs.length) return orderedDiscoveries;
-
-    const combined = [...orderedDiscoveries];
-    chosenFavs.forEach((fav, idx) => {
-      const insertAt = Math.min(combined.length, 6 + idx * 7);
-      combined.splice(insertAt, 0, fav);
+    const orderedDiscoveries = orderWaveRecommendations(cleanDiscoveries, limit, precedingTrack, target === 'all', 1, {
+      cursor, salt, diversifyWindow: 3, recentSongKeys
     });
-    return combined.slice(0, limit);
+
+    if (target !== 'all' || orderedDiscoveries.length < 6 || limit <= 6) return orderedDiscoveries;
+
+    const favorite = (profile?.likedTracks || [])
+      .filter(track => {
+        if (track?.id == null || isAiSlopTrack(track) || isDislikedTrack(track, dislikes)) return false;
+        const id = String(track.id);
+        return !seenIds.has(id) && !recentPlayedIds.has(id) && !recentServedIds.has(id)
+          && !hasMatchingSongKey(track, recentSongKeys);
+      })
+      .sort((a, b) => (hashString(`${a.id}:${cursor}:${salt}`) % 23) - (hashString(`${b.id}:${cursor}:${salt}`) % 23))[0];
+
+    if (!favorite) return orderedDiscoveries;
+    return [...orderedDiscoveries.slice(0, 6), favorite, ...orderedDiscoveries.slice(6, limit - 1)];
   }
 
   async function invokeRelatedTracks(api, trackId) {
@@ -1284,6 +1359,16 @@
       getArtistTracks(userId, api, limit = 30) {
         return getCached(artistTracks, userId, () => invokeArtistTracks(api, userId, limit));
       },
+      getRelatedSources(seedIds) {
+        const sources = [];
+        const now = Date.now();
+        for (const [id, entry] of related) {
+          if (seedIds.has(id) && now - entry.at < ttlMs) {
+            sources.push({ key: `rel:${id}`, list: entry.data, isRelated: true });
+          }
+        }
+        return sources;
+      },
       clear() {
         related.clear();
         artistTracks.clear();
@@ -1350,6 +1435,7 @@
     queueTracks = [],
     isReplenish = false,
     maxQueueSeeds,
+    dislikes = null,
     timeoutMs = 3200
   }) {
     const target = normalizeWaveMood(mood);
@@ -1362,6 +1448,7 @@
       recentPlayedIds,
       recentSeedIds: waveCache.recentSeedIds,
       recentSeedArtists: waveCache.recentSeedArtists,
+      dislikes,
       queueTracks,
       maxQueueSeeds: maxQueueSeeds ?? (isReplenish ? 2 : 1)
     });
@@ -1376,9 +1463,13 @@
       for (const k of likedSongKeys) blockedSongKeys.add(k);
     }
 
-    // 1. Primary wave discovery: parallel SoundCloud /related across diverse taste seeds + rotated style search
-    const primaryQueryLimit = (target === 'new' || targeted) ? 2 : (cursor > 0 || isReplenish ? 1 : 0);
-    const primaryQueries = buildTasteSearchQueries(profile, target, cursor).slice(0, primaryQueryLimit);
+    // 1. Primary wave discovery: parallel SoundCloud /related across diverse taste seeds.
+    // For targeted moods (sad/calm/energetic), also run targeted search immediately when user likes lack mood seeds.
+    const moodSeedCount = targeted ? seeds.filter(s => waveMoodFit(s, target) >= 1).length : seeds.length;
+    const primaryQueryLimit = seeds.length === 0 ? 2 : ((targeted && moodSeedCount < 3) ? 2 : 0);
+    const primaryQueries = primaryQueryLimit > 0
+      ? buildTasteSearchQueries(profile, target, cursor).slice(0, primaryQueryLimit)
+      : [];
 
     const primaryTasks = [
       ...seeds.map(seed => (async () => {
@@ -1419,7 +1510,8 @@
       cursor,
       salt,
       allowLiked: false,
-      strictMood: targeted
+      strictMood: targeted,
+      dislikes
     };
 
     let ranked = rankWaveCandidates(candidateMap, profile, target, rankOpts);
@@ -1430,8 +1522,14 @@
     if (ranked.length < (targeted ? 20 : 32) || unfamiliarCount < 24 || (targeted && moodMatchedCount < 18) || cursor > 0 || isReplenish) {
       const expansionTasks = [];
       const secondHopPool = ranked.filter(t =>
-        !seedIds.has(String(t.id)) && !isKnownLikedArtist(profile, t) && !waveCache.recentHopIds.has(String(t.id)));
-      const hopFallback = ranked.filter(t => !seedIds.has(String(t.id)) && !waveCache.recentHopIds.has(String(t.id)));
+        !seedIds.has(String(t.id))
+        && !isKnownLikedArtist(profile, t)
+        && !waveCache.recentHopIds.has(String(t.id))
+        && hasCredibleDiscoveryEngagement(t, { minPlays: 300, minLikes: 8 }));
+      const hopFallback = ranked.filter(t =>
+        !seedIds.has(String(t.id))
+        && !waveCache.recentHopIds.has(String(t.id))
+        && hasCredibleDiscoveryEngagement(t, { minPlays: 150, minLikes: 4 }));
       const hopSource = secondHopPool.length ? secondHopPool : (hopFallback.length ? hopFallback : ranked.filter(t => !seedIds.has(String(t.id))));
       const secondHopSeeds = hopSource
         .filter(t => !targeted || waveMoodFit(t, target) > 0)
@@ -1455,7 +1553,10 @@
         })());
       }
 
-      const artistHop = secondHopSeeds.find(t => t?.user_id != null && !isKnownLikedArtist(profile, t));
+      const artistHop = secondHopSeeds.find(t =>
+        t?.user_id != null
+        && !isKnownLikedArtist(profile, t)
+        && hasCredibleDiscoveryEngagement(t, { minPlays: 300, minLikes: 8 }));
       if (artistHop && (unfamiliarCount < 24 || cursor > 0)) {
         expansionTasks.push((async () => {
           const list = await waveCache.getArtistTracks(artistHop.user_id, api, 20);
@@ -1471,7 +1572,7 @@
         })());
       }
 
-      if (ranked.length < (targeted ? 18 : 20) || (targeted && moodMatchedCount < 16)) {
+      if (ranked.length < (targeted ? 12 : 10)) {
         const fallbackQueries = buildTasteSearchQueries(profile, target, cursor + 1)
           .filter(q => !primaryQueries.includes(q))
           .slice(0, 2);
@@ -1501,25 +1602,38 @@
     if (ranked.length < 12 && recentServedIds.size > 0) {
       ranked = rankWaveCandidates(candidateMap, profile, target, {
         ...rankOpts,
-        excludeServed: false,
-        recentSongKeys: target === 'favorites' ? null : likedSongKeys
+        excludeServed: false
       });
     }
 
-    // 4. Emergency fallback for targeted moods ONLY if strict mood-matched tracks are scarce
-    if (targeted && ranked.length < 6) {
-      const softRanked = rankWaveCandidates(candidateMap, profile, target, {
+    // 4. Emergency fallback ONLY if credible candidates are scarce
+    if (ranked.length < 6) {
+      const relaxed = rankWaveCandidates(candidateMap, profile, target, {
         ...rankOpts,
-        strictMood: false,
-        excludeServed: false
+        strictMood: targeted,
+        excludeServed: false,
+        allowLowEngagement: true
       });
       const existing = new Set(ranked.map(t => String(t.id)));
-      for (const t of softRanked) {
+      for (const t of relaxed) {
         if (!existing.has(String(t.id))) {
           ranked.push(t);
           existing.add(String(t.id));
         }
       }
+    }
+
+    if (!ranked.length) {
+      const softRanked = rankWaveCandidates(candidateMap, profile, target, {
+        ...rankOpts,
+        strictMood: false,
+        excludeServed: false,
+        allowLowEngagement: true
+      });
+      if (targeted) {
+        softRanked.sort((a, b) => waveMoodFit(b, target) - waveMoodFit(a, target));
+      }
+      ranked.push(...softRanked);
     }
 
     return { seeds, ranked, candidateMap };
@@ -1570,6 +1684,7 @@
     cursor = 0,
     salt = 0,
     isReplenish = false,
+    dislikes = null,
     timeoutMs = 2600
   }) {
     if (!baseTrack || baseTrack.id == null) {
@@ -1591,9 +1706,11 @@
 
     const pickDiverseHops = (pool, count) => {
       const valid = (Array.isArray(pool) ? pool : []).filter(t =>
-        t && t.id != null && String(t.id) !== baseId && !isAiSlopTrack(t) && !recentPlayedIds.has(String(t.id))
+        t && t.id != null && String(t.id) !== baseId && !isAiSlopTrack(t) && !isDislikedTrack(t, dislikes) && !recentPlayedIds.has(String(t.id))
       );
-      const scored = valid.map(t => {
+      const credible = valid.filter(t => hasCredibleDiscoveryEngagement(t, { minPlays: 200, minLikes: 5 }));
+      const source = credible.length ? credible : valid;
+      const scored = source.map(t => {
         const sid = String(t.id);
         const hopPenalty = waveCache.recentHopIds.has(sid) ? 1000 : 0;
         const servedPenalty = recentServedIds.has(sid) ? 200 : 0;
@@ -1689,9 +1806,13 @@
       })());
     }
 
-    const queries = buildTrackRadioQueries(baseTrack, hopSeeds, cursor, salt).slice(0, isReplenish ? 1 : 2);
-    for (const q of queries) {
-      tasks.push((async () => {
+    if (tasks.length) {
+      await raceWithTimeout(tasks, timeoutMs);
+    }
+
+    if (candidateMap.size < 14) {
+      const queries = buildTrackRadioQueries(baseTrack, hopSeeds, cursor, salt).slice(0, isReplenish ? 1 : 2);
+      const searchTasks = queries.map(q => (async () => {
         const offset = waveCache.nextSearchOffset(q);
         const list = await invokeSoundCloudSearch(api, q, offset).catch(() => []);
         list.slice(0, 25).forEach((track, rank) => {
@@ -1703,10 +1824,9 @@
           });
         });
       })());
-    }
-
-    if (tasks.length) {
-      await raceWithTimeout(tasks, timeoutMs);
+      if (searchTasks.length) {
+        await raceWithTimeout(searchTasks, Math.min(1800, timeoutMs));
+      }
     }
 
     const rankOpts = {
@@ -1719,7 +1839,8 @@
       cursor,
       salt,
       allowLiked: true,
-      strictMood: false
+      strictMood: false,
+      dislikes
     };
 
     let ranked = rankWaveCandidates(candidateMap, effectiveProfile, 'all', rankOpts);
@@ -1750,10 +1871,12 @@
     const recentPos = new Map();
     recentList.forEach((id, idx) => recentPos.set(id, idx));
 
+    const dislikes = options.dislikes || null;
+
     const unique = [];
     const seen = new Set();
     for (const t of (Array.isArray(candidates) ? candidates : [])) {
-      if (!t || t.id == null || isAiSlopTrack(t)) continue;
+      if (!t || t.id == null || isAiSlopTrack(t) || isDislikedTrack(t, dislikes)) continue;
       const id = String(t.id);
       if (seen.has(id)) continue;
       seen.add(id);
@@ -1815,6 +1938,81 @@
     return picked;
   }
 
+  function buildInstantWaveQueue({
+    profile,
+    mood = 'all',
+    cache,
+    sessionTracks = [],
+    mixedTracks = [],
+    seenIds = new Set(),
+    recentPlayedIds = new Set(),
+    recentServedIds = new Set(),
+    recentSongKeys = new Set(),
+    cursor = 0,
+    salt = 0,
+    dislikes = null,
+    limit = 14
+  }) {
+    const target = normalizeWaveMood(mood);
+    const targeted = target === 'energetic' || target === 'calm' || target === 'sad';
+    if (!profile || (!profile.pool?.length && !sessionTracks?.length && !mixedTracks?.length)) return [];
+
+    const candidateMap = new Map();
+    const seedIds = new Set(profile.pool.map(track => String(track.id)));
+    const poolSources = [
+      ...(cache?.getRelatedSources?.(seedIds) || []),
+      { list: sessionTracks, key: 'session', isRelated: false },
+      { list: mixedTracks, key: 'mixed', isRelated: false }
+    ];
+    for (const src of poolSources) {
+      if (!Array.isArray(src.list)) continue;
+      src.list.forEach((track, rank) => {
+        if (!src.isRelated && !isKnownLikedArtist(profile, track)
+          && !profile.genreWeights.has(waveGenreKey(track))
+          && !parseTrackTags(track?.tag_list).some(tag => profile.tagWeights.has(tag))) return;
+        recordCandidate(candidateMap, track, {
+          sourceKey: src.key,
+          isRelated: src.isRelated,
+          rank
+        });
+      });
+    }
+
+    const likedSongKeys = collectSongKeys(profile?.likedTracks);
+    const blockedSongKeys = new Set(recentSongKeys || []);
+    if (target !== 'favorites') {
+      for (const k of likedSongKeys) blockedSongKeys.add(k);
+    }
+
+    const rankOpts = {
+      seenIds,
+      recentPlayedIds,
+      recentServedIds,
+      excludeServed: true,
+      recentSongKeys: blockedSongKeys,
+      cursor,
+      salt,
+      allowLiked: false,
+      strictMood: targeted,
+      dislikes
+    };
+    const ranked = rankWaveCandidates(candidateMap, profile, target, rankOpts);
+
+    if (target === 'new') {
+      return orderWaveRecommendations(ranked, limit, null, false, 1, { cursor, salt, diversifyWindow: 4 });
+    }
+
+    return blendDiscoveryWithFavorites(ranked, profile, target, limit, {
+      seenIds,
+      recentPlayedIds,
+      recentServedIds,
+      recentSongKeys,
+      cursor,
+      salt,
+      dislikes
+    });
+  }
+
   return {
     WAVE_MOODS,
     normalizeWaveMood,
@@ -1827,6 +2025,7 @@
     parseTrackTags,
     waveGenreKey,
     isAiSlopTrack,
+    isDislikedTrack,
     analyzeTrackMood,
     waveTrackMood,
     waveMoodFit,
@@ -1841,6 +2040,7 @@
     createWaveCache,
     collectWaveCandidates,
     collectTrackRadioCandidates,
-    pickHomeTracks
+    pickHomeTracks,
+    buildInstantWaveQueue
   };
 });

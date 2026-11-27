@@ -3724,7 +3724,6 @@
 
 
 
-    #immersive-like-btn > svg { scale: 0.8; }
     #immersive-eq-btn > svg { scale: 1.25; }
     #immersive-volume-btn > svg { scale: 1.1; }
 
@@ -3773,14 +3772,65 @@
     }
 
     .karaoke-controls {
-      display: grid;
-      grid-template-columns: repeat(9, minmax(0, 1fr));
+      display: flex;
       align-items: center;
-      justify-items: center;
+      justify-content: space-between;
+      gap: 20px;
     }
 
-    .karaoke-controls #immersive-shuffle-btn {
-      grid-column: 3;
+    .karaoke-control-group {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .karaoke-control-group.playback {
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .karaoke-control-group.utilities {
+      justify-content: flex-end;
+    }
+
+    .karaoke-control-group > button:not(#immersive-play-btn),
+    .karaoke-control-group > .karaoke-volume,
+    .karaoke-volume > button {
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      border-radius: 9999px;
+    }
+
+    .karaoke-control-group > button:not(#immersive-play-btn) > svg,
+    .karaoke-volume > button > svg {
+      max-width: 100%;
+    }
+
+    #immersive-dislike-btn > svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    #wave-feed-refresh[aria-busy="true"] {
+      cursor: progress;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      #wave-feed-refresh[aria-busy="true"] > svg {
+        animation: wave-refresh-spin 700ms linear infinite;
+      }
+
+      @keyframes wave-refresh-spin {
+        to { transform: rotate(360deg); }
+      }
     }
 
     .karaoke-volume-popover {
@@ -3934,21 +3984,8 @@
 
 
       width: 12px !important;
-
-
-
-
-
-
-
       height: 12px !important;
-
-
-
-
-
-
-
+      margin-top: -4px !important;
       border-radius: 50% !important;
 
 
@@ -5860,10 +5897,20 @@
               <span>Эфир волны</span>
               <span id="wave-queue-count" class="text-xs text-neutral-500 font-normal">0 треков</span>
             </h3>
-            <button id="wave-feed-refresh" onclick="refreshWaveFeed()" class="text-xs text-neutral-400 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center gap-1">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-              <span>Сменить треки</span>
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button id="wave-hidden-btn" onclick="openHiddenDislikesModal()" class="text-xs text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5" title="Скрытые треки и артисты">
+                <svg class="w-3.5 h-3.5 shrink-0" style="color: var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 14V2"/>
+                  <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>
+                </svg>
+                <span>Скрытые</span>
+                <span id="wave-hidden-count" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" style="background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);">0</span>
+              </button>
+              <button id="wave-feed-refresh" type="button" aria-busy="false" onclick="refreshWaveFeed()" class="text-xs text-neutral-400 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>Сменить треки</span>
+              </button>
+            </div>
           </div>
 
           <!-- Контейнер треков волны -->
@@ -6205,7 +6252,7 @@
 
 
 
-      <div id="tab-settings" class="tab-content"><div class="settings-shell"><header><h1>Настройки приложения</h1><span id="settings-wordmark" class="wordmark">ONYX v1.1.23</span></header><div class="layout"><nav aria-label="Разделы настроек"><button data-group="account">Аккаунт</button><button data-group="sound">Звук и караоке</button><button data-group="discord">Discord</button><button data-group="look">Оформление</button></nav><div class="content"><div id="settings-notice" role="status"></div><div id="settings-cards">
+      <div id="tab-settings" class="tab-content"><div class="settings-shell"><header><h1>Настройки приложения</h1><span id="settings-wordmark" class="wordmark">ONYX v1.2.0</span></header><div class="layout"><nav aria-label="Разделы настроек"><button data-group="account">Аккаунт</button><button data-group="sound">Звук и караоке</button><button data-group="discord">Discord</button><button data-group="look">Оформление</button></nav><div class="content"><div id="settings-notice" role="status"></div><div id="settings-cards">
         <div class="flex items-center justify-between">
           <h1 class="text-xl font-bold text-white">Настройки приложения</h1>
           <span id="settings-app-version" class="text-xs text-neutral-400 font-mono">ONYX Edition</span>
@@ -6916,6 +6963,51 @@
 
 
 
+    <!-- Hidden Dislikes Modal -->
+    <div id="hidden-dislikes-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm" onclick="if (event.target === this) closeHiddenDislikesModal()">
+      <div id="hidden-dislikes-modal-panel" class="w-full max-w-xl overflow-hidden shadow-2xl border transition-colors" style="background: var(--panel-bg); border-color: var(--panel-border); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); border-radius: var(--app-radius, 16px);">
+        <div class="flex items-center justify-between px-5 py-4 border-b" style="border-color: var(--panel-border);">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 14V2"/>
+                <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 id="hidden-modal-title" class="text-sm font-bold text-white">Скрытые в волне</h3>
+              <p id="hidden-modal-subtitle" class="text-[11px] text-neutral-400">Дизлайкнутые треки и артисты не попадают в «Мою волну» и радио</p>
+            </div>
+          </div>
+          <button onclick="closeHiddenDislikesModal()" class="w-8 h-8 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center" title="Закрыть">✕</button>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b" style="border-color: var(--panel-border);">
+          <div class="inline-flex p-0.5 rounded-xl border" style="background: var(--card-bg); border-color: var(--panel-border);">
+            <button id="hidden-tab-tracks" onclick="setHiddenDislikesTab('tracks')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5">
+              <span>Треки</span>
+              <span id="hidden-tracks-pill" class="px-1.5 py-0.5 rounded-full text-[10px]">0</span>
+            </button>
+            <button id="hidden-tab-artists" onclick="setHiddenDislikesTab('artists')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5">
+              <span>Артисты</span>
+              <span id="hidden-artists-pill" class="px-1.5 py-0.5 rounded-full text-[10px]">0</span>
+            </button>
+          </div>
+
+          <input id="hidden-search-input" type="text" placeholder="Поиск по треку или артисту…" oninput="renderHiddenDislikesModal()" class="flex-1 min-w-[180px] max-w-[240px] px-3 py-1.5 rounded-lg border text-xs outline-none transition-colors" style="background: var(--card-bg); border-color: var(--panel-border);">
+        </div>
+
+        <div id="hidden-modal-list" class="max-h-80 overflow-y-auto p-3 space-y-1"></div>
+
+        <div class="flex items-center justify-between px-5 py-3 border-t" style="border-color: var(--panel-border);">
+          <span id="hidden-modal-footer-note" class="text-[11px] text-neutral-500">Нажмите «Вернуть», чтобы снова разрешить рекомендации</span>
+          <button onclick="clearAllDislikes()" class="px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer" style="border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);">
+            Очистить всё
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="queue-drawer" class="absolute right-0 top-0 bottom-0 w-80 bg-[#0d0b14]/95 backdrop-blur-xl border-l border-white/5 p-5 z-40 transform translate-x-full transition-transform duration-300 flex flex-col justify-between">
 
 
@@ -7347,11 +7439,13 @@
 
         </button>
 
-
-
-
-
-
+        <!-- Dislike Thumbs-Down Icon -->
+        <button id="dislike-btn" onclick="dislikeCurrentTrack()" class="p-1.5 rounded-full hover:bg-white/10 text-neutral-400 hover:text-rose-400 transition-all hover:scale-110 active:scale-90 cursor-pointer flex items-center justify-center select-none shrink-0" title="Не нравится (пропустить)">
+          <svg id="dislike-svg" class="w-4 h-4 transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 14V2"/>
+            <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>
+          </svg>
+        </button>
 
         <!-- Beautiful Animated Waveform Visualizer -->
 
@@ -7653,15 +7747,8 @@
 
 
 
-      <div class="flex items-center justify-end gap-3.5 w-72 shrink-0 text-neutral-400">
-
-
-
-
-
-
-
-        <button id="shuffle-btn" style="transform: translateX(-6px);" onclick="toggleShuffle(); this.blur();" class="hover:text-white transition-colors cursor-pointer p-1" title="Перемешать">
+      <div class="flex items-center justify-end gap-2.5 w-72 shrink-0 text-neutral-400">
+        <button id="shuffle-btn" onclick="toggleShuffle(); this.blur();" class="inline-flex items-center justify-center w-7 h-7 shrink-0 hover:text-white transition-colors cursor-pointer" title="Перемешать">
           <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
             <path d="m18 2 4 4-4 4"/>
@@ -7671,13 +7758,7 @@
           </svg>
         </button>
 
-
-
-
-
-
-
-        <button id="repeat-btn" onclick="toggleRepeat(); this.blur();" class="hover:text-white transition-colors cursor-pointer p-1" title="Повтор">
+        <button id="repeat-btn" onclick="toggleRepeat(); this.blur();" class="inline-flex items-center justify-center w-7 h-7 shrink-0 hover:text-white transition-colors cursor-pointer" title="Повтор">
           <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m17 2 4 4-4 4"/>
             <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
@@ -7686,164 +7767,27 @@
           </svg>
         </button>
 
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
         <!-- Equalizer & Audio Presets Button -->
-
-
-
-
-
-
-
-        <button id="eq-btn" class="hover:text-white transition-colors cursor-pointer relative p-1" title="Эквалайзер и звук (5 полос, Студийные пресеты)">
-
-
-
-
-
-
-
+        <button id="eq-btn" class="inline-flex items-center justify-center w-7 h-7 shrink-0 hover:text-white transition-colors cursor-pointer relative" title="Эквалайзер и звук (5 полос, Студийные пресеты)">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
-
-
-
-
-
-
-
         </button>
-
-
-
-
-
-
 
         <!-- OBS / Streamer Overlay Button -->
-
-
-
-
-
-
-
-        <button id="obs-overlay-btn" class="hover:text-white transition-colors cursor-pointer p-1" title="Виджет для OBS / Стрима">
-
-
-
-
-
-
-
+        <button id="obs-overlay-btn" class="inline-flex items-center justify-center w-7 h-7 shrink-0 hover:text-white transition-colors cursor-pointer" title="Виджет для OBS / Стрима">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-
-
-
-
-
-
-
         </button>
 
-
-
-
-
-
-
         <!-- Volume slider -->
-
-
-
-
-
-
-
-        <div class="flex items-center gap-2">
-
-
-
-
-
-
-
-          <button id="volume-icon-btn" onclick="toggleMute()" class="hover:text-white transition-colors cursor-pointer" title="Громкость">
-
-
-
-
-
-
-
+        <div class="flex items-center gap-2 h-7 shrink-0">
+          <button id="volume-icon-btn" onclick="toggleMute()" class="inline-flex items-center justify-center w-7 h-7 shrink-0 hover:text-white transition-colors cursor-pointer" title="Громкость">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
-
-
-
-
-
-
-
           </button>
-
-
-
-
-
-
-
-          <input id="volume-slider" type="range" min="0" max="100" value="80" class="cursor-pointer">
-
-
-
-
-
-
-
+          <input id="volume-slider" type="range" min="0" max="100" value="80" class="block m-0 cursor-pointer">
         </div>
 
-
-
-
-
-
-
         <!-- Queue Drawer Toggle -->
-
-
-
-
-
-
-
-        <button id="toggle-queue-btn" class="hover:text-white transition-colors cursor-pointer p-1" title="Очередь воспроизведения">
-
-
-
-
-
-
-
+        <button id="toggle-queue-btn" class="inline-flex items-center justify-center w-7 h-7 shrink-0 hover:text-white transition-colors cursor-pointer" title="Очередь воспроизведения">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
-
-
-
-
-
-
-
         </button>
 
 
@@ -7988,7 +7932,7 @@
 
 
 
-          <div class="w-9 h-9 rounded-lg bg-[#22212b] border border-white/5 flex items-center justify-center shrink-0">
+          <div class="login-avatar relative overflow-hidden w-9 h-9 rounded-lg bg-[#22212b] border border-white/5 flex items-center justify-center shrink-0">
 
 
 
@@ -7996,6 +7940,7 @@
 
 
 
+            <img id="modal-user-avatar" alt="" hidden class="absolute inset-0 w-full h-full object-cover" onerror="this.hidden=true">
             <svg class="w-5 h-5 text-white/80" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
 
 
@@ -8074,7 +8019,7 @@
       </div>
 
       <!-- Explanatory note about Account Requirement -->
-      <div class="p-3.5 rounded-xl bg-[#191512] border border-[#ff5500]/25 text-neutral-300 text-xs leading-relaxed">
+      <div class="login-note p-3.5 rounded-xl bg-[#191512] border border-[#ff5500]/25 text-neutral-300 text-xs leading-relaxed">
         <div class="flex items-center gap-1.5 text-[#ff7722] font-semibold text-xs mb-1">
           <svg class="w-4 h-4 text-[#ff5500] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
           <span>Вход только через аккаунт</span>
@@ -8087,7 +8032,7 @@
       <!-- Divider -->
       <div class="relative flex items-center justify-center pt-1">
         <div class="border-t border-[#232328] w-full"></div>
-        <span class="bg-[#111114] px-2.5 text-[10px] text-neutral-500 uppercase tracking-wider font-medium whitespace-nowrap">или вручную по OAuth токену</span>
+        <span class="login-divider-label bg-[#111114] px-2.5 text-[10px] text-neutral-500 uppercase tracking-wider font-medium whitespace-nowrap">или вручную по OAuth токену</span>
         <div class="border-t border-[#232328] w-full"></div>
       </div>
 
@@ -8577,59 +8522,71 @@
 
 
         <!-- Karaoke playback controls -->
-          <div class="karaoke-controls relative z-20 w-full max-w-[464px] px-2 pt-1 select-none" style="pointer-events: auto !important;">
-            <button id="immersive-like-btn" onclick="toggleCurrentTrackLike()" class="p-2 text-neutral-400 hover:text-white transition-all hover:scale-110 active:scale-90 cursor-pointer" title="Нравится" style="pointer-events: auto !important;">
-                <svg id="immersive-like-svg" class="w-5 h-5 pointer-events-none transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          <div class="karaoke-controls relative z-20 w-full max-w-lg px-4 pt-1 select-none" style="pointer-events: auto !important;">
+            <div class="karaoke-control-group">
+              <button id="immersive-like-btn" onclick="toggleCurrentTrackLike()" class="text-neutral-400 hover:text-white transition-all hover:scale-110 active:scale-90 cursor-pointer" title="Нравится" style="pointer-events: auto !important;">
+                  <svg id="immersive-like-svg" class="w-4 h-4 pointer-events-none transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                </button>
+                <button id="immersive-dislike-btn" onclick="dislikeCurrentTrack()" class="text-neutral-400 hover:text-rose-400 transition-all hover:scale-110 active:scale-90 cursor-pointer" title="Не нравится (пропустить)" style="pointer-events: auto !important;">
+                  <svg class="w-4 h-4 pointer-events-none transition-all duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 14V2"/>
+                    <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>
+                  </svg>
+                </button>
+            </div>
+            <div class="karaoke-control-group playback">
+              <button id="immersive-shuffle-btn" onclick="toggleShuffle(); this.blur();" class="text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Перемешать" style="pointer-events: auto !important;">
+                  <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
+              <path d="m18 2 4 4-4 4"/>
+              <path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/>
+              <path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/>
+              <path d="m18 14 4 4-4 4"/>
+            </svg>
+                </button>
+              <button id="immersive-prev-btn" onclick="playPrevTrack()" class="text-neutral-400 hover:text-white transition-colors cursor-pointer active:scale-90" title="Предыдущий трек" style="pointer-events: auto !important;">
+                  <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 20 20"><path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z"/></svg>
+                </button>
+              <button id="immersive-play-btn" onclick="togglePlay()" class="w-10 h-10 rounded-full flex items-center justify-center bg-white text-black font-bold shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0" title="Воспроизведение / Пауза" style="pointer-events: auto !important;">
+                  <svg id="immersive-play-icon" class="w-4 h-4 fill-black pointer-events-none" viewBox="0 0 24 24">
+                    <path transform="translate(1.375 0)" d="M7 5.5v13a.5.5 0 0 0 .76.43l10-6.5a.5.5 0 0 0 0-.86l-10-6.5A.5.5 0 0 0 7 5.5z"/>
+                  </svg>
+                  <svg id="immersive-pause-icon" class="w-4 h-4 fill-black hidden pointer-events-none" viewBox="0 0 24 24">
+                    <rect x="6" y="4" width="4" height="16" rx="1.5"/>
+                    <rect x="14" y="4" width="4" height="16" rx="1.5"/>
+                  </svg>
+                </button>
+              <button id="immersive-next-btn" onclick="playNextTrack()" class="text-neutral-400 hover:text-white transition-colors cursor-pointer active:scale-90" title="Следующий трек" style="pointer-events: auto !important;">
+                  <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 20 20"><path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4A1 1 0 0010 6v2.798L4.555 5.168z"/></svg>
+                </button>
+              <button id="immersive-repeat-btn" onclick="toggleRepeat(); this.blur();" class="text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Повтор" style="pointer-events: auto !important;">
+                  <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m17 2 4 4-4 4"/>
+              <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+              <path d="m7 22-4-4 4-4"/>
+              <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+            </svg>
+                </button>
+            </div>
+            <div class="karaoke-control-group utilities">
+              <button id="immersive-queue-btn" type="button" onclick="toggleQueueDrawer(true)" class="text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Очередь воспроизведения" aria-label="Очередь воспроизведения" aria-controls="queue-drawer">
+                <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1"/>
                 </svg>
               </button>
-<button id="immersive-queue-btn" type="button" onclick="toggleQueueDrawer(true)" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Очередь воспроизведения" aria-label="Очередь воспроизведения" aria-controls="queue-drawer">
-              <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <path d="M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1"/>
-              </svg>
-            </button>
-            <button id="immersive-shuffle-btn" onclick="toggleShuffle(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Перемешать" style="pointer-events: auto !important;">
-                <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
-            <path d="m18 2 4 4-4 4"/>
-            <path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/>
-            <path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/>
-            <path d="m18 14 4 4-4 4"/>
-          </svg>
-              </button>
-            <button id="immersive-prev-btn" onclick="playPrevTrack()" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer active:scale-90" title="Предыдущий трек" style="pointer-events: auto !important;">
-                <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 20 20"><path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z"/></svg>
-              </button>
-            <button id="immersive-play-btn" onclick="togglePlay()" class="w-10 h-10 rounded-full flex items-center justify-center bg-white text-black font-bold shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0" title="Воспроизведение / Пауза" style="pointer-events: auto !important;">
-                <svg id="immersive-play-icon" class="w-4 h-4 fill-black pointer-events-none" viewBox="0 0 24 24">
-                  <path transform="translate(1.375 0)" d="M7 5.5v13a.5.5 0 0 0 .76.43l10-6.5a.5.5 0 0 0 0-.86l-10-6.5A.5.5 0 0 0 7 5.5z"/>
-                </svg>
-                <svg id="immersive-pause-icon" class="w-4 h-4 fill-black hidden pointer-events-none" viewBox="0 0 24 24">
-                  <rect x="6" y="4" width="4" height="16" rx="1.5"/>
-                  <rect x="14" y="4" width="4" height="16" rx="1.5"/>
-                </svg>
-              </button>
-            <button id="immersive-next-btn" onclick="playNextTrack()" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer active:scale-90" title="Следующий трек" style="pointer-events: auto !important;">
-                <svg class="w-5 h-5 fill-current pointer-events-none" viewBox="0 0 20 20"><path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4A1 1 0 0010 6v2.798L4.555 5.168z"/></svg>
-              </button>
-            <button id="immersive-repeat-btn" onclick="toggleRepeat(); this.blur();" class="p-2 text-neutral-400 hover:text-white transition-colors cursor-pointer" title="Повтор" style="pointer-events: auto !important;">
-                <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m17 2 4 4-4 4"/>
-            <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
-            <path d="m7 22-4-4 4-4"/>
-            <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
-          </svg>
-              </button>
-            <button id="immersive-eq-btn" type="button" class="p-2 shrink-0 rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Эквалайзер" aria-label="Эквалайзер" aria-controls="eq-popover" style="pointer-events: auto !important;">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
-              </button>
-            <div class="karaoke-volume relative grid h-10 w-10 place-items-center">
-              <button id="immersive-volume-btn" onclick="toggleMute()" class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Громкость" style="pointer-events: auto !important;">
-                <svg id="immersive-volume-icon" class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
-              </button>
-              <div class="karaoke-volume-popover">
-                <div class="karaoke-volume-panel card-glass border border-white/10 rounded-full shadow-xl">
-                  <input id="immersive-volume-slider" type="range" min="0" max="100" value="80" class="min-w-0 cursor-pointer custom-range-slider focus-visible:ring-2 focus-visible:ring-white/50" title="Громкость" style="pointer-events: auto !important;">
+              <button id="immersive-eq-btn" type="button" class="shrink-0 text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Эквалайзер" aria-label="Эквалайзер" aria-controls="eq-popover" style="pointer-events: auto !important;">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+                </button>
+              <div class="karaoke-volume relative">
+                <button id="immersive-volume-btn" onclick="toggleMute()" class="shrink-0 text-neutral-400 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50 transition-colors cursor-pointer" title="Громкость" style="pointer-events: auto !important;">
+                  <svg id="immersive-volume-icon" class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                </button>
+                <div class="karaoke-volume-popover">
+                  <div class="karaoke-volume-panel card-glass border border-white/10 rounded-full shadow-xl">
+                    <input id="immersive-volume-slider" type="range" min="0" max="100" value="80" class="min-w-0 cursor-pointer custom-range-slider focus-visible:ring-2 focus-visible:ring-white/50" title="Громкость" style="pointer-events: auto !important;">
+                  </div>
                 </div>
               </div>
             </div>
@@ -10300,7 +10257,7 @@
     var waveActiveMood = null;
     var isWaveStarting = false;
     var lastNonWavePlayRequestId = 0;
-    const waveSelectionVersion = 3;
+    const waveSelectionVersion = 4;
     var wavePlayedIds = new Set();
     var isWaveLoadingMore = false;
     window.isWaveActive = false;
@@ -15509,9 +15466,8 @@
     const STREAM_URL_TTL_MS = 5 * 60 * 1000;
 
     function streamUrlExpiresAtMs(url) {
-      if (typeof url !== 'string' || !url) return null;
       try {
-        const parsed = new URL(url);
+        const parsed = new URL(typeof url === 'string' ? url : url?.url);
         const policyParam = parsed.searchParams.get('Policy');
         if (policyParam) {
           const b64 = policyParam.replace(/-/g, '+').replace(/_/g, '/').replace(/~/g, '=');
@@ -15519,7 +15475,7 @@
           const epoch = Number(json?.Statement?.[0]?.Condition?.DateLessThan?.['AWS:EpochTime']);
           if (Number.isFinite(epoch) && epoch > 0) return epoch * 1000;
         }
-        const exp = Number(parsed.searchParams.get('expires'));
+        const exp = Number(parsed.searchParams.get('Expires') || parsed.searchParams.get('expires'));
         if (Number.isFinite(exp) && exp > 0) return exp * 1000;
       } catch (_) {}
       return null;
@@ -15542,7 +15498,10 @@
       const url = streamUrlCache.get(String(trackId));
       const cachedAt = streamUrlCacheAt.get(String(trackId)) || 0;
       const expiresAt = streamUrlExpiresAtMs(url);
-      if (Date.now() - cachedAt > STREAM_URL_TTL_MS || (expiresAt != null && expiresAt - Date.now() < 60 * 1000)) {
+      const validUntil = expiresAt != null
+        ? Math.min(expiresAt - 60_000, cachedAt + 60 * 60_000)
+        : cachedAt + STREAM_URL_TTL_MS;
+      if (Date.now() >= validUntil) {
         invalidateStreamUrl(trackId);
         return null;
       }
@@ -15565,10 +15524,27 @@
     }
 
 
+    // Start at most one speculative resolution after the pointer settles on a track.
+    let hoveredStreamRow = null;
+    let hoverStreamTimer = null;
+    document.addEventListener('pointerover', event => {
+      if (event.pointerType !== 'mouse') return;
+      const row = event.target.closest?.('[data-track-id]');
+      if (row === hoveredStreamRow) return;
+      hoveredStreamRow = row;
+      clearTimeout(hoverStreamTimer);
+      if (!row) return;
+      hoverStreamTimer = setTimeout(() => {
+        if (row.matches(':hover') && streamRequests.size === 0) warmStreamUrl(row.dataset.trackId);
+      }, 300);
+    });
+
     function warmStreamUrl(trackId) {
-      if (trackId && !getCachedStreamUrl(trackId)) {
-        requestStreamUrl(trackId).then(url => cacheStreamUrl(trackId, url)).catch(() => {});
-      }
+      if (!trackId || getCachedStreamUrl(trackId)) return Promise.resolve(null);
+      return requestStreamUrl(trackId).then(url => {
+        if (url) cacheStreamUrl(trackId, url);
+        return url;
+      }).catch(() => null);
     }
 
     // Visible feedback while a stream is resolved (YouTube fallback can take a few seconds).
@@ -15615,15 +15591,33 @@
       } catch (_) {}
     }
 
-    function prefetchNextTrack(index) {
+    let prefetchGeneration = 0;
+    async function prefetchNextTrack(index) {
+      const generation = ++prefetchGeneration;
+      const queue = currentQueue;
+      const stillCurrent = () => generation === prefetchGeneration && currentQueue === queue;
       if (!currentQueue || index < 0 || index >= currentQueue.length) return;
       const nextT = currentQueue[index];
       if (!nextT || !nextT.id) return;
-      warmStreamUrl(nextT.id);
+      const lookahead = (typeof isShuffle !== 'undefined' && isShuffle && typeof getShuffleUpcomingIndices === 'function')
+        ? getShuffleUpcomingIndices().filter(i => i !== index).slice(0, 2)
+        : [index + 1, index + 2].filter(i => i >= 0 && i < currentQueue.length);
+
       // 2. Prefetch and pre-transcribe lyrics in advance before the song plays!
       setTimeout(() => {
-        prefetchLyricsForTrack(nextT);
+        if (stillCurrent()) prefetchLyricsForTrack(nextT);
       }, 1200);
+
+      // Warm sequentially so YouTube fallback tracks don't spawn competing yt-dlp processes.
+      await warmStreamUrl(nextT.id);
+      for (const idx of lookahead) {
+        if (!stillCurrent()) return;
+        const t = currentQueue[idx];
+        if (!t || !t.id || getCachedStreamUrl(t.id)) continue;
+        await new Promise(r => setTimeout(r, 150));
+        if (!stillCurrent()) return;
+        await warmStreamUrl(t.id);
+      }
     }
 
     const crossfadeInput = document.getElementById('crossfade-duration');
@@ -15669,6 +15663,7 @@
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
+        startFragPrefetch: true,
         backBufferLength: 30,
         maxBufferLength: 30,
         maxMaxBufferLength: 120,
@@ -15876,6 +15871,7 @@
         }
 
         if (!currentQueue || index < 0 || index >= currentQueue.length) return;
+        ++prefetchGeneration;
         currentTrackIndex = index;
         const track = currentQueue[currentTrackIndex];
         if (!track) return;
@@ -17676,6 +17672,9 @@
       if (typeof updateQueueDrawer === 'function') {
         updateQueueDrawer();
       }
+      if (typeof prefetchNextTrack === 'function' && typeof nextQueuedTrackIndex === 'function') {
+        prefetchNextTrack(nextQueuedTrackIndex());
+      }
       saveSessionState();
     }
     window.toggleShuffle = toggleShuffle;
@@ -17794,8 +17793,8 @@
         queueDrawer.classList.add('translate-x-full');
         parent.insertBefore(queueDrawer, inKaraoke ? null : queueDrawerNextSibling);
       }
-      if (queueDrawer.classList.contains('translate-x-full')) updateQueueDrawer();
-      queueDrawer.classList.toggle('translate-x-full');
+      const closed = queueDrawer.classList.toggle('translate-x-full');
+      if (!closed) updateQueueDrawer();
     }
 
     toggleQueueBtn.addEventListener('click', () => toggleQueueDrawer());
@@ -17815,6 +17814,7 @@
 
 
     function updateQueueDrawer() {
+      if (queueDrawer.classList.contains('translate-x-full')) return;
       const currentTitle = document.getElementById('queue-current-title');
       const currentArtist = document.getElementById('queue-current-artist');
       const currentCover = document.getElementById('queue-current-cover');
@@ -20374,6 +20374,18 @@
         refreshBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
         refreshBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
       }
+      const hiddenBtn = document.getElementById('wave-hidden-btn');
+      if (hiddenBtn) {
+        hiddenBtn.style.color = isLight ? '#334155' : '#d4d4d8';
+        hiddenBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
+        hiddenBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
+      }
+      if (typeof renderHiddenDislikesModal === 'function') {
+        const modal = document.getElementById('hidden-dislikes-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+          renderHiddenDislikesModal();
+        }
+      }
 
       // Update mood chips
       document.querySelectorAll('.wave-mood-chip').forEach(chip => {
@@ -20442,7 +20454,7 @@
       }
     }
 
-    function renderWaveTrackList() {
+    function renderWaveTrackList(animateRefresh = false) {
       const container = document.getElementById('wave-track-list');
       const countEl = document.getElementById('wave-queue-count');
       if (!container) return;
@@ -20502,13 +20514,19 @@
             <div class="w-6 flex items-center justify-center shrink-0">
               ${iconHtml}
             </div>
-            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm">
+            <img src="${escapeMarkup(t.cover || DEFAULT_COVER)}" decoding="async" onerror="this.onerror=null; this.src=DEFAULT_COVER;" class="w-10 h-10 rounded-lg object-cover shrink-0 shadow-sm">
             <div class="truncate min-w-0">
               <div class="text-xs truncate" style="${isCurrent ? `color: ${wt.activeTrackTitle}; font-weight: bold;` : ''}">${escapeMarkup(t.title)}</div>
               <div class="text-[11px] ${isLight ? 'text-slate-500' : 'text-neutral-400'} truncate">${escapeMarkup(t.artist)}</div>
             </div>
           </div>
-          <div class="flex items-center gap-3 shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
+            <button class="wave-track-dislike-btn p-1.5 opacity-0 group-hover:opacity-100 ${isLight ? 'text-slate-400 hover:text-rose-500' : 'text-neutral-500 hover:text-rose-400'} transition-all cursor-pointer" title="Не нравится (убрать из волны)" data-id="${escapeMarkup(t.id)}">
+              <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 14V2"/>
+                <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>
+              </svg>
+            </button>
             <button class="wave-track-like-btn p-1.5 ${isLight ? 'text-slate-400 hover:text-rose-500' : 'text-neutral-500 hover:text-rose-500'} transition-colors cursor-pointer" title="Добавить в любимые" data-id="${escapeMarkup(t.id)}">
               <svg class="w-4 h-4 ${t.liked ? 'fill-rose-500 text-rose-500' : 'fill-none stroke-currentColor'}" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
@@ -20521,6 +20539,11 @@
         `;
 
         row.addEventListener('click', (e) => {
+          if (e.target.closest('.wave-track-dislike-btn')) {
+            e.stopPropagation();
+            dislikeTrack(t);
+            return;
+          }
           if (e.target.closest('.wave-track-like-btn')) {
             e.stopPropagation();
             toggleLike(t);
@@ -20535,6 +20558,13 @@
 
         container.appendChild(row);
       });
+
+      if (animateRefresh && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        container.animate([
+          { opacity: 0.4, transform: 'translateY(14px)' },
+          { opacity: 1, transform: 'translateY(0)' }
+        ], { duration: 260, easing: 'ease-out' });
+      }
     }
 
     async function setWaveMood(btn, mood) {
@@ -20603,16 +20633,23 @@
     window.shuffleWaveQueue = shuffleWaveQueue;
 
     async function refreshWaveFeed() {
-      ensureWaveMemoryLoaded();
-      const mood = WaveEngine.normalizeWaveMood(waveCurrentMood);
-      const previousIds = (currentStationUrn === 'my_wave' && Array.isArray(currentQueue))
-        ? currentQueue.map(t => String(t?.id)).filter(Boolean)
-        : [];
-      if (currentStationUrn === 'my_wave' && Array.isArray(currentQueue)) {
-        rememberWaveServedTracks(currentQueue);
+      const button = document.getElementById('wave-feed-refresh');
+      if (button?.getAttribute('aria-busy') === 'true') return;
+      button?.setAttribute('aria-busy', 'true');
+      try {
+        ensureWaveMemoryLoaded();
+        const mood = WaveEngine.normalizeWaveMood(waveCurrentMood);
+        const previousIds = (currentStationUrn === 'my_wave' && Array.isArray(currentQueue))
+          ? currentQueue.map(t => String(t?.id)).filter(Boolean)
+          : [];
+        if (currentStationUrn === 'my_wave' && Array.isArray(currentQueue)) {
+          rememberWaveServedTracks(currentQueue);
+        }
+        waveSessionSalt = (waveSessionSalt + 1 + Math.floor(Math.random() * 997)) >>> 0;
+        await startWave(mood, { excludeIds: previousIds, animateRefresh: true });
+      } finally {
+        button?.setAttribute('aria-busy', 'false');
       }
-      waveSessionSalt = (waveSessionSalt + 1 + Math.floor(Math.random() * 997)) >>> 0;
-      await startWave(mood, { excludeIds: previousIds });
     }
     window.refreshWaveFeed = refreshWaveFeed;
 
@@ -20714,6 +20751,374 @@
     }
     window.isWaveTrackRecentlyPlayed = isWaveTrackRecentlyPlayed;
 
+    const WAVE_DISLIKES_KEY_PREFIX = 'onyx_wave_dislikes_v1_';
+    let waveDislikesLoadedFor = null;
+    let waveDislikesData = { trackIds: [], songKeys: [], artistCounts: {}, tagCounts: {}, trackMeta: {}, artistNames: {}, artistAvatars: {} };
+    let hiddenDislikesTab = 'tracks';
+
+    function waveDislikesUserKey() {
+      const uid = currentUser?.id != null ? String(currentUser.id) : 'guest';
+      return WAVE_DISLIKES_KEY_PREFIX + uid;
+    }
+
+    function countUniqueDislikedArtists() {
+      const seen = new Set();
+      for (const [key] of Object.entries(waveDislikesData.artistCounts || {})) {
+        const name = (waveDislikesData.artistNames?.[key] || key).trim().toLowerCase();
+        if (name) seen.add(name);
+      }
+      return seen.size;
+    }
+
+    function updateWaveHiddenCount() {
+      const el = document.getElementById('wave-hidden-count');
+      if (!el) return;
+      ensureWaveDislikesLoaded();
+      const total = waveDislikesData.trackIds.length + countUniqueDislikedArtists();
+      el.textContent = String(total);
+    }
+
+    function ensureWaveDislikesLoaded() {
+      const key = waveDislikesUserKey();
+      if (waveDislikesLoadedFor === key) return;
+      waveDislikesLoadedFor = key;
+      waveDislikesData = { trackIds: [], songKeys: [], artistCounts: {}, tagCounts: {}, trackMeta: {}, artistNames: {}, artistAvatars: {} };
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return;
+        if (Array.isArray(parsed.trackIds)) waveDislikesData.trackIds = parsed.trackIds.slice(-500).map(String);
+        if (Array.isArray(parsed.songKeys)) waveDislikesData.songKeys = parsed.songKeys.slice(-500).map(String);
+        if (parsed.artistCounts && typeof parsed.artistCounts === 'object') waveDislikesData.artistCounts = parsed.artistCounts;
+        if (parsed.tagCounts && typeof parsed.tagCounts === 'object') waveDislikesData.tagCounts = parsed.tagCounts;
+        if (parsed.trackMeta && typeof parsed.trackMeta === 'object') waveDislikesData.trackMeta = parsed.trackMeta;
+        if (parsed.artistNames && typeof parsed.artistNames === 'object') waveDislikesData.artistNames = parsed.artistNames;
+        if (parsed.artistAvatars && typeof parsed.artistAvatars === 'object') waveDislikesData.artistAvatars = parsed.artistAvatars;
+      } catch (_) {}
+    }
+
+    function persistWaveDislikes() {
+      try {
+        localStorage.setItem(waveDislikesUserKey(), JSON.stringify({
+          trackIds: waveDislikesData.trackIds.slice(-500),
+          songKeys: waveDislikesData.songKeys.slice(-500),
+          artistCounts: waveDislikesData.artistCounts,
+          tagCounts: waveDislikesData.tagCounts,
+          trackMeta: waveDislikesData.trackMeta,
+          artistNames: waveDislikesData.artistNames,
+          artistAvatars: waveDislikesData.artistAvatars,
+          updatedAt: Date.now()
+        }));
+      } catch (_) {}
+      updateWaveHiddenCount();
+    }
+
+    function getWaveDislikesState() {
+      ensureWaveDislikesLoaded();
+      return {
+        trackIds: new Set(waveDislikesData.trackIds),
+        songKeys: new Set(waveDislikesData.songKeys),
+        artistCounts: new Map(Object.entries(waveDislikesData.artistCounts || {}).map(([k, v]) => [k, Number(v) || 0])),
+        tagCounts: new Map(Object.entries(waveDislikesData.tagCounts || {}).map(([k, v]) => [k, Number(v) || 0]))
+      };
+    }
+
+    function recordTrackDislike(track) {
+      if (!track || track.id == null) return;
+      ensureWaveDislikesLoaded();
+      const sid = String(track.id);
+      pushCappedHistory(waveDislikesData.trackIds, sid, 500);
+      const songKeys = typeof WaveEngine?.waveSongKeys === 'function' ? WaveEngine.waveSongKeys(track) : [];
+      for (const k of songKeys) {
+        pushCappedHistory(waveDislikesData.songKeys, k, 500);
+      }
+      waveDislikesData.trackMeta[sid] = {
+        id: sid,
+        title: String(track.title || 'Без названия'),
+        artist: String(track.artist || 'Неизвестный артист'),
+        genre: String(track.genre || ''),
+        cover: String(track.cover || ''),
+        songKeys
+      };
+      const primaryArt = waveArtistKey(track);
+      if (primaryArt) {
+        waveDislikesData.artistCounts[primaryArt] = (waveDislikesData.artistCounts[primaryArt] || 0) + 1;
+        waveDislikesData.artistNames[primaryArt] = String(track.artist || primaryArt);
+        const avatar = String(track.user_avatar || track.cover || '').trim();
+        if (avatar && avatar !== DEFAULT_COVER) {
+          waveDislikesData.artistAvatars[primaryArt] = avatar;
+        }
+      }
+      if (typeof WaveEngine?.parseTrackTags === 'function') {
+        for (const tag of WaveEngine.parseTrackTags(track.tag_list)) {
+          waveDislikesData.tagCounts[tag] = (waveDislikesData.tagCounts[tag] || 0) + 1;
+        }
+      }
+      persistWaveDislikes();
+      prewarmedMoodQueues.clear();
+    }
+
+    function openHiddenDislikesModal() {
+      ensureWaveDislikesLoaded();
+      const modal = document.getElementById('hidden-dislikes-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      renderHiddenDislikesModal();
+    }
+    window.openHiddenDislikesModal = openHiddenDislikesModal;
+
+    function closeHiddenDislikesModal() {
+      const modal = document.getElementById('hidden-dislikes-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+    window.closeHiddenDislikesModal = closeHiddenDislikesModal;
+
+    function setHiddenDislikesTab(tab) {
+      hiddenDislikesTab = tab === 'artists' ? 'artists' : 'tracks';
+      renderHiddenDislikesModal();
+    }
+    window.setHiddenDislikesTab = setHiddenDislikesTab;
+
+    function restoreDislikedTrack(id) {
+      ensureWaveDislikesLoaded();
+      const sid = String(id);
+      const meta = waveDislikesData.trackMeta?.[sid];
+      waveDislikesData.trackIds = waveDislikesData.trackIds.filter(x => x !== sid);
+      if (meta && Array.isArray(meta.songKeys) && meta.songKeys.length) {
+        const drop = new Set(meta.songKeys);
+        waveDislikesData.songKeys = waveDislikesData.songKeys.filter(k => !drop.has(k));
+      }
+      if (waveDislikesData.trackMeta) delete waveDislikesData.trackMeta[sid];
+      persistWaveDislikes();
+      prewarmedMoodQueues.clear();
+      renderHiddenDislikesModal();
+    }
+    window.restoreDislikedTrack = restoreDislikedTrack;
+
+    function restoreDislikedArtist(artKey) {
+      ensureWaveDislikesLoaded();
+      const targetName = (waveDislikesData.artistNames?.[artKey] || artKey).trim().toLowerCase();
+      for (const k of Object.keys(waveDislikesData.artistCounts || {})) {
+        const kName = (waveDislikesData.artistNames?.[k] || k).trim().toLowerCase();
+        if (k === artKey || kName === targetName) {
+          delete waveDislikesData.artistCounts[k];
+          if (waveDislikesData.artistNames) delete waveDislikesData.artistNames[k];
+          if (waveDislikesData.artistAvatars) delete waveDislikesData.artistAvatars[k];
+        }
+      }
+      persistWaveDislikes();
+      prewarmedMoodQueues.clear();
+      renderHiddenDislikesModal();
+    }
+    window.restoreDislikedArtist = restoreDislikedArtist;
+
+    function clearAllDislikes() {
+      ensureWaveDislikesLoaded();
+      waveDislikesData = { trackIds: [], songKeys: [], artistCounts: {}, tagCounts: {}, trackMeta: {}, artistNames: {}, artistAvatars: {} };
+      persistWaveDislikes();
+      prewarmedMoodQueues.clear();
+      renderHiddenDislikesModal();
+    }
+    window.clearAllDislikes = clearAllDislikes;
+
+    function renderHiddenDislikesModal() {
+      ensureWaveDislikesLoaded();
+      const isLight = currentThemeKey === 'light'
+        || document.documentElement.classList.contains('light')
+        || (currentThemeKey === 'custom' && typeof settingsView !== 'undefined' && settingsView?.customIsLight?.());
+
+      const titleEl = document.getElementById('hidden-modal-title');
+      const subEl = document.getElementById('hidden-modal-subtitle');
+      const footerEl = document.getElementById('hidden-modal-footer-note');
+      const searchEl = document.getElementById('hidden-search-input');
+      if (titleEl) titleEl.style.color = isLight ? '#0f172a' : '#ffffff';
+      if (subEl) subEl.style.color = isLight ? '#475569' : '#a1a1aa';
+      if (footerEl) footerEl.style.color = isLight ? '#64748b' : '#71717a';
+      if (searchEl) searchEl.style.color = isLight ? '#0f172a' : '#ffffff';
+
+      const tracksCount = waveDislikesData.trackIds.length;
+      const dedupedArtistsMap = new Map();
+      for (const [key, rawCount] of Object.entries(waveDislikesData.artistCounts || {})) {
+        const name = String(waveDislikesData.artistNames?.[key] || key).trim();
+        const norm = name.toLowerCase();
+        const count = Number(rawCount) || 1;
+        let avatar = String(waveDislikesData.artistAvatars?.[key] || '');
+        if (!avatar && waveDislikesData.trackMeta) {
+          const matchMeta = Object.values(waveDislikesData.trackMeta).find(m => m && String(m.artist || '').trim().toLowerCase() === norm && m.cover);
+          if (matchMeta) avatar = String(matchMeta.cover);
+        }
+        const prev = dedupedArtistsMap.get(norm);
+        if (!prev) {
+          dedupedArtistsMap.set(norm, { key, name, count, avatar });
+        } else {
+          prev.count = Math.max(prev.count, count);
+          if (!prev.avatar && avatar) prev.avatar = avatar;
+        }
+      }
+      const artistEntries = Array.from(dedupedArtistsMap.values());
+      const tracksPill = document.getElementById('hidden-tracks-pill');
+      const artistsPill = document.getElementById('hidden-artists-pill');
+      if (tracksPill) tracksPill.textContent = String(tracksCount);
+      if (artistsPill) artistsPill.textContent = String(artistEntries.length);
+
+      const tBtn = document.getElementById('hidden-tab-tracks');
+      const aBtn = document.getElementById('hidden-tab-artists');
+      if (tBtn && aBtn) {
+        const activeBg = isLight ? 'rgba(15, 23, 42, 0.08)' : 'rgba(255, 255, 255, 0.12)';
+        const activeCol = isLight ? '#0f172a' : '#ffffff';
+        const inactiveCol = isLight ? '#64748b' : '#a1a1aa';
+        tBtn.style.background = hiddenDislikesTab === 'tracks' ? activeBg : 'transparent';
+        tBtn.style.color = hiddenDislikesTab === 'tracks' ? activeCol : inactiveCol;
+        aBtn.style.background = hiddenDislikesTab === 'artists' ? activeBg : 'transparent';
+        aBtn.style.color = hiddenDislikesTab === 'artists' ? activeCol : inactiveCol;
+        if (tracksPill) {
+          tracksPill.style.background = hiddenDislikesTab === 'tracks' ? 'color-mix(in srgb, var(--accent) 22%, transparent)' : (isLight ? 'rgba(15,23,42,0.06)' : 'rgba(255,255,255,0.08)');
+          tracksPill.style.color = hiddenDislikesTab === 'tracks' ? 'var(--accent)' : inactiveCol;
+        }
+        if (artistsPill) {
+          artistsPill.style.background = hiddenDislikesTab === 'artists' ? 'color-mix(in srgb, var(--accent) 22%, transparent)' : (isLight ? 'rgba(15,23,42,0.06)' : 'rgba(255,255,255,0.08)');
+          artistsPill.style.color = hiddenDislikesTab === 'artists' ? 'var(--accent)' : inactiveCol;
+        }
+      }
+
+      const listEl = document.getElementById('hidden-modal-list');
+      if (!listEl) return;
+      const q = (searchEl?.value || '').trim().toLowerCase();
+      const rowHover = isLight ? 'hover:bg-slate-900/5' : 'hover:bg-white/5';
+      const titleCol = isLight ? 'text-slate-900' : 'text-white';
+      const subCol = isLight ? 'text-slate-500' : 'text-neutral-400';
+      const restoreCls = isLight
+        ? 'bg-slate-900/5 hover:bg-slate-900/10 border-slate-200 text-slate-700'
+        : 'bg-white/5 hover:bg-white/15 border-white/10 text-neutral-200 hover:text-white';
+
+      if (hiddenDislikesTab === 'tracks') {
+        const items = [...waveDislikesData.trackIds].reverse().map(id => {
+          const meta = waveDislikesData.trackMeta?.[id];
+          return meta || { id, title: `Трек #${id}`, artist: 'Скрытый трек', genre: '', cover: '' };
+        }).filter(t => !q || t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q));
+
+        if (!items.length) {
+          listEl.innerHTML = `<div class="text-center py-10 text-xs ${subCol}">Скрытых треков нет</div>`;
+          return;
+        }
+        listEl.innerHTML = items.map(t => `
+          <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl ${rowHover} transition-colors">
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+              ${t.cover
+                ? `<img src="${escapeMarkup(t.cover)}" class="w-9 h-9 rounded-lg object-cover shrink-0" onerror="this.style.display='none'">`
+                : `<div class="w-9 h-9 rounded-lg flex items-center justify-center text-xs ${subCol} shrink-0" style="background: var(--card-bg); border: 1px solid var(--panel-border);">♫</div>`}
+              <div class="min-w-0">
+                <div class="text-xs font-medium ${titleCol} truncate">${escapeMarkup(t.title)}</div>
+                <div class="text-[11px] ${subCol} truncate">${escapeMarkup(t.artist)}${t.genre ? ' · ' + escapeMarkup(t.genre) : ''}</div>
+              </div>
+            </div>
+            <button onclick="restoreDislikedTrack('${escapeMarkup(t.id)}')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border ${restoreCls} transition-colors cursor-pointer shrink-0">Вернуть</button>
+          </div>
+        `).join('');
+      } else {
+        const items = artistEntries
+          .sort((a, b) => b.count - a.count)
+          .filter(a => !q || a.name.toLowerCase().includes(q));
+
+        if (!items.length) {
+          listEl.innerHTML = `<div class="text-center py-10 text-xs ${subCol}">Скрытых артистов нет</div>`;
+          return;
+        }
+        listEl.innerHTML = items.map(a => {
+          const banned = a.count >= 2;
+          const initials = escapeMarkup(a.name.slice(0, 2).toUpperCase());
+          const avatarHtml = a.avatar
+            ? `<img src="${escapeMarkup(a.avatar)}" class="w-9 h-9 rounded-full object-cover shrink-0" onerror="this.outerHTML='<div class=\\'w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${titleCol} shrink-0\\' style=\\'background: var(--card-bg); border: 1px solid var(--panel-border);\\'>${initials}</div>'">`
+            : `<div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${titleCol} shrink-0" style="background: var(--card-bg); border: 1px solid var(--panel-border);">${initials}</div>`;
+          return `
+            <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl ${rowHover} transition-colors">
+              <div class="flex items-center gap-3 min-w-0 flex-1">
+                ${avatarHtml}
+                <div class="min-w-0">
+                  <div class="text-xs font-medium ${titleCol} truncate">${escapeMarkup(a.name)}</div>
+                  <div class="text-[11px] ${subCol}">${banned ? 'Скрыт из рекомендаций' : 'Понижен в рекомендациях'}</div>
+                </div>
+              </div>
+              <button onclick="restoreDislikedArtist('${escapeMarkup(a.key)}')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border ${restoreCls} transition-colors cursor-pointer shrink-0">Вернуть</button>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+    window.renderHiddenDislikesModal = renderHiddenDislikesModal;
+
+    setTimeout(updateWaveHiddenCount, 0);
+
+    async function dislikeTrack(track) {
+      if (!track || track.id == null) return;
+      recordTrackDislike(track);
+      const targetId = String(track.id);
+      const songKeys = new Set(typeof WaveEngine?.waveSongKeys === 'function' ? WaveEngine.waveSongKeys(track) : []);
+      const matchesDisliked = (item) => {
+        if (!item || item.id == null) return false;
+        if (String(item.id) === targetId) return true;
+        if (songKeys.size && typeof WaveEngine?.waveSongKeys === 'function') {
+          return WaveEngine.waveSongKeys(item).some(k => songKeys.has(k));
+        }
+        return false;
+      };
+
+      if (track.liked === true && typeof toggleLike === 'function') {
+        try { toggleLike(track.id, track); } catch (_) {}
+      }
+
+      const currentTrack = Array.isArray(currentQueue) ? currentQueue[currentTrackIndex] : null;
+      const isRemovingCurrent = Boolean(currentTrack && matchesDisliked(currentTrack));
+
+      if (Array.isArray(currentQueue) && currentQueue.length) {
+        let removedBeforeCurrent = 0;
+        const filtered = [];
+        currentQueue.forEach((item, idx) => {
+          if (matchesDisliked(item)) {
+            if (idx < currentTrackIndex) removedBeforeCurrent += 1;
+          } else {
+            filtered.push(item);
+          }
+        });
+        currentQueue = filtered;
+        if (Array.isArray(originalQueue) && originalQueue.length) {
+          originalQueue = originalQueue.filter(item => !matchesDisliked(item));
+        }
+        if (isRemovingCurrent) {
+          const nextIdx = Math.max(0, Math.min(currentTrackIndex - removedBeforeCurrent, currentQueue.length - 1));
+          currentTrackIndex = nextIdx;
+          if (currentQueue.length > 0) {
+            await playTrack(nextIdx);
+          } else if (isWaveActive && currentStationUrn === 'my_wave') {
+            await startWave(waveCurrentMood, { excludeIds: [targetId] });
+          } else if (audioEl) {
+            audioEl.pause();
+            isPlaying = false;
+            updatePlayPauseUI();
+          }
+        } else {
+          currentTrackIndex = Math.max(0, currentTrackIndex - removedBeforeCurrent);
+          updateQueueDrawer();
+          renderWaveTrackList();
+          saveSessionState();
+        }
+      }
+
+      if (isWaveActive) {
+        checkWaveReplenish();
+      }
+      if (typeof notify === 'function') {
+        notify('Трек скрыт из рекомендаций', '👎');
+      }
+    }
+    window.dislikeTrack = dislikeTrack;
+
+    window.dislikeCurrentTrack = function() {
+      const track = Array.isArray(currentQueue) ? currentQueue[currentTrackIndex] : null;
+      if (track) dislikeTrack(track);
+    };
+
     const waveArtistKey = WaveEngine.waveArtistKey;
     const isAiSlopTrack = WaveEngine.isAiSlopTrack;
     const waveGenreKey = WaveEngine.waveGenreKey;
@@ -20727,6 +21132,90 @@
     let waveRefillQueue;
     let waveRefillAfter = 0;
     const waveCandidateCache = WaveEngine.createWaveCache();
+    const prewarmedMoodQueues = new Map();
+    const preloadedCoverUrls = new Set();
+    let waveMoodPrewarmTimer = null;
+
+    function preloadTrackCovers(tracks, limit = 14) {
+      for (const t of (Array.isArray(tracks) ? tracks.slice(0, limit) : [])) {
+        const src = t?.cover || t?.artwork_url;
+        if (!src || src === DEFAULT_COVER || preloadedCoverUrls.has(src)) continue;
+        preloadedCoverUrls.add(src);
+        if (preloadedCoverUrls.size > 320) preloadedCoverUrls.clear();
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = src;
+      }
+    }
+
+    function promoteWarmedTrackFirst(queue) {
+      if (!Array.isArray(queue) || queue.length <= 1 || typeof getCachedStreamUrl !== 'function') return queue;
+      if (getCachedStreamUrl(queue[0]?.id)) return queue;
+      const warmedIdx = queue.slice(1, 6).findIndex(t => t?.id && getCachedStreamUrl(t.id));
+      if (warmedIdx < 0) return queue;
+      const realIdx = warmedIdx + 1;
+      const next = [...queue];
+      const [picked] = next.splice(realIdx, 1);
+      next.unshift(picked);
+      return next;
+    }
+
+    function scheduleWaveMoodPrewarm(activeMood) {
+      if (waveMoodPrewarmTimer) {
+        clearTimeout(waveMoodPrewarmTimer);
+        waveMoodPrewarmTimer = null;
+      }
+      const moodsToWarm = ['all', 'energetic', 'calm', 'sad', 'new'].filter(m => {
+        if (m === activeMood) return false;
+        const hit = prewarmedMoodQueues.get(m);
+        return !hit || Date.now() - hit.at > 4 * 60 * 1000;
+      });
+      if (!moodsToWarm.length) return;
+      const runNext = (idx) => {
+        if (idx >= moodsToWarm.length || !isWaveActive || currentStationUrn !== 'my_wave') return;
+        const mood = moodsToWarm[idx];
+        waveMoodPrewarmTimer = setTimeout(async () => {
+          try {
+            const profile = buildWaveTasteProfile(currentQueue);
+            if (!profile.pool.length) return;
+            const recentPlayedIds = buildWaveRecentSet();
+            const recentServedIds = buildWaveServedSet();
+            const recentSongKeys = buildWaveRecentSongKeys();
+            const dislikes = getWaveDislikesState();
+            const { ranked } = await WaveEngine.collectWaveCandidates({
+              profile,
+              mood,
+              cursor: waveSeedCursor++,
+              salt: waveSessionSalt,
+              api,
+              cache: waveCandidateCache,
+              seenIds: new Set(),
+              recentPlayedIds,
+              recentServedIds,
+              recentSongKeys,
+              dislikes,
+              timeoutMs: 2200
+            });
+            const q = WaveEngine.blendDiscoveryWithFavorites(ranked, profile, mood, 16, {
+              seenIds: new Set(),
+              recentPlayedIds,
+              recentServedIds,
+              recentSongKeys,
+              cursor: waveSeedCursor,
+              salt: waveSessionSalt,
+              dislikes
+            });
+            if (q.length >= 4) {
+              prewarmedMoodQueues.set(mood, { queue: q, at: Date.now() });
+              preloadTrackCovers(q, 10);
+              if (q[0]?.id && typeof warmStreamUrl === 'function') warmStreamUrl(q[0].id);
+            }
+          } catch (_) {}
+          runNext(idx + 1);
+        }, idx === 0 ? 900 : 1400);
+      };
+      runNext(0);
+    }
 
     function waveRecentHistory() {
       return (typeof recentlyPlayed !== 'undefined' && Array.isArray(recentlyPlayed)) ? recentlyPlayed : [];
@@ -20789,19 +21278,26 @@
       waveCurrentMood = targetMood;
       window.waveCurrentMood = targetMood;
       waveDesiredActive = true;
-      needsWaveQueueRefresh = false;
-      isWaveActive = true;
-      window.isWaveActive = true;
-      currentStationUrn = 'my_wave';
       isWaveStarting = true;
       if (typeof updateWaveTheme === 'function') updateWaveTheme(currentThemeKey);
       syncWavePlayButton(true);
+
+      const activateWave = () => {
+        currentStationUrn = 'my_wave';
+        isWaveActive = true;
+        window.isWaveActive = true;
+        waveActiveMood = targetMood;
+        window.waveActiveMood = targetMood;
+        needsWaveQueueRefresh = false;
+        isWaveStarting = false;
+      };
 
       try {
         const excludeIds = Array.isArray(options.excludeIds) ? options.excludeIds : [];
         const recentPlayedIds = buildWaveRecentSet(excludeIds);
         const recentServedIds = buildWaveServedSet(excludeIds);
         const recentSongKeys = buildWaveRecentSongKeys();
+        const dislikes = getWaveDislikesState();
         const profile = buildWaveTasteProfile(currentQueue);
         const cursor = waveSeedCursor++;
         const salt = waveSessionSalt;
@@ -20809,10 +21305,6 @@
         if (targetMood === 'favorites') {
           if (!profile.likedTracks.length) {
             notify('Добавьте любимые треки в медиатеку, чтобы запустить «Любимое»', 'ℹ️');
-            isWaveActive = false;
-            window.isWaveActive = false;
-            waveActiveMood = null;
-            window.waveActiveMood = null;
             return;
           }
           const favQueue = WaveEngine.selectFavoriteWaveTracks(profile, 18, {
@@ -20821,12 +21313,11 @@
             recentServedIds,
             recentSongKeys,
             cursor,
-            salt
+            salt,
+            dislikes
           });
           if (isCancelled() || !favQueue.length) return;
-          waveActiveMood = 'favorites';
-          window.waveActiveMood = 'favorites';
-          isWaveStarting = false;
+          activateWave();
           currentQueue = favQueue;
           currentTrackIndex = 0;
           if (isShuffle) originalQueue = [...currentQueue];
@@ -20834,7 +21325,7 @@
           const playback = playTrack(0, favQueue, true);
           syncWavePlayButton(true);
           updateQueueDrawer();
-          renderWaveTrackList();
+          renderWaveTrackList(options.animateRefresh);
           saveSessionState();
           checkWaveReplenish();
           await playback;
@@ -20843,14 +21334,107 @@
 
         if (!profile.pool.length) {
           notify('Для запуска волны добавьте любимые треки в медиатеку', 'ℹ️');
-          isWaveActive = false;
-          window.isWaveActive = false;
-          waveActiveMood = null;
-          window.waveActiveMood = null;
           return;
         }
 
         const seenIds = new Set(excludeIds.map(String));
+        const prewarmHit = prewarmedMoodQueues.get(targetMood);
+        let instantQueue = [];
+        let usedPrewarm = false;
+        if (prewarmHit && Date.now() - prewarmHit.at < 4 * 60 * 1000 && Array.isArray(prewarmHit.queue) && prewarmHit.queue.length > 0) {
+          prewarmedMoodQueues.delete(targetMood);
+          const filtered = WaveEngine.blendDiscoveryWithFavorites(prewarmHit.queue, profile, targetMood, 14, {
+            seenIds, recentPlayedIds, recentServedIds, recentSongKeys, cursor, salt, dislikes
+          });
+          if (filtered.length >= 4) {
+            instantQueue = filtered;
+            usedPrewarm = true;
+          }
+        }
+        if (!instantQueue.length && typeof WaveEngine?.buildInstantWaveQueue === 'function') {
+          instantQueue = WaveEngine.buildInstantWaveQueue({
+            profile,
+            mood: targetMood,
+            cache: waveCandidateCache,
+            sessionTracks: Array.from(waveSessionTracksById.values()),
+            mixedTracks: extractMixedTracks(lastMixedData),
+            seenIds: new Set(seenIds),
+            recentPlayedIds,
+            recentServedIds,
+            recentSongKeys,
+            cursor,
+            salt,
+            dislikes,
+            limit: 14
+          });
+        }
+
+        if (instantQueue.length > 0) {
+          instantQueue = promoteWarmedTrackFirst(instantQueue);
+          preloadTrackCovers(instantQueue, 14);
+          activateWave();
+          currentQueue = instantQueue;
+          currentTrackIndex = 0;
+          if (isShuffle) originalQueue = [...currentQueue];
+          rememberWaveServedTracks(instantQueue);
+          const playback = playTrack(0, instantQueue, true);
+          syncWavePlayButton(true);
+          updateQueueDrawer();
+          renderWaveTrackList(options.animateRefresh);
+          saveSessionState();
+          scheduleWaveMoodPrewarm(targetMood);
+
+          if (!usedPrewarm || instantQueue.length < 14) {
+            // Enrich the queue in background with fresh network discoveries without blocking tab switch
+            const bgSeen = new Set([...seenIds, ...instantQueue.map(t => String(t.id))]);
+            const bgSongKeys = new Set([...recentSongKeys, ...WaveEngine.collectSongKeys(instantQueue)]);
+            WaveEngine.collectWaveCandidates({
+              profile,
+              mood: targetMood,
+              cursor: waveSeedCursor++,
+              salt,
+              api,
+              cache: waveCandidateCache,
+              seenIds: bgSeen,
+              recentPlayedIds,
+              recentServedIds,
+              recentSongKeys: bgSongKeys,
+              queueTracks: instantQueue,
+              isReplenish: true,
+              dislikes,
+              timeoutMs: 2600
+            }).then(({ ranked }) => {
+              if (isCancelled() || currentStationUrn !== 'my_wave' || waveActiveMood !== targetMood) return;
+              const targetAdd = Math.max(0, 18 - currentQueue.length);
+              const extra = WaveEngine.blendDiscoveryWithFavorites(ranked, profile, targetMood, Math.max(8, targetAdd), {
+                seenIds: new Set(currentQueue.map(t => String(t.id))),
+                recentPlayedIds: buildWaveRecentSet(),
+                recentServedIds: buildWaveServedSet(),
+                recentSongKeys: buildWaveRecentSongKeys(currentQueue),
+                cursor,
+                salt,
+                dislikes
+              });
+              if (!extra.length || isCancelled()) return;
+              const existing = new Set(currentQueue.map(t => String(t.id)));
+              const freshExtra = extra.filter(t => t?.id != null && !existing.has(String(t.id)));
+              if (!freshExtra.length) return;
+              preloadTrackCovers(freshExtra, 12);
+              const firstNewIdx = currentQueue.length;
+              currentQueue = [...currentQueue, ...freshExtra];
+              if (isShuffle && originalQueue) originalQueue = [...originalQueue, ...freshExtra];
+              rememberWaveServedTracks(freshExtra);
+              prefetchNextTrack(nextQueuedTrackIndex() >= 0 ? nextQueuedTrackIndex() : firstNewIdx);
+              updateQueueDrawer();
+              renderWaveTrackList();
+              saveSessionState();
+            }).catch(() => {});
+          }
+
+          await playback;
+          return;
+        }
+
         const { ranked } = await WaveEngine.collectWaveCandidates({
           profile,
           mood: targetMood,
@@ -20862,7 +21446,8 @@
           recentPlayedIds,
           recentServedIds,
           recentSongKeys,
-          timeoutMs: 3600
+          dislikes,
+          timeoutMs: 2200
         });
 
         if (isCancelled()) return;
@@ -20873,12 +21458,12 @@
           recentServedIds,
           recentSongKeys,
           cursor,
-          salt
+          salt,
+          dislikes
         });
 
-        // If excluding previous wave queue left too few tracks (small library/refresh), retry allowing non-played tracks
+        // Retry with older recommendations while still excluding the current queue.
         if (!finalQueue.length && excludeIds.length) {
-          const relaxedRecent = buildWaveRecentSet();
           const retryCursor = waveSeedCursor++;
           const retry = await WaveEngine.collectWaveCandidates({
             profile,
@@ -20887,17 +21472,21 @@
             salt,
             api,
             cache: waveCandidateCache,
-            seenIds: new Set(),
-            recentPlayedIds: relaxedRecent,
+            seenIds,
+            recentPlayedIds,
+            recentSongKeys,
             recentServedIds: new Set(),
+            dislikes,
             timeoutMs: 2800
           });
           if (isCancelled()) return;
           finalQueue = WaveEngine.blendDiscoveryWithFavorites(retry.ranked, profile, targetMood, 16, {
-            seenIds: new Set(),
-            recentPlayedIds: relaxedRecent,
+            seenIds,
+            recentPlayedIds,
+            recentSongKeys,
             cursor: retryCursor,
-            salt
+            salt,
+            dislikes
           });
         }
 
@@ -20906,40 +21495,33 @@
             ? 'Не удалось подобрать новые похожие треки — проверьте подключение к сети'
             : 'Не удалось подобрать треки под выбранный раздел';
           notify(message, 'ℹ️');
-          isWaveActive = false;
-          window.isWaveActive = false;
-          waveActiveMood = null;
-          window.waveActiveMood = null;
           return;
         }
 
-        waveActiveMood = targetMood;
-        window.waveActiveMood = targetMood;
-        isWaveStarting = false;
+        activateWave();
         currentQueue = finalQueue;
         currentTrackIndex = 0;
         if (isShuffle) originalQueue = [...currentQueue];
         rememberWaveServedTracks(finalQueue);
         const playback = playTrack(0, finalQueue, true);
         syncWavePlayButton(true);
-        prefetchNextTrack(1);
         updateQueueDrawer();
-        renderWaveTrackList();
+        renderWaveTrackList(options.animateRefresh);
         saveSessionState();
         checkWaveReplenish();
         await playback;
       } catch (err) {
         console.warn('startWave error:', err);
         if (typeof logD === 'function') logD('startWave error: ' + (err?.stack || err?.message || err));
-        if (request === waveStartRequest) {
-          isWaveActive = false;
-          window.isWaveActive = false;
+        if (!isCancelled()) {
           notify('Не удалось запустить волну: ' + (err?.message || 'ошибка'), '⚠️');
         }
       } finally {
         if (request === waveStartRequest) {
           isWaveStarting = false;
-          syncWavePlayButton(Boolean(isPlaying && isWaveActive && currentStationUrn === 'my_wave'));
+          const hasActiveWave = isWaveActive && currentStationUrn === 'my_wave';
+          waveDesiredActive = Boolean(hasActiveWave);
+          syncWavePlayButton(Boolean(isPlaying && hasActiveWave));
           renderWaveTrackList();
         }
       }
@@ -20972,7 +21554,8 @@
           salt,
           precedingTrack: queue.at(-1),
           isReplenish: true,
-          allowCycle: remaining <= 1
+          allowCycle: remaining <= 1,
+          dislikes: getWaveDislikesState()
         });
       } else {
         const { ranked } = await WaveEngine.collectWaveCandidates({
@@ -20989,6 +21572,7 @@
           queueTracks: queue.slice(-6),
           isReplenish: true,
           maxQueueSeeds: 2,
+          dislikes: getWaveDislikesState(),
           timeoutMs: 3600
         });
         if (!isWaveActive || currentStationUrn !== 'my_wave' || currentQueue !== queue) return;
@@ -20999,7 +21583,8 @@
           recentSongKeys,
           precedingTrack: queue.at(-1),
           cursor,
-          salt
+          salt,
+          dislikes: getWaveDislikesState()
         });
       }
 
@@ -21012,7 +21597,7 @@
       queue.push(...next);
       if (isShuffle && originalQueue) originalQueue.push(...next);
       rememberWaveServedTracks(next);
-      prefetchNextTrack(currentTrackIndex + 1);
+      prefetchNextTrack(nextQueuedTrackIndex());
       updateQueueDrawer();
       renderWaveTrackList();
       saveSessionState();
@@ -21073,6 +21658,7 @@
               recentServedIds,
               recentSongKeys,
               queueTracks: currentQueue,
+              dislikes: getWaveDislikesState(),
               cursor,
               salt: waveSessionSalt,
               isReplenish: true
@@ -22785,7 +23371,11 @@
 
 
 
-        if (modalAvatar) modalAvatar.src = currentUser.avatar_url || DEFAULT_COVER;
+        if (modalAvatar) {
+          modalAvatar.hidden = !currentUser.avatar_url;
+          if (currentUser.avatar_url) modalAvatar.src = currentUser.avatar_url;
+          else modalAvatar.removeAttribute('src');
+        }
 
 
 
@@ -22849,7 +23439,10 @@
 
 
 
-        if (modalAvatar) modalAvatar.src = DEFAULT_COVER;
+        if (modalAvatar) {
+          modalAvatar.hidden = true;
+          modalAvatar.removeAttribute('src');
+        }
 
 
 
@@ -24124,6 +24717,7 @@
       if (typeof waveSessionTracksById !== 'undefined') waveSessionTracksById.clear();
       if (typeof wavePlayedIds !== 'undefined') wavePlayedIds.clear();
       if (typeof waveCandidateCache !== 'undefined' && waveCandidateCache?.clear) waveCandidateCache.clear();
+      if (typeof prewarmedMoodQueues !== 'undefined') prewarmedMoodQueues.clear();
       waveMemoryLoadedFor = null;
       lastMixedData = null;
       currentDisplayedTrackMixes = [];
@@ -29179,54 +29773,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      if (!title) return '';
-
-
-
-
-
-
-
-      return title
-
-
-
-
-
-
-
-        .replace(/\(.*?\)|\[.*?\]|\{.*?\}/g, '')
-
-
-
-
-
-
-
-        .replace(/ft\.?.*|feat\.?.*|prod\.?.*|prod by.*|official video|official audio|slowed|reverb|remix/gi, '')
-
-
-
-
-
-
-
-        .replace(/[-_~]/g, ' ')
-
-
-
-
-
-
-
+      return (title || '')
+        .replace(/\s*[([{](?:official (?:audio|video)|(?:prod\.?|feat\.?|ft\.?)\s+[^)\]}]+)[)\]}]\s*$/i, '')
+        .replace(/\s+(?:official (?:audio|video)|(?:prod\.|feat\.|ft\.)\s+.*)$/i, '')
         .trim();
-
-
-
-
-
-
-
     }
 
 
@@ -30197,7 +30747,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-    function getTrackDurationSec(t) {
+    function getTrackDurationSec(t, usePlayerDuration = false) {
       if (!t) return null;
       if (typeof t.duration_ms === 'number' && t.duration_ms > 0) return t.duration_ms / 1000;
       if (typeof t.duration === 'number' && t.duration > 0) return t.duration > 1000 ? t.duration / 1000 : t.duration;
@@ -30207,7 +30757,8 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return parts[0] * 60 + parts[1];
         if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) return parts[0] * 3600 + parts[1] * 60 + parts[2];
       }
-      if (typeof audioEngine !== 'undefined' && audioEngine && !isNaN(audioEngine.duration) && audioEngine.duration > 0) {
+      if (usePlayerDuration && t.id != null && String(t.id) === String(currentlyPlayingTrackId)
+        && Number.isFinite(audioEngine?.duration) && audioEngine.duration > 0) {
         return audioEngine.duration;
       }
       return null;
@@ -30222,11 +30773,11 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     }
 
     function trackLyricsStorageKey(track) {
-      return 'sc_lyrics_cache_v2_' + (track.id || encodeURIComponent(track.title));
+      return 'sc_lyrics_cache_v3_' + (track.id || encodeURIComponent(trackLyricsKey(track)));
     }
 
     function wordLyricsStorageKey(legacyKey) {
-      return legacyKey.replace('sc_lyrics_cache_v2_', 'sc_lyrics_word_cache_v1_');
+      return legacyKey.replace('sc_lyrics_cache_v3_', 'sc_lyrics_word_cache_v2_');
     }
 
     function writeLyricsCacheEntries(legacyKey, lyrics) {
@@ -30257,7 +30808,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
     // Keep the old cache readable by builds that only understand line timestamps.
     try {
       for (const key of Object.keys(localStorage)) {
-        if (!key.startsWith('sc_lyrics_cache_v2_')) continue;
+        if (!key.startsWith('sc_lyrics_cache_v3_')) continue;
         try {
           const value = JSON.parse(localStorage.getItem(key));
           if (typeof value?.syncedLyrics === 'string' && stripLyricWordTags(value.syncedLyrics) !== value.syncedLyrics) {
@@ -30273,7 +30824,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       if (separator) {
         return { title: cleanTrackTitleForLyrics(label.slice(separator.index + separator[0].length)), artist: label.slice(0, separator.index).trim() };
       }
-      return { title: cleanTrackTitleForLyrics(label), artist: (track.artist || '').split(/[,&]/)[0].replace(/@\w+/g, '').trim() };
+      return { title: cleanTrackTitleForLyrics(label), artist: (track.artist || '').trim() };
     }
 
     function requestTrackLyrics(track) {
@@ -30282,6 +30833,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       if (pending) return pending;
       const { title, artist } = trackLyricsIdentity(track);
       const request = api.getLyrics(title, artist, getTrackDurationSec(track))
+        .then(data => matchedOriginalLyrics(data, track))
         .catch(() => null).finally(() => lyricsLookups.delete(key));
       lyricsLookups.set(key, request);
       return request;
@@ -30300,35 +30852,8 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       const ltKey = key(cleanTrackTitleForLyrics(lyrics.trackName || ''));
       const aKey = key(artist);
       const laKey = key(lyrics.artistName || '');
-      const titleMatch = !ltKey || tKey === ltKey || (tKey.length >= 4 && (tKey.includes(ltKey) || ltKey.includes(tKey)));
-      const artistMatch = !laKey || !aKey || aKey === laKey || (aKey.length >= 3 && (aKey.includes(laKey) || laKey.includes(aKey)));
-      if (!titleMatch || !artistMatch) return null;
+      if (!tKey || tKey !== ltKey || !aKey || aKey !== laKey) return null;
       return lyrics;
-    }
-
-    function lyricsDifferSubstantially(transcribed, original) {
-      const words = lyrics => (lyrics.plainLyrics || lyrics.syncedLyrics || '')
-        .normalize('NFKC').toLowerCase().replace(/ё/g, 'е')
-        .replace(/\[[^\]\n]*\]|<\d+:\d+(?:\.\d+)?>/g, ' ')
-        .match(/[\p{L}\p{N}]+/gu) || [];
-      const actual = words(transcribed);
-      const expected = words(original);
-      if (expected.length < 12) return false;
-      const overlap = (a, b) => {
-        const remaining = new Map();
-        for (const word of a) remaining.set(word, (remaining.get(word) || 0) + 1);
-        let shared = 0;
-        for (const word of b) {
-          const count = remaining.get(word);
-          if (count) {
-            shared++;
-            remaining.set(word, count - 1);
-          }
-        }
-        return 2 * shared / (a.length + b.length);
-      };
-      const pairs = tokens => tokens.slice(1).map((word, index) => `${tokens[index]} ${word}`);
-      return overlap(actual, expected) < 0.60 || overlap(pairs(actual), pairs(expected)) < 0.30;
     }
 
     function automaticKaraokeEnabled(track) {
@@ -30484,7 +31009,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
       // 1. Real Synced LRC with valid timestamps (LRCLIB or custom)
       if (lyricsData.syncedLyrics && lyricsData.syncedLyrics.trim().length > 15) {
-        const durSec = getTrackDurationSec(track);
+        const durSec = getTrackDurationSec(track, true);
         const hasBigMismatch = durSec && lyricsData.duration && Math.abs(lyricsData.duration - durSec) > 10;
         if (!hasBigMismatch) {
           const parsed = parseLrc(lyricsData.syncedLyrics);
@@ -31059,9 +31584,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           cachedOriginal || requestTrackLyrics(track).then(data => matchedOriginalLyrics(data, track))
         ]);
         const recognized = attempt.data;
-        const selected = original && (original.instrumental || !recognized || lyricsDifferSubstantially(recognized, original))
-          ? original
-          : recognized;
+        const selected = recognized || original;
         if (!selected) throw attempt.error;
         if (!usableCachedLyrics(selected)) return;
         if (localStorage.getItem('custom_lyrics_' + track.id)?.trim()) return;

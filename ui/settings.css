@@ -170,3 +170,43 @@ body.theme-custom #tab-search-input:focus { border-color:var(--custom-mark) !imp
 body.theme-custom #tab-search-input::placeholder,
 body.theme-custom #tab-search :is(.text-neutral-400,.text-neutral-500) { color:var(--custom-muted) !important; }
 body.theme-custom #tab-search :is(h1,.text-neutral-300,.text-white) { color:var(--custom-ink) !important; }
+
+/* The account dialog uses the same calculated palette as the settings panel. */
+body[class] #login-modal > .relative {
+  background: var(--panel) !important;
+  border-color: var(--line) !important;
+  color: var(--ink);
+}
+#login-modal :is(.border-b, .border-t, .login-avatar, #modal-current-user-info, #modal-user-badge, #login-identifier-input, #btn-oauth-window-login) {
+  border-color: var(--line) !important;
+}
+#login-modal :is(#modal-current-user-info, #login-identifier-input, #btn-oauth-window-login) {
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+}
+#login-modal :is(.login-avatar, #modal-user-badge) {
+  background: color-mix(in srgb, var(--ink) 10%, var(--surface)) !important;
+  color: var(--ink) !important;
+}
+#login-modal .login-avatar svg { color: inherit !important; }
+#login-modal :is(h3, label, #modal-user-name) { color: var(--ink) !important; }
+#login-modal :is(p, .text-neutral-400, .text-neutral-500, #modal-user-likes),
+#login-modal #login-identifier-input::placeholder { color: var(--muted) !important; }
+#login-modal .login-divider-label { background: var(--panel) !important; }
+#login-modal .login-note {
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel)) !important;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--panel)) !important;
+}
+#login-modal .login-note :is(div, svg) { color: var(--ink) !important; }
+body #login-modal :is(#btn-browser-login, #submit-login-btn) {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+  border-color: var(--line) !important;
+}
+body #login-modal :is(#btn-browser-login, #submit-login-btn) * { color: inherit !important; }
+#login-modal :is(#btn-browser-login, #submit-login-btn):hover { filter: brightness(.94); }
+#login-modal #btn-oauth-window-login:hover { background: color-mix(in srgb, var(--ink) 9%, var(--surface)) !important; }
+#login-modal :is(button, input):focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+#login-modal #modal-user-badge.text-emerald-400 { color: light-dark(#146238, #94ebaf) !important; background: light-dark(#e2f5e9, #19362a) !important; }
+#login-modal #login-status-msg:is(.text-red-400, .text-rose-400) { color: light-dark(#8a162b, #ffb4bf); }
+#login-modal #login-status-msg.text-orange-400 { color: light-dark(#753900, #ffd19c); }
