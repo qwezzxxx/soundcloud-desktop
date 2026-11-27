@@ -354,6 +354,8 @@ pub struct FormattedTrack {
     pub description: Option<String>,
     #[serde(default)]
     pub genre: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag_list: Option<String>,
     #[serde(default)]
     pub permalink_url: Option<String>,
     #[serde(default)]
@@ -364,6 +366,12 @@ pub struct FormattedTrack {
     pub user_permalink: Option<String>,
     #[serde(default)]
     pub user_avatar: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playback_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub likes_count: Option<u64>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -512,6 +520,12 @@ pub struct FormattedAlbum {
 // Cache of YouTube search results: "artist|title|duration_ms" -> (video_id, timestamp).
 // The search step alone costs ~3s (yt-dlp process + network), so remember it per session.
 static YT_SEARCH_CACHE: std::sync::OnceLock<
+    std::sync::Mutex<std::collections::HashMap<String, (String, std::time::Instant)>>,
+> = std::sync::OnceLock::new();
+
+// Cache of resolved direct googlevideo audio URLs: video_id -> (url, timestamp).
+// YouTube signed stream URLs live ~6h; keeping them for 2h avoids spawning yt-dlp again.
+static YT_STREAM_URL_CACHE: std::sync::OnceLock<
     std::sync::Mutex<std::collections::HashMap<String, (String, std::time::Instant)>>,
 > = std::sync::OnceLock::new();
 
@@ -1104,13 +1118,10 @@ impl SoundCloudClient {
 
 
     pub async fn get_client_id(&self) -> String {
+        self.client_id_from_config(&self.load_config()).await
+    }
 
-
-
-        let cfg = self.load_config();
-
-
-
+    async fn client_id_from_config(&self, cfg: &AppConfig) -> String {
         if let Some(ref cid) = cfg.client_id {
 
 
@@ -1143,7 +1154,7 @@ impl SoundCloudClient {
 
 
 
-        cfg.client_id.unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string())
+        cfg.client_id.clone().unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string())
 
 
 
@@ -1399,11 +1410,15 @@ impl SoundCloudClient {
             liked,
             description,
             genre,
+            tag_list: t.get("tag_list").and_then(Value::as_str).filter(|tags| !tags.is_empty()).map(str::to_owned),
             permalink_url,
             provider: Some("soundcloud".to_string()),
             user_id,
             user_permalink,
             user_avatar,
+            created_at: t.get("created_at").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned),
+            playback_count: t.get("playback_count").and_then(Value::as_u64),
+            likes_count: t.get("likes_count").and_then(Value::as_u64),
         }
 
 
@@ -2102,13 +2117,8 @@ impl SoundCloudClient {
         let username = u.get("username").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
         let permalink = u.get("permalink").and_then(|v| v.as_str()).unwrap_or("").to_string();
         
-        let mut avatar = u.get("avatar_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if avatar.contains("large.jpg") {
-            avatar = avatar.replace("large.jpg", "t500x500.jpg");
-        }
-        if avatar.is_empty() {
-            avatar = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300".to_string();
-        }
+        let avatar = u.get("avatar_url").and_then(|v| v.as_str())
+            .filter(|url| !url.contains("default_avatar")).unwrap_or("").to_string();
 
         let banner_url = u.get("visuals")
             .and_then(|v| v.get("visuals"))
@@ -2273,8 +2283,6 @@ impl SoundCloudClient {
     }
 
     pub async fn get_artist_tracks(&self, user_id: Value, limit: Option<usize>) -> Result<Vec<FormattedTrack>, String> {
-        let client_id = self.get_client_id().await;
-        let cfg = self.load_config();
         let id_str = if let Some(n) = user_id.as_i64() {
             n.to_string()
         } else if let Some(s) = user_id.as_str() {
@@ -2285,56 +2293,28 @@ impl SoundCloudClient {
         let lim = limit.unwrap_or(50);
 
         // 1. Try /toptracks first so "Популярные треки" actually shows the artist's real top hits
-        let toptracks_url = format!(
-            "https://api-v2.soundcloud.com/users/{}/toptracks?limit={}&client_id={}",
-            id_str,
-            lim,
-            client_id
-        );
-        let mut req = self.http.get(&toptracks_url);
-        if let Some(auth) = self.auth_header(&cfg) {
-            req = req.header("Authorization", auth);
-        }
-        if let Ok(res) = req.send().await {
-            if res.status().is_success() {
-                if let Ok(data) = res.json::<Value>().await {
-                    let mut tracks = Vec::new();
-                    if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
-                        for t in arr {
-                            tracks.push(Self::format_track(t, false));
-                        }
-                    }
-                    if !tracks.is_empty() {
-                        return Ok(tracks);
-                    }
+        let toptracks_url = format!("https://api-v2.soundcloud.com/users/{}/toptracks?limit={}", id_str, lim);
+        if let Ok(data) = self.public_v2_get_json(&toptracks_url).await {
+            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+                let tracks: Vec<FormattedTrack> = arr.iter().map(|t| Self::format_track(t, false)).collect();
+                if !tracks.is_empty() {
+                    return Ok(tracks);
                 }
             }
         }
 
         // 2. Fall back to /tracks if /toptracks is empty or unsupported
-        let url = format!(
-            "https://api-v2.soundcloud.com/users/{}/tracks?limit={}&client_id={}",
-            id_str,
-            lim,
-            client_id
-        );
-        let mut req = self.http.get(&url);
-        if let Some(auth) = self.auth_header(&cfg) {
-            req = req.header("Authorization", auth);
-        }
-        let res = req.send().await.map_err(|e| e.to_string())?;
-        if res.status().is_success() {
-            let data: Value = res.json().await.map_err(|e| e.to_string())?;
-            let mut tracks = Vec::new();
-            if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
-                for t in arr {
-                    tracks.push(Self::format_track(t, false));
-                }
+        let url = format!("https://api-v2.soundcloud.com/users/{}/tracks?limit={}", id_str, lim);
+        let data = self.public_v2_get_json(&url)
+            .await
+            .map_err(|e| format!("Get artist tracks failed: {}", e))?;
+        let mut tracks = Vec::new();
+        if let Some(arr) = data.get("collection").and_then(|v| v.as_array()) {
+            for t in arr {
+                tracks.push(Self::format_track(t, false));
             }
-            Ok(tracks)
-        } else {
-            Err(format!("Get artist tracks failed: status {}", res.status()))
         }
+        Ok(tracks)
     }
 
     pub async fn get_artist_albums(&self, user_id: Value, limit: Option<usize>) -> Result<Vec<FormattedAlbum>, String> {
@@ -2641,149 +2621,140 @@ impl SoundCloudClient {
 
 
 
-    pub async fn resolve_youtube_stream_by_id(video_id: &str) -> Option<String> {
-
-
-
-        let clean_id = video_id.trim();
-
-
-
-        if clean_id.len() != 11 || !clean_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
-
-
-
+    fn score_youtube_candidate(
+        lower_orig_artist: &str,
+        lower_orig_title: &str,
+        target_sec: f64,
+        v_title: &str,
+        uploader: &str,
+        dur_sec: f64,
+    ) -> Option<i32> {
+        const UNWANTED: [&str; 8] = [
+            "live", "cover", "remix", "reaction", "tutorial", "karaoke", "instrumental", "hour",
+        ];
+        let lower_v_title = v_title.to_lowercase();
+        let lower_uploader = uploader.to_lowercase();
+        let diff = if target_sec > 0.0 && dur_sec > 0.0 {
+            (dur_sec - target_sec).abs()
+        } else {
+            0.0
+        };
+        if target_sec > 0.0 && diff > 8.0 {
             return None;
-
-
-
+        }
+        if UNWANTED
+            .iter()
+            .any(|kw| lower_v_title.contains(kw) && !lower_orig_title.contains(kw))
+        {
+            return None;
         }
 
-
-
-
-
-
-
-        let yt_url = format!("https://www.youtube.com/watch?v={}", clean_id);
-
-
-
-        let yt_bin = Self::find_yt_dlp();
-
-
-
-
-
-
-
-        let mut stream_cmd = tokio::process::Command::new(&yt_bin);
-
-
-
-        stream_cmd.args([
-
-
-
-            "--no-warnings",
-
-
-
-            "--no-playlist",
-
-
-
-            "-g",
-
-
-
-            "-f",
-
-
-
-            "bestaudio[ext=m4a]/140/bestaudio",
-
-
-
-            &yt_url,
-
-
-
-        ]);
-
-
-
-        #[cfg(windows)]
-
-
-
-        stream_cmd.creation_flags(0x08000000);
-
-
-
-
-
-
-
-        let res_stream = tokio::time::timeout(std::time::Duration::from_secs(14), stream_cmd.output()).await;
-
-
-
-        if let Ok(Ok(out)) = res_stream {
-
-
-
-            if out.status.success() {
-
-
-
-                let stdout = String::from_utf8_lossy(&out.stdout);
-
-
-
-                if let Some(url) = stdout.lines().find(|l| l.starts_with("http")) {
-
-
-
-                    return Some(url.trim().to_string());
-
-
-
-                }
-
-
-
-            }
-
-
-
+        let mut score: i32 = 0;
+        if !lower_orig_artist.is_empty()
+            && (lower_uploader == lower_orig_artist || lower_uploader.contains(lower_orig_artist))
+        {
+            score += 100;
+        } else if lower_uploader.ends_with("- topic") || lower_uploader.contains("topic") {
+            score += 60;
         }
 
-
-
-        None
-
-
-
+        let clean_vt = lower_v_title
+            .replace(&format!("{} - ", lower_orig_artist), "")
+            .replace(&format!("{} – ", lower_orig_artist), "")
+            .trim()
+            .to_string();
+        if clean_vt == lower_orig_title {
+            score += 50;
+        }
+        if diff <= 2.0 {
+            score += 30;
+        } else if diff <= 5.0 {
+            score += 15;
+        }
+        Some(score)
     }
 
+    pub fn invalidate_youtube_stream_url(url: &str) {
+        if let Some(cache) = YT_STREAM_URL_CACHE.get() {
+            if let Ok(mut c) = cache.lock() {
+                c.retain(|_, (cached_url, _)| cached_url != url);
+            }
+        }
+    }
 
+    pub async fn resolve_youtube_stream_by_id(video_id: &str) -> Option<String> {
+        let clean_id = video_id.trim();
+        if clean_id.len() != 11
+            || !clean_id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        {
+            return None;
+        }
 
+        let stream_cache = YT_STREAM_URL_CACHE
+            .get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+        if let Some((cached_url, cached_at)) = stream_cache
+            .lock()
+            .ok()
+            .and_then(|c| c.get(clean_id).cloned())
+        {
+            if cached_at.elapsed() < std::time::Duration::from_secs(3600) {
+                return Some(cached_url);
+            }
+        }
 
+        let yt_url = format!("https://www.youtube.com/watch?v={}", clean_id);
+        let yt_bin = Self::find_yt_dlp();
 
+        let mut stream_cmd = tokio::process::Command::new(&yt_bin);
+        stream_cmd.args([
+            "--no-warnings",
+            "--no-playlist",
+            "-g",
+            "-f",
+            "bestaudio[ext=m4a]/140/bestaudio",
+            &yt_url,
+        ]);
+        #[cfg(windows)]
+        stream_cmd.creation_flags(0x08000000);
 
+        let res_stream =
+            tokio::time::timeout(std::time::Duration::from_secs(14), stream_cmd.output()).await;
+        if let Ok(Ok(out)) = res_stream {
+            if out.status.success() {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                if let Some(url) = stdout.lines().find(|l| l.starts_with("http")) {
+                    let resolved = url.trim().to_string();
+                    if let Ok(mut c) = stream_cache.lock() {
+                        c.insert(
+                            clean_id.to_string(),
+                            (resolved.clone(), std::time::Instant::now()),
+                        );
+                    }
+                    return Some(resolved);
+                }
+            }
+        }
+        None
+    }
 
-    pub async fn resolve_official_youtube_stream(artist: &str, title: &str, duration_ms: u64) -> Option<String> {
+    pub async fn resolve_official_youtube_stream(
+        &self,
+        artist: &str,
+        title: &str,
+        duration_ms: u64,
+    ) -> Option<String> {
         if artist.is_empty() && title.is_empty() {
             return None;
         }
 
         let clean_title = title.trim();
         let clean_artist = artist.trim();
-        let query = if !clean_artist.is_empty() && !clean_title.is_empty() {
-            format!("ytsearch8:{} {}", clean_artist, clean_title)
+        let search_text = if !clean_artist.is_empty() && !clean_title.is_empty() {
+            format!("{} {}", clean_artist, clean_title)
         } else {
-            format!("ytsearch8:{}", clean_title)
+            clean_title.to_string()
         };
 
         let cache_key = format!(
@@ -2806,112 +2777,95 @@ impl SoundCloudClient {
             }
         }
 
-        let yt_bin = Self::find_yt_dlp();
-        let mut search_cmd = tokio::process::Command::new(&yt_bin);
-        search_cmd.args([
-            "--no-warnings",
-            "--no-playlist",
-            "--flat-playlist",
-            "--print",
-            "%(id)s\t%(duration)s\t%(title)s\t%(uploader)s",
-            &query,
-        ]);
+        let target_sec = duration_ms as f64 / 1000.0;
+        let lower_orig_title = clean_title.to_lowercase();
+        let lower_orig_artist = clean_artist.to_lowercase();
+        let mut best_id: Option<String> = None;
+        let mut best_score: i32 = -1;
 
-        #[cfg(windows)]
-        search_cmd.creation_flags(0x08000000);
+        // Fast path (~200-350ms): search via YouTube Music Innertube HTTP API instead of spawning yt-dlp.
+        let ytm_hits = crate::multi_providers::MultiProviders::search_youtube_music(
+            &self.http,
+            &search_text,
+        )
+        .await;
+        for hit in ytm_hits {
+            let Some(vid_id) = hit.id.as_str().map(str::trim).filter(|s| s.len() == 11) else {
+                continue;
+            };
+            let dur_sec = hit.duration_ms as f64 / 1000.0;
+            if let Some(score) = Self::score_youtube_candidate(
+                &lower_orig_artist,
+                &lower_orig_title,
+                target_sec,
+                &hit.title,
+                &hit.artist,
+                dur_sec,
+            ) {
+                if score > best_score {
+                    best_score = score;
+                    best_id = Some(vid_id.to_string());
+                }
+            }
+        }
 
-        let search_res = tokio::time::timeout(std::time::Duration::from_secs(10), search_cmd.output()).await;
-        if let Ok(Ok(out)) = search_res {
-            if out.status.success() {
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                let target_sec = duration_ms as f64 / 1000.0;
-                let lower_orig_title = clean_title.to_lowercase();
-                let lower_orig_artist = clean_artist.to_lowercase();
-                let unwanted_keywords = ["live", "cover", "remix", "reaction", "tutorial", "karaoke", "instrumental", "hour"];
+        // Slow fallback (~3-4s): spawn yt-dlp search only if fast HTTP search found no match.
+        if best_id.is_none() {
+            let query = format!("ytsearch8:{}", search_text);
+            let yt_bin = Self::find_yt_dlp();
+            let mut search_cmd = tokio::process::Command::new(&yt_bin);
+            search_cmd.args([
+                "--no-warnings",
+                "--no-playlist",
+                "--flat-playlist",
+                "--print",
+                "%(id)s\t%(duration)s\t%(title)s\t%(uploader)s",
+                &query,
+            ]);
+            #[cfg(windows)]
+            search_cmd.creation_flags(0x08000000);
 
-                let mut best_id: Option<String> = None;
-                let mut best_score: i32 = -1;
-
-                for line in stdout.lines() {
-                    let parts: Vec<&str> = line.split('\t').collect();
-                    if parts.is_empty() {
-                        continue;
-                    }
-                    let vid_id = parts[0].trim();
-                    if vid_id.is_empty() || vid_id == "NA" {
-                        continue;
-                    }
-                    let dur_sec: f64 = parts.get(1).and_then(|s| s.trim().parse().ok()).unwrap_or(0.0);
-                    let v_title = parts.get(2).map(|s| s.trim()).unwrap_or("");
-                    let uploader = parts.get(3).map(|s| s.trim()).unwrap_or("");
-                    let lower_v_title = v_title.to_lowercase();
-                    let lower_uploader = uploader.to_lowercase();
-
-                    let diff = if target_sec > 0.0 && dur_sec > 0.0 {
-                        (dur_sec - target_sec).abs()
-                    } else {
-                        0.0
-                    };
-
-                    // Hard duration tolerance (within 8 sec)
-                    if target_sec > 0.0 && diff > 8.0 {
-                        continue;
-                    }
-
-                    // Check for unwanted keywords if original doesn't have them
-                    let mut has_unwanted = false;
-                    for kw in &unwanted_keywords {
-                        if lower_v_title.contains(kw) && !lower_orig_title.contains(kw) {
-                            has_unwanted = true;
-                            break;
+            if let Ok(Ok(out)) =
+                tokio::time::timeout(std::time::Duration::from_secs(10), search_cmd.output()).await
+            {
+                if out.status.success() {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    for line in stdout.lines() {
+                        let parts: Vec<&str> = line.split('\t').collect();
+                        let vid_id = parts.first().map(|s| s.trim()).unwrap_or("");
+                        if vid_id.is_empty() || vid_id == "NA" {
+                            continue;
+                        }
+                        let dur_sec: f64 =
+                            parts.get(1).and_then(|s| s.trim().parse().ok()).unwrap_or(0.0);
+                        let v_title = parts.get(2).map(|s| s.trim()).unwrap_or("");
+                        let uploader = parts.get(3).map(|s| s.trim()).unwrap_or("");
+                        if let Some(score) = Self::score_youtube_candidate(
+                            &lower_orig_artist,
+                            &lower_orig_title,
+                            target_sec,
+                            v_title,
+                            uploader,
+                            dur_sec,
+                        ) {
+                            if score > best_score {
+                                best_score = score;
+                                best_id = Some(vid_id.to_string());
+                            }
                         }
                     }
-                    if has_unwanted {
-                        continue;
-                    }
-
-                    let mut score: i32 = 0;
-
-                    // 1. Official artist channel / Topic priority (+100)
-                    if !lower_orig_artist.is_empty() && (lower_uploader == lower_orig_artist || lower_uploader.contains(&lower_orig_artist)) {
-                        score += 100;
-                    } else if lower_uploader.ends_with("- topic") || lower_uploader.contains("topic") {
-                        score += 60;
-                    }
-
-                    // 2. Exact Title match (+50)
-                    let clean_vt = lower_v_title
-                        .replace(&format!("{} - ", lower_orig_artist), "")
-                        .replace(&format!("{} – ", lower_orig_artist), "")
-                        .trim()
-                        .to_string();
-                    if clean_vt == lower_orig_title {
-                        score += 50;
-                    }
-
-                    // 3. Duration closeness (+30)
-                    if diff <= 2.0 {
-                        score += 30;
-                    } else if diff <= 5.0 {
-                        score += 15;
-                    }
-
-                    if score > best_score {
-                        best_score = score;
-                        best_id = Some(vid_id.to_string());
-                    }
                 }
+            }
+        }
 
-                if let Some(id_ref) = best_id.as_ref() {
-                    if let Ok(mut c) = yt_cache.lock() {
-                        c.insert(cache_key.clone(), (id_ref.clone(), std::time::Instant::now()));
-                    }
-                }
-                if let Some(id) = best_id {
-                    if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&id).await {
-                        return crate::auth_server::register_youtube_stream(&raw_url);
-                    }
-                }
+        if let Some(id_ref) = best_id.as_ref() {
+            if let Ok(mut c) = yt_cache.lock() {
+                c.insert(cache_key, (id_ref.clone(), std::time::Instant::now()));
+            }
+        }
+        if let Some(id) = best_id {
+            if let Some(raw_url) = Self::resolve_youtube_stream_by_id(&id).await {
+                return crate::auth_server::register_youtube_stream(&raw_url);
             }
         }
 
@@ -2945,19 +2899,52 @@ impl SoundCloudClient {
         request().send().await
     }
 
-    pub async fn resolve_stream_url(&self, track_id: Value) -> Result<String, String> {
-
-
-
+    async fn public_v2_get_json(&self, base_url_without_client_id: &str) -> Result<Value, String> {
         let cfg = self.load_config();
+        let initial_cid = self.get_client_id().await;
+        let mut client_ids = std::collections::VecDeque::from([initial_cid]);
+        if client_ids.front().is_some_and(|id| id != DEFAULT_CLIENT_ID) {
+            client_ids.push_back(DEFAULT_CLIENT_ID.to_string());
+        }
+        let mut refreshed_client_id = false;
+        let session_auth = self.auth_header(&cfg);
+        let mut auth = session_auth.as_deref();
+        let sep = if base_url_without_client_id.contains('?') { '&' } else { '?' };
+        let mut last_err = "Request failed".to_string();
 
+        while let Some(cid) = client_ids.pop_front() {
+            let url = format!("{}{}client_id={}", base_url_without_client_id, sep, cid);
+            let res = match self.public_track_request(&url, &mut auth).await {
+                Ok(res) => res,
+                Err(e) => {
+                    last_err = e.to_string();
+                    continue;
+                }
+            };
 
+            if res.status().is_success() {
+                return res.json::<Value>().await.map_err(|e| e.to_string());
+            }
 
-        let client_id = self.get_client_id().await;
+            let st = res.status().as_u16();
+            last_err = format!("HTTP {}", res.status());
+            if st == 429 {
+                return Err(last_err);
+            }
+            if (st == 401 || st == 403) && !refreshed_client_id {
+                refreshed_client_id = true;
+                if let Some(fresh_cid) = self.refresh_dynamic_client_id().await {
+                    if fresh_cid != cid && !client_ids.contains(&fresh_cid) {
+                        client_ids.push_front(fresh_cid);
+                    }
+                }
+            }
+        }
 
+        Err(last_err)
+    }
 
-
-
+    pub async fn resolve_stream_url(&self, track_id: Value) -> Result<String, String> {
 
 
 
@@ -3114,7 +3101,7 @@ impl SoundCloudClient {
 
 
 
-                if let Some(audio_url) = Self::resolve_official_youtube_stream(artist, title, 0).await {
+                if let Some(audio_url) = self.resolve_official_youtube_stream(artist, title, 0).await {
 
 
 
@@ -3166,7 +3153,7 @@ impl SoundCloudClient {
 
 
 
-                if let Some(audio_url) = Self::resolve_official_youtube_stream(artist, title, 0).await {
+                if let Some(audio_url) = self.resolve_official_youtube_stream(artist, title, 0).await {
 
 
 
@@ -3202,6 +3189,8 @@ impl SoundCloudClient {
 
 
 
+        let cfg = self.load_config();
+        let client_id = self.client_id_from_config(&cfg).await;
         let mut client_ids = std::collections::VecDeque::from([client_id]);
         if client_ids.front().is_some_and(|id| id != DEFAULT_CLIENT_ID) {
             client_ids.push_back(DEFAULT_CLIENT_ID.to_string());
@@ -3485,7 +3474,7 @@ impl SoundCloudClient {
                 let track_dur = track.get("duration").and_then(|v| v.as_u64()).or(_opt_duration).unwrap_or(0);
 
                 if !track_title.is_empty() {
-                    if let Some(yt_stream) = Self::resolve_official_youtube_stream(track_artist, track_title, track_dur).await {
+                    if let Some(yt_stream) = self.resolve_official_youtube_stream(track_artist, track_title, track_dur).await {
                         return Ok(yt_stream);
                     }
                 }
@@ -3508,7 +3497,7 @@ impl SoundCloudClient {
 
         if let Some(ref t) = opt_title {
             let a = opt_artist.as_deref().unwrap_or("");
-            if let Some(yt_stream) = Self::resolve_official_youtube_stream(a, t, _opt_duration.unwrap_or(0)).await {
+            if let Some(yt_stream) = self.resolve_official_youtube_stream(a, t, _opt_duration.unwrap_or(0)).await {
                 return Ok(yt_stream);
             }
         }
@@ -4324,6 +4313,10 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
     pub async fn search_tracks(&self, query: &str) -> Result<Vec<FormattedTrack>, String> {
+        self.search_tracks_with_offset(query, 0).await
+    }
+
+    pub async fn search_tracks_with_offset(&self, query: &str, offset: usize) -> Result<Vec<FormattedTrack>, String> {
 
 
 
@@ -4431,78 +4424,22 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
 
-        let cfg = self.load_config();
-
-
-
-        let client_id = self.get_client_id().await;
-
-
-
         let encoded = urlencoding_simple(query);
-
-
-
-        let url = format!("https://api-v2.soundcloud.com/search/tracks?q={}&client_id={}&limit=30", encoded, client_id);
-
-
-
-
-
-
-
-        let session_auth = self.auth_header(&cfg);
-        let mut auth = session_auth.as_deref();
-        let res = self.public_track_request(&url, &mut auth).await.map_err(|e| e.to_string())?;
-
-        if res.status().is_success() {
-
-
-
-            let data: Value = res.json().await.map_err(|e| e.to_string())?;
-
-
-
-            let items = data.get("collection").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-
-
-
-            let tracks: Vec<FormattedTrack> = items
-
-
-
-                .into_iter()
-
-
-
-                .filter(|t| t.get("id").is_some() && t.get("title").is_some())
-
-
-
-                .map(|t| Self::format_track(&t, false))
-
-
-
-                .collect();
-
-
-
-            Ok(tracks)
-
-
-
+        let url = if offset > 0 {
+            format!("https://api-v2.soundcloud.com/search/tracks?q={}&limit=30&offset={}", encoded, offset)
         } else {
-
-
-
-            Err(format!("Search failed: HTTP {}", res.status()))
-
-
-
-        }
-
-
-
+            format!("https://api-v2.soundcloud.com/search/tracks?q={}&limit=30", encoded)
+        };
+        let data = self.public_v2_get_json(&url)
+            .await
+            .map_err(|e| format!("Search failed: {}", e))?;
+        let items = data.get("collection").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let tracks: Vec<FormattedTrack> = items
+            .into_iter()
+            .filter(|t| t.get("id").is_some() && t.get("title").is_some())
+            .map(|t| Self::format_track(&t, false))
+            .collect();
+        Ok(tracks)
     }
 
 
@@ -5148,105 +5085,29 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
 
     pub async fn get_related_tracks(&self, track_id: Value) -> Result<Vec<FormattedTrack>, String> {
-
-
-
-        let cfg = self.load_config();
-
-
-
-        let client_id = self.get_client_id().await;
-
-
-
         let id_str = if let Some(n) = track_id.as_i64() {
-
-
-
             n.to_string()
-
-
-
         } else if let Some(s) = track_id.as_str() {
-
-
-
             s.trim_matches('"').to_string()
-
-
-
         } else {
-
-
-
             track_id.to_string().trim_matches('"').to_string()
-
-
-
         };
 
-
-
-        let url = format!("https://api-v2.soundcloud.com/tracks/{}/related?client_id={}&limit=30", id_str, client_id);
-
-
-
-
-
-
-
-        let session_auth = self.auth_header(&cfg);
-        let mut auth = session_auth.as_deref();
-        let res = self.public_track_request(&url, &mut auth).await.map_err(|e| e.to_string())?;
-
-        if res.status().is_success() {
-
-
-
-            let data: Value = res.json().await.map_err(|e| e.to_string())?;
-
-
-
-            let items = data.get("collection").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-
-
-
-            let tracks: Vec<FormattedTrack> = items
-
-
-
-                .into_iter()
-
-
-
-                .filter(|t| t.get("id").is_some() && t.get("title").is_some())
-
-
-
-                .map(|t| Self::format_track(&t, false))
-
-
-
-                .collect();
-
-
-
-            Ok(tracks)
-
-
-
-        } else {
-
-
-
-            Err(format!("Related tracks fetch failed: HTTP {}", res.status()))
-
-
-
+        if id_str.is_empty() || !id_str.chars().all(|c| c.is_ascii_digit()) {
+            return Ok(Vec::new());
         }
 
-
-
+        let url = format!("https://api-v2.soundcloud.com/tracks/{}/related?limit=50", id_str);
+        let data = self.public_v2_get_json(&url)
+            .await
+            .map_err(|e| format!("Related tracks fetch failed: {}", e))?;
+        let items = data.get("collection").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let tracks: Vec<FormattedTrack> = items
+            .into_iter()
+            .filter(|t| t.get("id").is_some() && t.get("title").is_some())
+            .map(|t| Self::format_track(&t, false))
+            .collect();
+        Ok(tracks)
     }
 
 
@@ -5287,28 +5148,28 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
     }
 
     pub async fn fetch_lyrics(&self, title: String, artist: String, duration: Option<f64>) -> Result<Value, String> {
-        let clean_title = clean_lyrics_text(&title);
-        let clean_artist = clean_lyrics_text(&artist);
+        let clean_title = title.trim().to_string();
+        let clean_artist = artist.trim().to_string();
 
         let mut alt_artist = clean_artist.clone();
         let mut alt_title = clean_title.clone();
         if title.contains(" - ") {
             let parts: Vec<&str> = title.splitn(2, " - ").collect();
             if parts.len() == 2 {
-                alt_artist = clean_lyrics_text(parts[0]);
-                alt_title = clean_lyrics_text(parts[1]);
+                alt_artist = parts[0].trim().to_string();
+                alt_title = parts[1].trim().to_string();
             }
         } else if title.contains(" — ") {
             let parts: Vec<&str> = title.splitn(2, " — ").collect();
             if parts.len() == 2 {
-                alt_artist = clean_lyrics_text(parts[0]);
-                alt_title = clean_lyrics_text(parts[1]);
+                alt_artist = parts[0].trim().to_string();
+                alt_title = parts[1].trim().to_string();
             }
         } else if title.contains(" – ") {
             let parts: Vec<&str> = title.splitn(2, " – ").collect();
             if parts.len() == 2 {
-                alt_artist = clean_lyrics_text(parts[0]);
-                alt_title = clean_lyrics_text(parts[1]);
+                alt_artist = parts[0].trim().to_string();
+                alt_title = parts[1].trim().to_string();
             }
         }
 
@@ -5368,37 +5229,21 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                     0.0
                 };
 
-                if let Some(ref data) = r1 {
-                    if (is_synced(data) || is_plain(data)) && dur_diff(data) <= 12.0 {
-                        return Some(data.clone());
-                    }
-                }
-                if let Some(ref data) = r2 {
-                    if (is_synced(data) || is_plain(data)) && dur_diff(data) <= 12.0 {
-                        return Some(data.clone());
-                    }
-                }
-
-                let mut candidates: Vec<Value> = Vec::new();
-                if let Some(items) = r3 { candidates.extend(items); }
-                if let Some(items) = r4 { candidates.extend(items); }
-
-                if let Some(hit) = candidates.iter().find(|c| is_synced(c) && dur_diff(c) <= 8.0) {
-                    return Some(hit.clone());
-                }
-                if let Some(hit) = candidates.iter().find(|c| is_synced(c) && dur_diff(c) <= 16.0) {
-                    return Some(hit.clone());
-                }
-                if let Some(hit) = candidates.iter().find(|c| is_plain(c) && dur_diff(c) <= 16.0) {
-                    return Some(hit.clone());
-                }
-                if let Some(hit) = candidates.iter().find(|c| is_synced(c) && dur_diff(c) <= 25.0) {
-                    return Some(hit.clone());
-                }
-                if let Some(hit) = candidates.iter().find(|c| is_plain(c) && dur_diff(c) <= 25.0) {
-                    return Some(hit.clone());
-                }
-                None
+                let mut candidates: Vec<Value> = r1.into_iter().chain(r2).collect();
+                candidates.extend(r3.into_iter().flatten());
+                candidates.extend(r4.into_iter().flatten());
+                candidates.retain(|item| {
+                    let title = item["trackName"].as_str().unwrap_or_default();
+                    let artist = item["artistName"].as_str().unwrap_or_default();
+                    let matches = |t: &str, a: &str| lyrics_identity_matches(t, title)
+                        && lyrics_identity_matches(a, artist);
+                    (matches(&c_title, &c_artist) || matches(&a_title, &a_artist))
+                        && dur_diff(item) <= 10.0
+                        && (is_synced(item) || is_plain(item) || item["instrumental"] == true)
+                });
+                candidates.sort_by(|a, b| is_synced(b).cmp(&is_synced(a))
+                    .then_with(|| dur_diff(a).total_cmp(&dur_diff(b))));
+                candidates.into_iter().next()
             }
         };
 
@@ -5423,7 +5268,7 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
 
         // 1. If LRCLIB found synced lyrics, prioritize it!
         if let Some(ref lrc_data) = lrclib_res {
-            if lrc_data.get("syncedLyrics").and_then(|s| s.as_str()).map(|s| s.trim().len() > 15).unwrap_or(false) {
+            if lrc_data["instrumental"] == true || lrc_data.get("syncedLyrics").and_then(|s| s.as_str()).map(|s| s.trim().len() > 15).unwrap_or(false) {
                 return Ok(lrc_data.clone());
             }
         }
@@ -5478,7 +5323,12 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         let songs = data.get("data")?.get("song")?.get("list")?.as_array()?;
 
         for song in songs {
-            let songmid = song.get("songmid")?.as_str()?;
+            let Some(songmid) = song["songmid"].as_str() else { continue };
+            let song_title = song["songname"].as_str().unwrap_or_default();
+            let singer = song["singer"].as_array().into_iter().flatten()
+                .filter_map(|s| s["name"].as_str()).find(|name| lyrics_identity_matches(artist, name));
+            let Some(singer) = singer else { continue };
+            if !lyrics_identity_matches(title, song_title) { continue; }
             let song_dur = song.get("interval").and_then(Value::as_f64);
             if let (Some(target_dur), Some(cand_dur)) = (duration, song_dur) {
                 if (target_dur - cand_dur).abs() > 6.0 {
@@ -5510,9 +5360,9 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                 obj.insert("syncedLyrics".to_string(), Value::String(lyric.to_string()));
                 obj.insert("plainLyrics".to_string(), Value::String(plain));
                 obj.insert("source".to_string(), Value::String("qqmusic".to_string()));
-                obj.insert("trackName".to_string(), Value::String(title.to_string()));
-                obj.insert("artistName".to_string(), Value::String(artist.to_string()));
-                obj.insert("duration".to_string(), serde_json::json!(duration.or(song_dur).unwrap_or(0.0)));
+                obj.insert("trackName".to_string(), Value::String(song_title.to_string()));
+                obj.insert("artistName".to_string(), Value::String(singer.to_string()));
+                obj.insert("duration".to_string(), serde_json::json!(song_dur));
                 return Some(Value::Object(obj));
             }
         }
@@ -5542,8 +5392,6 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
         let sections = search_json.get("response").and_then(|r| r.get("sections")).and_then(|s| s.as_array())?;
         
         let mut song_path: Option<String> = None;
-        let title_key = clean_lyrics_text(title).to_lowercase();
-        let artist_key = clean_lyrics_text(artist).to_lowercase();
         for sec in sections {
             if sec.get("type").and_then(|t| t.as_str()) == Some("song") {
                 if let Some(hits) = sec.get("hits").and_then(|h| h.as_array()) {
@@ -5551,8 +5399,8 @@ pub async fn login_account(&self, identifier: String, token: Option<String>) -> 
                         if let Some(result) = hit.get("result") {
                             let result_title = result.get("title").and_then(Value::as_str).unwrap_or_default();
                             let result_artist = result.pointer("/primary_artist/name").and_then(Value::as_str).unwrap_or_default();
-                            if clean_lyrics_text(result_title).to_lowercase() != title_key
-                                || clean_lyrics_text(result_artist).to_lowercase() != artist_key
+                            if !lyrics_identity_matches(title, result_title)
+                                || !lyrics_identity_matches(artist, result_artist)
                             {
                                 continue;
                             }
@@ -5663,129 +5511,21 @@ fn default_whisper_precise() -> bool {
     true
 }
 
-fn clean_lyrics_text(s: &str) -> String {
-
-
-
-    let mut res = String::new();
-
-
-
-    let mut depth = 0;
-
-
-
-    for c in s.chars() {
-
-
-
-        if c == '(' || c == '[' || c == '{' {
-
-
-
-            depth += 1;
-
-
-
-        } else if c == ')' || c == ']' || c == '}' {
-
-
-
-            if depth > 0 { depth -= 1; }
-
-
-
-        } else if depth == 0 {
-
-
-
-            res.push(c);
-
-
-
-        }
-
-
-
-    }
-
-
-
-
-
-
-
-    let lower = res.to_lowercase();
-
-
-
-    let stop_words = [
-
-
-
-        " prod.", " prod by", " produced by", " feat.", " feat ", " ft.", " ft ",
-
-
-
-        " slowed", " sped up", " speed up", " reverb", " remix", " official audio", " official video",
-
-
-
-        " music video", " edit", " / ", " w/ "
-
-
-
-    ];
-
-
-
-    let mut cut_idx = res.len();
-
-
-
-    for sw in stop_words {
-
-
-
-        if let Some(pos) = lower.find(sw) {
-
-
-
-            if pos < cut_idx {
-
-
-
-                cut_idx = pos;
-
-
-
-            }
-
-
-
-        }
-
-
-
-    }
-
-
-
-    res.truncate(cut_idx);
-
-
-
-    res.trim().to_string()
-
-
-
+fn lyrics_identity_matches(expected: &str, actual: &str) -> bool {
+    let key = |value: &str| value.to_lowercase().chars()
+        .filter(|c| c.is_alphanumeric()).collect::<String>();
+    let expected = key(expected);
+    !expected.is_empty() && expected == key(actual)
 }
 
-
-
-
-
-
+#[cfg(test)]
+#[test]
+fn lyrics_identity_requires_the_same_nonempty_name() {
+    assert!(lyrics_identity_matches("AC/DC", "ac dc"));
+    assert!(!lyrics_identity_matches("After Dark", "After Dark (Live)"));
+    assert!(!lyrics_identity_matches("After", "After Dark"));
+    assert!(!lyrics_identity_matches("", ""));
+}
 
 fn urlencoding_simple(s: &str) -> String {
 

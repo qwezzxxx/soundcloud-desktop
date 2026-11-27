@@ -254,6 +254,7 @@ window.addEventListener('blur', () => {
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape') window.__TAURI__.window.getCurrentWindow().hide().catch(console.warn);
 });
+document.addEventListener('contextmenu', event => event.preventDefault());
 events.listen('mini-player-state', render).then(() => {
   window.addEventListener('focus', startRefresh);
   if (document.hasFocus()) startRefresh();

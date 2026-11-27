@@ -150,12 +150,16 @@ impl MultiProviders {
                         liked: false,
                         description: Some("YouTube Music Audio".to_string()),
                         genre: Some("YouTube".to_string()),
+                        tag_list: None,
                         waveform_url: None,
                         permalink_url: Some(format!("https://music.youtube.com/watch?v={}", video_id)),
                         provider: Some("youtube".to_string()),
                         user_id: None,
                         user_permalink: None,
                         user_avatar: None,
+                        created_at: None,
+                        playback_count: None,
+                        likes_count: None,
                     });
                 }
             }
@@ -251,12 +255,16 @@ impl MultiProviders {
                     liked: false,
                     description: Some("Яндекс Музыка HD".to_string()),
                     genre: Some("Yandex".to_string()),
+                    tag_list: None,
                     waveform_url: None,
                     permalink_url: Some(format!("https://music.yandex.ru/track/{}", track_id_str)),
                     provider: Some("yandex".to_string()),
                     user_id: None,
                     user_permalink: None,
                     user_avatar: None,
+                    created_at: None,
+                    playback_count: None,
+                    likes_count: None,
                 });
             }
         }
@@ -328,12 +336,16 @@ impl MultiProviders {
                     liked: false,
                     description: Some("Spotify Catalogue Track".to_string()),
                     genre: Some("Spotify".to_string()),
+                    tag_list: None,
                     waveform_url: None,
                     permalink_url: it.get("link").and_then(|l| l.as_str()).map(|s| s.to_string()),
                     provider: Some("spotify".to_string()),
                     user_id: None,
                     user_permalink: None,
                     user_avatar: None,
+                    created_at: None,
+                    playback_count: None,
+                    likes_count: None,
                 });
             }
         }
@@ -417,12 +429,16 @@ impl MultiProviders {
                     liked: false,
                     description: Some("Spotify Imported Track".to_string()),
                     genre: Some("Spotify".to_string()),
+                    tag_list: None,
                     waveform_url: None,
                     permalink_url: Some(clean.to_string()),
                     provider: Some("spotify".to_string()),
                     user_id: None,
                     user_permalink: None,
                     user_avatar: None,
+                    created_at: None,
+                    playback_count: None,
+                    likes_count: None,
                 });
             }
         } else {
@@ -452,12 +468,16 @@ impl MultiProviders {
                 liked: false,
                 description: Some("Spotify Track".to_string()),
                 genre: Some("Spotify".to_string()),
+                tag_list: None,
                 waveform_url: None,
                 permalink_url: Some(clean.to_string()),
                 provider: Some("spotify".to_string()),
                 user_id: None,
                 user_permalink: None,
                 user_avatar: None,
+                created_at: None,
+                playback_count: None,
+                likes_count: None,
             });
         }
 
@@ -469,8 +489,10 @@ impl MultiProviders {
         sc: &SoundCloudClient,
         query: &str,
         provider: Option<&str>,
+        offset: Option<usize>,
     ) -> Vec<FormattedTrack> {
         let clean = query.trim();
+        let off = offset.unwrap_or(0);
 
         // 1. Direct link detection
         if clean.contains("spotify.com/") {
@@ -482,7 +504,7 @@ impl MultiProviders {
             "yandex" => Self::search_yandex_music(http, clean).await,
             "spotify" => Self::search_spotify_catalogue(http, clean).await,
             "soundcloud" => {
-                let mut sc_tracks = sc.search_tracks(clean).await.unwrap_or_default();
+                let mut sc_tracks = sc.search_tracks_with_offset(clean, off).await.unwrap_or_default();
                 for t in &mut sc_tracks {
                     if t.provider.is_none() {
                         t.provider = Some("soundcloud".to_string());
@@ -493,7 +515,7 @@ impl MultiProviders {
             _ => {
                 // "all" - Search SoundCloud, YouTube Music, and Yandex Music in parallel!
                 let (sc_res, yt_res, ym_res) = tokio::join!(
-                    sc.search_tracks(clean),
+                    sc.search_tracks_with_offset(clean, off),
                     Self::search_youtube_music(http, clean),
                     Self::search_yandex_music(http, clean)
                 );

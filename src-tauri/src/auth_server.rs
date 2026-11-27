@@ -265,7 +265,7 @@ async fn serve_stream(stream: &mut TcpStream, method: &str, path: &str, headers:
         write_empty(stream, "502 Bad Gateway").await;
         return;
     };
-    let mut request = if method == "HEAD" { client.head(url) } else { client.get(url) };
+    let mut request = if method == "HEAD" { client.head(url.clone()) } else { client.get(url.clone()) };
     request = request.header(reqwest::header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36");
     if let Some(range) = request_header(headers, "Range") {
         request = request.header(reqwest::header::RANGE, range);
@@ -278,6 +278,17 @@ async fn serve_stream(stream: &mut TcpStream, method: &str, path: &str, headers:
         200 => "200 OK",
         206 => "206 Partial Content",
         416 => "416 Range Not Satisfiable",
+        code @ (403 | 404 | 410) => {
+            if let Some(tickets) = STREAM_TICKETS.get() {
+                if let Ok(mut map) = tickets.lock() {
+                    map.remove(key);
+                }
+            }
+            crate::soundcloud::SoundCloudClient::invalidate_youtube_stream_url(url.as_str());
+            let _ = code;
+            write_empty(stream, "502 Bad Gateway").await;
+            return;
+        }
         _ => {
             write_empty(stream, "502 Bad Gateway").await;
             return;
@@ -347,39 +358,75 @@ const LOGIN_HEAD: &str = r#"<!doctype html>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>SoundCloud · ONYX</title>
     <style>
-        :root { color-scheme: dark; --accent: #ff8554; --muted: #b9b6c3; }
+        :root {
+            color-scheme: dark;
+            --text: #f5f4ef;
+            --muted: #b5b4ae;
+            --edge: #42433f;
+            font: 15px/1.5 Inter, "Segoe UI", sans-serif;
+        }
         * { box-sizing: border-box; }
-        body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #0d0d12; color: #f9f8fb; font: 15px/1.5 system-ui, sans-serif; }
-        main { width: min(880px, 100%); overflow: hidden; border: 1px solid #36333f; border-radius: 24px; background: #16151d; box-shadow: 0 24px 80px #0007; }
-        .connect { display: grid; grid-template-columns: 1fr 1.2fr; }
-        .intro { display: flex; flex-direction: column; justify-content: center; gap: 16px; padding: 36px; background: radial-gradient(ellipse at top left, #542c29 0%, #231b26 58%, #1c1922 100%); }
-        .brand { color: #ffc1a8; font-size: 12px; font-weight: 750; letter-spacing: .2em; }
-        h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.05; letter-spacing: -.045em; margin: 0; }
-        p { margin: 0; color: var(--muted); }
-        .wave { width: 104px; height: 40px; color: var(--accent); }
-        ol { list-style: none; counter-reset: steps; margin: 0; padding: 30px; display: grid; gap: 14px; }
-        li { counter-increment: steps; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; gap: 12px; }
-        li::before { content: counter(steps, decimal-leading-zero); display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #583a36; border-radius: 10px; background: #2d2126; color: #ffb495; font-size: 12px; font-weight: 750; }
-        h2 { font-size: 15px; margin: 4px 0 5px; }
-        li p { font-size: 13px; }
-        a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-        .button { display: inline-flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 8px 12px; border-radius: 9px; color: #19100b; background: var(--accent); text-decoration: none; font-weight: 750; font-size: 13px; }
-        .button:hover { background: #ffa27e; }
-        .bookmark { color: #ffc1a8; background: #241d24; border: 1px dashed #a8604c; cursor: grab; }
-        .bookmark:hover { background: #3a292f; }
-        kbd { color: #f2e9f0; white-space: nowrap; }
-        .token-row { display: flex; gap: 8px; margin-top: 10px; }
-        .token-input { flex: 1; background: #0d0d12; border: 1px solid #36333f; border-radius: 9px; padding: 8px 12px; color: #fff; font-size: 13px; font-family: monospace; outline: none; }
-        .token-input:focus { border-color: var(--accent); }
-        .hint { font-size: 11px; color: #888; margin-top: 6px; }
-        .hint code { color: #ffb495; background: #241d24; padding: 1px 4px; border-radius: 4px; }
-        .result { width: min(500px, 100%); padding: 32px; display: grid; gap: 14px; }
+        body {
+            margin: 0; min-height: 100vh; min-height: 100svh; display: grid; place-items: center;
+            padding: clamp(14px, 4vw, 48px); color: var(--text);
+            background: radial-gradient(ellipse at 48% 24%, #23252d, transparent 68%), #101114;
+        }
+        main { width: min(780px, 100%); min-width: 0; }
+        .connect, .result {
+            border: 1px solid #383a42; border-radius: 21px; overflow: hidden;
+            background: #1b1c21; box-shadow: 0 28px 80px #0005;
+        }
+        .intro {
+            position: relative; isolation: isolate; overflow: hidden; padding: 28px clamp(20px, 4vw, 38px) 25px;
+            background: linear-gradient(110deg, #25262d 20%, #2a2d37 73%, #40434c); border-bottom: 1px solid #363840;
+        }
+        .intro::after {
+            content: ""; position: absolute; z-index: -1; right: -35px; top: -70px;
+            width: 40%; height: 165px; transform: skewX(-32deg) rotate(-8deg);
+            background: repeating-linear-gradient(90deg, #788ac000, #788ac044 19px, #f4f6ff 20px, #adbbdb 22px);
+            mask-image: linear-gradient(175deg, black 68%, transparent);
+        }
+        .brand { display: flex; align-items: center; gap: 10px; font: 750 14px/1 Inter, "Segoe UI", sans-serif; letter-spacing: .16em; }
+        .brand img { width: 36px; height: 36px; border-radius: 10px; }
+        h1 { margin: 20px 0 6px; font-size: clamp(29px, 4.2vw, 40px); line-height: 1.1; letter-spacing: -.045em; font-weight: 650; }
+        p { color: #bcbcc5; margin: 0; }
+        .instructions { padding: 0 clamp(18px, 4vw, 38px); }
+        ol { list-style: none; counter-reset: steps; margin: 0; padding: 0; }
+        li { counter-increment: steps; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 23px 0; }
+        li + li { border-top: 1px solid #33343c; }
+        li::before {
+            content: counter(steps); display: grid; place-items: center; height: 28px;
+            border: 1px solid #45464f; border-radius: 9px; color: #dedfe5; background: #2b2c33; font: 600 13px/1 Inter, sans-serif;
+        }
+        li > div { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; column-gap: 22px; }
+        h2 { margin: 1px 0 4px; font-size: 18px; line-height: 1.35; letter-spacing: -.02em; }
+        li p { grid-column: 1; font-size: 14px; }
+        li .button { grid-row: 1 / 3; grid-column: 2; align-self: center; margin: 0; }
+        .button {
+            display: inline-flex; align-items: center; justify-content: center; gap: 16px;
+            margin-top: 16px; padding: 10px 17px; border: 1px solid transparent; border-radius: 6px;
+            background: var(--text); color: #171815; font: 650 14px/1.5 Inter, "Segoe UI", sans-serif;
+            text-decoration: none; cursor: pointer;
+        }
+        .button:hover { background: #d8d8d1; }
+        .bookmark { color: var(--text); background: #282930; border: 1px dashed #84857e; cursor: grab; }
+        .bookmark:hover { background: #2c2e29; }
+        a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid white; outline-offset: 4px; }
+        details { padding-bottom: 2px; border-top: 1px solid var(--edge); }
+        summary { width: fit-content; padding: 18px 0; cursor: pointer; font-size: 14px; color: var(--muted); }
+        details[open] { padding-bottom: 20px; }
+        summary:hover { color: white; }
+        kbd, code { font: .9em "IBM Plex Mono", monospace; color: #dcdcd5; }
+        .token-row { display: flex; max-width: 510px; gap: 8px; margin: 12px 0; }
+        .token-input { flex: 1; min-width: 0; padding: 10px; background: #20211e; color: var(--text); border: 1px solid #63655e; border-radius: 6px; }
+        .hint { font-size: 12px; }
+        .result { padding: 32px; max-width: 480px; }
         .result h1 { font-size: 30px; }
-        @media (max-width: 680px) {
-            body { padding: 14px; }
-            .connect { grid-template-columns: 1fr; }
-            .intro { padding: 24px; gap: 12px; }
-            ol { padding: 22px; }
+        @media (max-width: 660px) {
+            li > div { display: block; }
+            li .button { margin-top: 12px; }
+            li { gap: 10px; padding: 17px 0; }
+            .intro::after { width: 35%; height: 132px; }
         }
     </style>
 </head>
@@ -387,34 +434,34 @@ const LOGIN_HEAD: &str = r#"<!doctype html>
 
 const LOGIN_STEPS: &str = r#"<main class="connect">
     <header class="intro">
-        <div class="brand">ONYX</div>
-        <svg class="wave" aria-hidden="true" viewBox="0 0 104 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-            <path d="M4 17v6m12-12v18m12-24v30m12-21v12m12-23v34m12-27v20m12-14v8m12-12v16m12-12v8"/>
-        </svg>
-        <h1>Подключите<br>SoundCloud</h1>
-        <p>Войдите в SoundCloud и синхронизируйте лайки в ONYX.</p>
+        <div class="brand"><img src="data:image/webp;base64,UklGRiACAABXRUJQVlA4IBQCAACQDQCdASpQAFAAPj0cjEQiIaGT3VUMIAPEtIBrG7avKqnuP5HOMfzX8b8sa9dbYFMt8aHz9/0/cF/kv9D/znAZ/sAWv3fF8bPf726yQF9r735ejv3VOaP1+y5OteeL2r4c/kf5Km+TpIQ9Mk/IKPXRv0WLXgAA/v58lAOKPBQG7L3Wq26kWi9Gyy77sOSkXY5/vzhukj5oIxaNvHb77OsfxZqCxX1XYtuB6DXBEO7aZP3OXPbUOjjRqH9jnoMqdeYcoEONXg3kyP9cAdjWr9P4FNL/9oR5z8OdkZeuCBOPTocmjP8WgifyJ5fxT5WzccVctn2ZMuxNXYmn97mbnvz++7YY9Dl/rnf1f8eAFCcS2W40mLsa9BdQfggf5LohkKbJ38hve16HQCclsYl5BmVK/JCdbDDa2An+9u3TFe+6KlTnCk/fVStIEjbDOU/EKAY87RQ9sC2Mi0pi1EXgzXTz1964/LTeUqbNEpp2ruG/jt7eT0ubV16quf9x0hv8mtOk1JvKKM4N9+L6ZPvAVTVP6jwft7xzH0WCmphODXeVTsR3r3BY8ZD/iglEwHaCoy2j5pP+KlkrokhaI9k/oJIp5KIPsN7x6EmyFP+olOMyvsr6oTFQDsiIcOwGvtziOIWTyFnQ/yrkV9F45GKF4+hXzLPDrFLP0Ib/aCRbFwUOk5wgKHXvAu4stGeFRi/IVzoAAAAA" alt="">ONYX</div>
+        <h1>Подключение SoundCloud</h1>
+        <p>Ваша медиатека и любимые треки в ONYX.</p>
     </header>
+    <div class="instructions">
     <ol>
         <li><div>
             <h2>Войдите в SoundCloud</h2>
-            <p>Откройте сайт soundcloud.com и авторизуйтесь в вашем профиле.</p>
+            <p>Откройте сайт и войдите в свой аккаунт.</p>
             <a class="button" href="https://soundcloud.com/signin" target="_blank" rel="noopener noreferrer">Открыть SoundCloud <span aria-hidden="true">↗</span></a>
         </div></li>
         <li><div>
-            <h2>Быстрое подключение через закладку</h2>
-            <p>Перетащите кнопку на панель закладок браузера (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>). Затем перейдите на вкладку SoundCloud и нажмите её:</p>
-            <a class="button bookmark" onclick="event.preventDefault(); alert('Перетащите эту кнопку на панель закладок браузера, затем откройте soundcloud.com и нажмите её на вкладке.');" href="javascript:(function(){if(location.origin!=='https://soundcloud.com'){alert('Откройте вкладку soundcloud.com и войдите в аккаунт!');return;}var t=null;var m=document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);if(m&&m[1]){t=decodeURIComponent(m[1]);}if(!t){try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k==='oauth_token'||k==='sc_oauth_token'){var v=localStorage.getItem(k);if(v&&v.length>10){t=v;break;}}}}catch(e){}}if(!t){alert('Сессия SoundCloud не найдена. Убедитесь, что вы авторизованы на soundcloud.com!');return;}window.location.href='http://127.0.0.1:49221/auth?token='+encodeURIComponent(t);})();">🔗 Подключить к ONYX</a>
+            <h2>Добавьте закладку</h2>
+            <p>Перетащите кнопку на панель закладок. Затем откройте вкладку SoundCloud и нажмите сохранённую закладку.</p>
+            <a class="button bookmark" onclick="event.preventDefault(); alert('Перетащите эту кнопку на панель закладок браузера, затем откройте soundcloud.com и нажмите её на вкладке.');" href="javascript:(function(){if(location.origin!=='https://soundcloud.com'){alert('Откройте вкладку soundcloud.com и войдите в аккаунт!');return;}var t=null;var m=document.cookie.match(/(?:^|;\s*)oauth_token=([^;]+)/);if(m&&m[1]){t=decodeURIComponent(m[1]);}if(!t){try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k==='oauth_token'||k==='sc_oauth_token'){var v=localStorage.getItem(k);if(v&&v.length>10){t=v;break;}}}}catch(e){}}if(!t){alert('Сессия SoundCloud не найдена. Убедитесь, что вы авторизованы на soundcloud.com!');return;}window.location.href='http://127.0.0.1:49221/auth?token='+encodeURIComponent(t);})();">Подключить к ONYX</a>
+            <p class="hint" style="margin-top:8px">Показать панель закладок — <kbd>Ctrl + Shift + B</kbd>.</p>
         </div></li>
-        <li><div>
-            <h2>Или вставьте токен прямо здесь</h2>
+    </ol>
+    <details>
+        <summary>Войти с помощью токена</summary>
             <p>Скопируйте oauth_token из cookies или запросов и нажмите «Войти»:</p>
             <div class="token-row">
-                <input id="token-input" class="token-input" type="text" placeholder="2-29... или OAuth ...">
+                <input id="token-input" class="token-input" type="password" aria-label="Токен SoundCloud" autocomplete="off" placeholder="2-29... или OAuth ...">
                 <button class="button" style="margin:0; cursor:pointer;" onclick="var val=document.getElementById('token-input').value.trim();if(!val){alert('Вставьте токен!');return;}window.location.href='/auth?token='+encodeURIComponent(val);">Войти</button>
             </div>
             <p class="hint">В браузере: нажмите <code>F12</code> на soundcloud.com → вкладка <code>Application</code> (Приложение) → <code>Cookies</code> → скопируйте <code>oauth_token</code>.</p>
-        </div></li>
-    </ol>
+    </details>
+    </div>
 </main>"#;
 
 fn urldecode(input: &str) -> String {
