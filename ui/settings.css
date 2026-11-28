@@ -135,7 +135,8 @@ body.has-custom-bg #app-bg-overlay{backdrop-filter:blur(var(--settings-wall-blur
   contain: paint;
 }
 body:has(#tab-settings.active) footer.ui-panel-glass {
-  clip-path: inset(0);
+  /* The track link opens above the footer. Keep its hover area inside the clip. */
+  clip-path: inset(-2.5rem 0 0);
   backdrop-filter: none !important;
 }
 

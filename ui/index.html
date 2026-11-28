@@ -122,6 +122,8 @@
 
 
   <script src="tailwind.min.js"></script>
+  <script src="player_title.js"></script>
+  <link rel="stylesheet" href="player_title.css">
 
 
 
@@ -3819,6 +3821,9 @@
       height: 15px;
     }
 
+    .artist-track-item .search-like-btn { color: #737373; }
+    .artist-track-item .search-like-btn[aria-pressed="true"] { color: var(--accent); }
+
     #wave-feed-refresh[aria-busy="true"] {
       cursor: progress;
     }
@@ -4316,6 +4321,7 @@
 
 
   <link rel="stylesheet" href="profile.css">
+  <link rel="stylesheet" href="wave_controls.css">
 <link rel="stylesheet" href="settings.css">
 </head>
 
@@ -5898,15 +5904,15 @@
               <span id="wave-queue-count" class="text-xs text-neutral-500 font-normal">0 треков</span>
             </h3>
             <div class="flex items-center gap-2 shrink-0">
-              <button id="wave-hidden-btn" onclick="openHiddenDislikesModal()" class="text-xs text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center gap-1.5" title="Скрытые треки и артисты">
-                <svg class="w-3.5 h-3.5 shrink-0" style="color: var(--accent);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <button id="wave-hidden-btn" onclick="openHiddenDislikesModal()" class="wave-feed-action text-xs px-2.5 py-1 rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5" title="Скрытые треки и артисты">
+                <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M17 14V2"/>
                   <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"/>
                 </svg>
                 <span>Скрытые</span>
                 <span id="wave-hidden-count" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none" style="background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);">0</span>
               </button>
-              <button id="wave-feed-refresh" type="button" aria-busy="false" onclick="refreshWaveFeed()" class="text-xs text-neutral-400 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center gap-1">
+              <button id="wave-feed-refresh" type="button" aria-busy="false" onclick="refreshWaveFeed()" class="wave-feed-action text-xs px-2.5 py-1 rounded-lg border transition-colors cursor-pointer flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                 <span>Сменить треки</span>
               </button>
@@ -6252,7 +6258,7 @@
 
 
 
-      <div id="tab-settings" class="tab-content"><div class="settings-shell"><header><h1>Настройки приложения</h1><span id="settings-wordmark" class="wordmark">ONYX v1.2.0</span></header><div class="layout"><nav aria-label="Разделы настроек"><button data-group="account">Аккаунт</button><button data-group="sound">Звук и караоке</button><button data-group="discord">Discord</button><button data-group="look">Оформление</button></nav><div class="content"><div id="settings-notice" role="status"></div><div id="settings-cards">
+      <div id="tab-settings" class="tab-content"><div class="settings-shell"><header><h1>Настройки приложения</h1><span id="settings-wordmark" class="wordmark">ONYX v1.2.1</span></header><div class="layout"><nav aria-label="Разделы настроек"><button data-group="account">Аккаунт</button><button data-group="sound">Звук и караоке</button><button data-group="discord">Discord</button><button data-group="look">Оформление</button></nav><div class="content"><div id="settings-notice" role="status"></div><div id="settings-cards">
         <div class="flex items-center justify-between">
           <h1 class="text-xl font-bold text-white">Настройки приложения</h1>
           <span id="settings-app-version" class="text-xs text-neutral-400 font-mono">ONYX Edition</span>
@@ -7267,7 +7273,7 @@
 
 
 
-      <div class="flex items-center gap-3 w-[340px] shrink-0 overflow-hidden">
+      <div class="flex items-center gap-3 w-[340px] shrink-0">
 
 
 
@@ -7339,7 +7345,14 @@
 
 
 
-            <div id="player-title" class="text-xs font-semibold text-white truncate cursor-pointer hover:underline select-none" title="Развернуть на весь экран (Esc)">Трек не выбран</div>
+            <div class="sc-track-title relative min-w-0">
+              <button type="button" id="player-title" class="block max-w-full text-left text-xs font-semibold text-white truncate cursor-pointer hover:underline select-none" aria-description="Открыть караоке">Трек не выбран</button>
+              <div class="sc-track-action">
+                <a id="open-sc-permalink-btn" target="_blank" rel="noopener noreferrer" aria-label="Открыть в SoundCloud">В SoundCloud
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l8-8M5.5 4H12v6.5"/></svg>
+                </a>
+              </div>
+            </div>
 
 
 
@@ -13075,7 +13088,7 @@
 
 
 
-        const t = currentPlayingTrack;
+        const t = playerSessionTrack;
 
 
 
@@ -13148,86 +13161,12 @@
 
 
     const scPermBtn = document.getElementById('open-sc-permalink-btn');
-
-
-
-
-
-
-
-    if (scPermBtn) {
-
-
-
-
-
-
-
-      scPermBtn.addEventListener('click', () => {
-
-
-
-
-
-
-
-        const t = currentPlayingTrack;
-
-
-
-
-
-
-
-        if (t && t.permalink_url) {
-
-
-
-
-
-
-
-          window.open(t.permalink_url, '_blank');
-
-
-
-
-
-
-
-        } else if (t) {
-
-
-
-
-
-
-
-          window.open(`https://soundcloud.com/search?q=${encodeURIComponent(t.title)}`, '_blank');
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
-      });
-
-
-
-
-
-
-
-    }
+    scPermBtn.addEventListener('click', (event) => {
+      if (getInvoke() && scPermBtn.hasAttribute('href')) {
+        event.preventDefault();
+        api.openUrl(scPermBtn.href).catch(console.warn);
+      }
+    });
 
 
 
@@ -14758,6 +14697,7 @@
 
 
       // 5. Update UI views
+      updateArtistLikeButton(strId);
 
 
 
@@ -14882,7 +14822,10 @@
       if (!getInvoke()) return;
 
       try {
-        await api.toggleLike(change, newLikedState);
+        const syncMessage = await api.toggleLike(change, newLikedState);
+        if (syncMessage && pendingLikeWrites.get(strId) === change) {
+          showLikeSyncStatus('Только локально', syncMessage);
+        }
       } catch (err) {
         if (pendingLikeWrites.get(strId) === change) {
           pendingLikeWrites.delete(strId);
@@ -14890,6 +14833,7 @@
           const saved = await api.getLocalLikes().catch(() => null);
           if (Array.isArray(saved)) {
             allTracks = mergePendingLikes(saved);
+            updateArtistLikeButton(strId);
             const liked = allTracks.some(item => String(item.id) === strId);
             for (const item of [track, ...currentQueue, ...currentSearchResults]) {
               if (String(item?.id) === strId) item.liked = liked;
@@ -15246,7 +15190,8 @@
             duration: curTrack.duration,
             duration_ms: curTrack.duration_ms,
             waveform_url: curTrack.waveform_url,
-            stream_url: curTrack.stream_url
+            stream_url: curTrack.stream_url,
+            permalink_url: curTrack.permalink_url
           } : null,
           queue: (currentQueue && currentQueue.length > 0) ? currentQueue.slice(0, 200) : [],
           currentTime: curTime,
@@ -15308,9 +15253,8 @@
         const desktopSessions = [readSession('sc_desktop_session'), appConfig?.session];
         const newest = sessions => sessions.filter(s => s && (s.track || s.trackId != null || s.queue?.length))
           .sort((a, b) => (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0))[0];
-        const matchingDesktop = desktopSessions.filter(s => uid != null && s?.userId === String(uid));
-        const session = newest([...userSessions, ...matchingDesktop]) || newest(desktopSessions.filter(s =>
-          uid == null || s?.userId == null || s.userId === String(uid)));
+        const matchingDesktop = desktopSessions.filter(s => uid != null && s?.userId != null && String(s.userId) === String(uid));
+        const session = newest([...userSessions, ...matchingDesktop]) || newest(desktopSessions.filter(s => s?.userId == null));
         if (!session) return;
 
         // Restore Volume
@@ -15416,7 +15360,7 @@
           syncProfileFavoriteCards(false);
           updateRecentlyPlayedCurrentTrack();
 
-          if (playerTitle) playerTitle.textContent = track.title || "SoundCloud Track";
+          renderPlayerTitle(track);
           if (playerArtist) playerArtist.textContent = track.artist || track.user?.username || "Исполнитель не указан";
 
           const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20100%20100%27%3E%0A%20%20%3Cdefs%3E%0A%20%20%20%20%3ClinearGradient%20id%3D%27bg%27%20x1%3D%270%25%27%20y1%3D%270%25%27%20x2%3D%27100%25%27%20y2%3D%27100%25%27%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%23241e38%27/%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%230f0c1a%27/%3E%0A%20%20%20%20%3C/linearGradient%3E%0A%20%20%20%20%3ClinearGradient%20id%3D%27ac%27%20x1%3D%270%25%27%20y1%3D%270%25%27%20x2%3D%27100%25%27%20y2%3D%27100%25%27%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%23fb7185%27/%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%23c084fc%27/%3E%0A%20%20%20%20%3C/linearGradient%3E%0A%20%20%3C/defs%3E%0A%20%20%3Crect%20width%3D%27100%27%20height%3D%27100%27%20rx%3D%2718%27%20fill%3D%27url%28%23bg%29%27/%3E%0A%20%20%3Crect%20width%3D%2798%27%20height%3D%2798%27%20x%3D%271%27%20y%3D%271%27%20rx%3D%2717%27%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.1%29%27%20stroke-width%3D%271%27/%3E%0A%20%20%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2736%27%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.05%29%27%20stroke-width%3D%271.5%27/%3E%0A%20%20%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2726%27%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.05%29%27%20stroke-width%3D%271%27/%3E%0A%20%20%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2718%27%20fill%3D%27url%28%23ac%29%27%20opacity%3D%270.18%27/%3E%0A%20%20%3Cpath%20d%3D%27M44%2033v24a6%206%200%201%201-3-5.2V36.5l19-3.8v20.5a6%206%200%201%201-3-5.2V28.5z%27%20fill%3D%27url%28%23ac%29%27/%3E%0A%3C/svg%3E";
@@ -15902,7 +15846,7 @@
         }
 
         // Update UI instantly
-        if (playerTitle) playerTitle.textContent = track.title || "SoundCloud Track";
+        renderPlayerTitle(track);
         if (playerArtist) playerArtist.textContent = track.artist || track.user?.username || "Исполнитель не указан";
         const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20100%20100%27%3E%0A%20%20%3Crect%20width%3D%27100%27%20height%3D%27100%27%20rx%3D%2718%27%20fill%3D%27%23241e38%27/%3E%0A%3C/svg%3E";
         if (playerCover) {
@@ -15951,7 +15895,7 @@
           } catch (resolveErr) {
             if (requestId !== currentPlayRequestId) return;
             const msg = resolveErr && resolveErr.message ? resolveErr.message : String(resolveErr || '');
-            logD(`getStreamUrl failed for ${track.id}: ${msg}`);
+            logD(`getStreamUrl failed for ${track.id}`);
             if (/\bHTTP (401|429)\b/.test(msg)) {
               setPlayerLoading(false);
               isPlaying = false;
@@ -17384,7 +17328,7 @@
 
 
 
-    setVolume(parseInt(volumeSlider.value) || 80);
+    setVolume(volumeSlider.valueAsNumber);
 
 
 
@@ -20322,7 +20266,6 @@
       const titleEl = document.getElementById('wave-card-title');
       const descEl = document.getElementById('wave-card-desc');
       const feedTitleEl = document.getElementById('wave-feed-title');
-      const refreshBtn = document.getElementById('wave-feed-refresh');
       const playSvg = document.getElementById('wave-play-svg');
       const pauseSvg = document.getElementById('wave-pause-svg');
 
@@ -20363,23 +20306,6 @@
       if (titleEl) titleEl.style.color = isLight ? '#0f172a' : '#ffffff';
       if (descEl) descEl.style.color = isLight ? '#475569' : 'rgba(212, 212, 216, 0.85)';
       if (feedTitleEl) feedTitleEl.style.color = isLight ? '#0f172a' : '#e4e4e7';
-      const shuffleWaveBtn = document.getElementById('wave-feed-shuffle');
-      if (shuffleWaveBtn) {
-        shuffleWaveBtn.style.color = isLight ? '#475569' : '#a1a1aa';
-        shuffleWaveBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
-        shuffleWaveBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
-      }
-      if (refreshBtn) {
-        refreshBtn.style.color = isLight ? '#475569' : '#a1a1aa';
-        refreshBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
-        refreshBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
-      }
-      const hiddenBtn = document.getElementById('wave-hidden-btn');
-      if (hiddenBtn) {
-        hiddenBtn.style.color = isLight ? '#334155' : '#d4d4d8';
-        hiddenBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
-        hiddenBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
-      }
       if (typeof renderHiddenDislikesModal === 'function') {
         const modal = document.getElementById('hidden-dislikes-modal');
         if (modal && !modal.classList.contains('hidden')) {
@@ -21092,10 +21018,27 @@
             await playTrack(nextIdx);
           } else if (isWaveActive && currentStationUrn === 'my_wave') {
             await startWave(waveCurrentMood, { excludeIds: [targetId] });
-          } else if (audioEl) {
-            audioEl.pause();
+          } else {
+            ++currentPlayRequestId;
+            discardPreparedTrack();
+            finishCrossfade();
+            currentTrackIndex = -1;
+            releasePlaybackMedia(audioEngine, currentHls);
+            currentHls = null;
+            pendingSessionSeek = null;
             isPlaying = false;
-            updatePlayPauseUI();
+            resetPlayerDisplay();
+            syncPlayPauseState(false);
+            updateQueueDrawer();
+            localStorage.removeItem('sc_desktop_session');
+            if (currentUser?.id != null) {
+              localStorage.removeItem(`sc_user_${currentUser.id}_session`);
+              saveUserSettings(currentUser.id, { session: null });
+            }
+            if (appConfig) {
+              appConfig.session = null;
+              api.saveConfig(appConfig).catch(console.warn);
+            }
           }
         } else {
           currentTrackIndex = Math.max(0, currentTrackIndex - removedBeforeCurrent);
@@ -24629,6 +24572,45 @@
 
 
     // Robust Logout Implementation
+    function resetPlayerDisplay() {
+      const playIconEl = document.getElementById('play-icon');
+      const pauseIconEl = document.getElementById('pause-icon');
+      const timeElapsedEl = document.getElementById('time-elapsed');
+      const timeTotalEl = document.getElementById('time-total');
+      const progressBarFillEl = document.getElementById('progress-bar-fill');
+      const playerArtistEl = document.getElementById('player-artist');
+      const playerCoverEl = document.getElementById('player-cover');
+
+      if (playIconEl) playIconEl.classList.remove('hidden');
+      if (pauseIconEl) pauseIconEl.classList.add('hidden');
+      if (timeElapsedEl) timeElapsedEl.textContent = "0:00";
+      if (timeTotalEl) timeTotalEl.textContent = "0:00";
+      if (progressBarFillEl) progressBarFillEl.style.width = "0%";
+      renderPlayerTitle(null);
+      if (playerArtistEl) playerArtistEl.textContent = "";
+      if (playerCoverEl) playerCoverEl.src = "logo.png";
+      playerSessionTrack = null;
+      currentlyPlayingTrackId = null;
+      updateRecentlyPlayedCurrentTrack();
+
+      const immTitle = document.getElementById('immersive-title');
+      const immArtist = document.getElementById('immersive-artist');
+      const immCover = document.getElementById('immersive-cover');
+      const immTimeElapsed = document.getElementById('immersive-time-elapsed');
+      const immTimeTotal = document.getElementById('immersive-time-total');
+      const immProgressFill = document.getElementById('immersive-progress-fill');
+      const immLyrics = document.getElementById('immersive-lyrics-content');
+      if (immTitle) immTitle.textContent = "Трек не выбран";
+      if (immArtist) immArtist.textContent = "SoundCloud";
+      if (immCover) immCover.src = "logo.png";
+      if (immTimeElapsed) immTimeElapsed.textContent = "0:00";
+      if (immTimeTotal) immTimeTotal.textContent = "0:00";
+      if (immProgressFill) immProgressFill.style.width = "0%";
+      if (immLyrics) immLyrics.innerHTML = '';
+      if (typeof closeImmersiveView === 'function') closeImmersiveView();
+
+    }
+
     async function logoutAccount() {
       if (isLoggingOut) return;
       isLoggingOut = true;
@@ -24657,45 +24639,7 @@
       isPlaying = false;
       syncPlayPauseState(false);
 
-      // 3. Reset Bottom Player Bar
-      const playIconEl = document.getElementById('play-icon');
-      const pauseIconEl = document.getElementById('pause-icon');
-      const timeElapsedEl = document.getElementById('time-elapsed');
-      const timeTotalEl = document.getElementById('time-total');
-      const progressBarFillEl = document.getElementById('progress-bar-fill');
-      const playerTitleEl = document.getElementById('player-title');
-      const playerArtistEl = document.getElementById('player-artist');
-      const playerCoverEl = document.getElementById('player-cover');
-
-      if (playIconEl) playIconEl.classList.remove('hidden');
-      if (pauseIconEl) pauseIconEl.classList.add('hidden');
-      if (timeElapsedEl) timeElapsedEl.textContent = "0:00";
-      if (timeTotalEl) timeTotalEl.textContent = "0:00";
-      if (progressBarFillEl) progressBarFillEl.style.width = "0%";
-      if (playerTitleEl) playerTitleEl.textContent = "Трек не выбран";
-      if (playerArtistEl) playerArtistEl.textContent = "";
-      if (playerCoverEl) playerCoverEl.src = "logo.png";
-      playerSessionTrack = null;
-      currentlyPlayingTrackId = null;
-      updateRecentlyPlayedCurrentTrack();
-
-      // 4. Reset Immersive Player & close it if open
-      const immTitle = document.getElementById('immersive-title');
-      const immArtist = document.getElementById('immersive-artist');
-      const immCover = document.getElementById('immersive-cover');
-      const immTimeElapsed = document.getElementById('immersive-time-elapsed');
-      const immTimeTotal = document.getElementById('immersive-time-total');
-      const immProgressFill = document.getElementById('immersive-progress-fill');
-      const immLyrics = document.getElementById('immersive-lyrics-content');
-      if (immTitle) immTitle.textContent = "Трек не выбран";
-      if (immArtist) immArtist.textContent = "SoundCloud";
-      if (immCover) immCover.src = "logo.png";
-      if (immTimeElapsed) immTimeElapsed.textContent = "0:00";
-      if (immTimeTotal) immTimeTotal.textContent = "0:00";
-      if (immProgressFill) immProgressFill.style.width = "0%";
-      if (immLyrics) immLyrics.innerHTML = '';
-      if (typeof closeImmersiveView === 'function') closeImmersiveView();
-
+      resetPlayerDisplay();
       // 5. Wipe all memory state
       discordPlaybackTrack = null;
       pendingLikeWrites.clear();
@@ -25090,7 +25034,7 @@
 
 
 
-            if (getActiveTabId() === 'tab-library') syncQueueFromLikes();
+            if (!playerSessionTrack && getActiveTabId() === 'tab-library') syncQueueFromLikes();
 
 
 
@@ -25638,7 +25582,7 @@
 
           fresh.forEach(t => { if (t) t.liked = true; });
           allTracks = mergePendingLikes(fresh);
-          if (getActiveTabId() === 'tab-library') syncQueueFromLikes();
+          if (!playerSessionTrack && getActiveTabId() === 'tab-library') syncQueueFromLikes();
           saveLocalDatabase();
           renderLikedTable();
           applyUserProfile(currentUser, allTracks.length);
@@ -33067,7 +33011,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-          api.invoke('clear_custom_wallpaper').catch(() => {});
+          api.invoke('clear_custom_wallpaper').catch(console.warn);
 
 
 
@@ -34427,6 +34371,12 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
       switchTab(previousTabBeforeArtist || 'tab-home');
     }
 
+    function updateArtistLikeButton(trackId) {
+      const row = document.querySelector(`#artist-tracks-list [data-track-id="${CSS.escape(trackId)}"]`);
+      const button = row?.querySelector('.search-like-btn');
+      if (button) button.setAttribute('aria-pressed', String(allTracks.some(t => String(t.id) === trackId && t.liked !== false)));
+    }
+
     function renderArtistTracks(tracks) {
       const container = document.getElementById('artist-tracks-list');
       const countEl = document.getElementById('artist-tracks-header-count');
@@ -34444,7 +34394,6 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         const isCurrent = currentQueue && currentTrackIndex >= 0 && currentQueue[currentTrackIndex] && String(currentQueue[currentTrackIndex].id) === String(t.id);
         const isThisPlaying = isCurrent && isPlaying;
         const isLiked = allTracks.some(x => String(x.id) === String(t.id) && x.liked !== false);
-        const accent = currentAccent || '#ff5500';
 
         item.className = `artist-track-item flex items-center justify-between p-3 rounded-2xl hover:bg-white/5 transition cursor-pointer group ${isCurrent ? 'bg-white/[0.07] border border-white/10' : ''}`;
         item.dataset.trackId = String(t.id);
@@ -34480,7 +34429,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
           </div>
           <div class="flex items-center gap-4 text-xs font-mono text-neutral-400 shrink-0">
             <span class="hidden sm:inline">${escapeMarkup(t.duration || '0:00')}</span>
-            <button class="search-like-btn p-1.5 transition-transform hover:scale-125 active:scale-75 cursor-pointer select-none" title="Нравится" style="${isLiked ? `color: ${accent}; fill: ${accent};` : 'color: #737373;'}">
+            <button class="search-like-btn p-1.5 transition-transform hover:scale-125 active:scale-75 cursor-pointer select-none" title="Нравится" aria-pressed="${isLiked}">
               <svg class="w-4 h-4 fill-current pointer-events-none" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             </button>
           </div>
@@ -34490,9 +34439,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
         if (likeBtn) {
           likeBtn.onclick = (e) => {
             e.stopPropagation();
-            if (typeof toggleTrackLikeInList === 'function') {
-              toggleTrackLikeInList(t, likeBtn);
-            }
+            toggleLike(t);
           };
         }
 

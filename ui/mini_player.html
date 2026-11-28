@@ -161,6 +161,7 @@ const volume = byId('volume');
 let trackId = null;
 let coverUrl = '';
 let scrubbing = false;
+let seekTrackId = null;
 let adjustingVolume = false;
 let refreshTimer;
 
@@ -218,13 +219,17 @@ cover.onerror = () => { cover.hidden = true; };
 prev.onclick = () => send('previous');
 next.onclick = () => send('next');
 toggle.onclick = () => send('toggle');
+seek.onpointerdown = seek.onkeydown = () => { seekTrackId = trackId; };
 seek.oninput = () => {
   scrubbing = true;
   updateProgress(Number(seek.value));
 };
 seek.onchange = () => {
   scrubbing = false;
-  send('seek', { trackId, position: Number(seek.value) });
+  if (seekTrackId === null || seekTrackId === trackId) {
+    send('seek', { trackId, position: Number(seek.value) });
+  }
+  seekTrackId = null;
 };
 seek.onpointercancel = () => { scrubbing = false; };
 volume.oninput = () => {
