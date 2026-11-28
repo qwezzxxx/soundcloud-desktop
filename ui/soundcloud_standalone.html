@@ -122,6 +122,8 @@
 
 
   <script src="tailwind.min.js"></script>
+  <script src="player_title.js"></script>
+  <link rel="stylesheet" href="player_title.css">
 
 
 
@@ -4221,6 +4223,7 @@
 
 
   <link rel="stylesheet" href="profile.css">
+  <link rel="stylesheet" href="wave_controls.css">
 </head>
 
 
@@ -5840,7 +5843,7 @@
               <span>Эфир волны</span>
               <span id="wave-queue-count" class="text-xs text-neutral-500 font-normal">0 треков</span>
             </h3>
-            <button id="wave-feed-refresh" type="button" aria-busy="false" onclick="refreshWaveFeed()" class="text-xs text-neutral-400 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center gap-1">
+            <button id="wave-feed-refresh" type="button" aria-busy="false" onclick="refreshWaveFeed()" class="wave-feed-action text-xs px-2.5 py-1 rounded-lg border transition-colors cursor-pointer flex items-center gap-1">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
               <span>Сменить треки</span>
             </button>
@@ -8638,7 +8641,7 @@
 
 
 
-      <div class="flex items-center gap-3 w-[340px] shrink-0 overflow-hidden">
+      <div class="flex items-center gap-3 w-[340px] shrink-0">
 
 
 
@@ -8710,7 +8713,14 @@
 
 
 
-            <div id="player-title" class="text-xs font-semibold text-white truncate cursor-pointer hover:underline select-none" title="Развернуть на весь экран (Esc)">Трек не выбран</div>
+            <div class="sc-track-title relative min-w-0">
+              <button type="button" id="player-title" class="block max-w-full text-left text-xs font-semibold text-white truncate cursor-pointer hover:underline select-none" aria-description="Открыть караоке">Трек не выбран</button>
+              <div class="sc-track-action">
+                <a id="open-sc-permalink-btn" target="_blank" rel="noopener noreferrer" aria-label="Открыть в SoundCloud">В SoundCloud
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l8-8M5.5 4H12v6.5"/></svg>
+                </a>
+              </div>
+            </div>
 
 
 
@@ -10154,7 +10164,7 @@
               </button>
               <div class="karaoke-volume-popover">
                 <div class="karaoke-volume-panel card-glass border border-white/10 rounded-full shadow-xl">
-                  <input id="immersive-volume-slider" type="range" min="0" max="100" value="80" oninput="setVolume(parseInt(this.value))" onchange="saveVolumeConfig()" class="min-w-0 cursor-pointer custom-range-slider focus-visible:ring-2 focus-visible:ring-white/50" title="Громкость" style="pointer-events: auto !important;">
+                  <input id="immersive-volume-slider" type="range" min="0" max="100" value="80" class="min-w-0 cursor-pointer custom-range-slider focus-visible:ring-2 focus-visible:ring-white/50" title="Громкость" style="pointer-events: auto !important;">
                 </div>
               </div>
             </div>
@@ -13615,7 +13625,7 @@
       }
 
       if (typeof setVolume === 'function' && volumeSlider) {
-        setVolume(parseInt(volumeSlider.value) || 80);
+        setVolume(volumeSlider.valueAsNumber);
       }
 
       const immFill = document.getElementById('immersive-progress-fill');
@@ -14589,7 +14599,7 @@
 
 
 
-        const t = currentPlayingTrack;
+        const t = playerSessionTrack;
 
 
 
@@ -14662,86 +14672,12 @@
 
 
     const scPermBtn = document.getElementById('open-sc-permalink-btn');
-
-
-
-
-
-
-
-    if (scPermBtn) {
-
-
-
-
-
-
-
-      scPermBtn.addEventListener('click', () => {
-
-
-
-
-
-
-
-        const t = currentPlayingTrack;
-
-
-
-
-
-
-
-        if (t && t.permalink_url) {
-
-
-
-
-
-
-
-          window.open(t.permalink_url, '_blank');
-
-
-
-
-
-
-
-        } else if (t) {
-
-
-
-
-
-
-
-          window.open(`https://soundcloud.com/search?q=${encodeURIComponent(t.title)}`, '_blank');
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
-      });
-
-
-
-
-
-
-
-    }
+    scPermBtn.addEventListener('click', (event) => {
+      if (getInvoke() && scPermBtn.hasAttribute('href')) {
+        event.preventDefault();
+        api.openUrl(scPermBtn.href).catch(console.warn);
+      }
+    });
 
 
 
@@ -16396,7 +16332,10 @@
       if (!getInvoke()) return;
 
       try {
-        await api.toggleLike(change, newLikedState);
+        const syncMessage = await api.toggleLike(change, newLikedState);
+        if (syncMessage && pendingLikeWrites.get(strId) === change) {
+          showLikeSyncStatus('Только локально', syncMessage);
+        }
       } catch (err) {
         if (pendingLikeWrites.get(strId) === change) {
           pendingLikeWrites.delete(strId);
@@ -16756,7 +16695,8 @@
             artwork_url: curTrack.artwork_url || curTrack.cover,
             duration: curTrack.duration,
             duration_ms: curTrack.duration_ms,
-            stream_url: curTrack.stream_url
+            stream_url: curTrack.stream_url,
+            permalink_url: curTrack.permalink_url
           } : null,
           queue: (currentQueue && currentQueue.length > 0) ? currentQueue.slice(0, 200) : [],
           currentTime: curTime,
@@ -16818,9 +16758,8 @@
         const desktopSessions = [readSession('sc_desktop_session'), appConfig?.session];
         const newest = sessions => sessions.filter(s => s && (s.track || s.trackId != null || s.queue?.length))
           .sort((a, b) => (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0))[0];
-        const matchingDesktop = desktopSessions.filter(s => uid != null && s?.userId === String(uid));
-        const session = newest([...userSessions, ...matchingDesktop]) || newest(desktopSessions.filter(s =>
-          uid == null || s?.userId == null || s.userId === String(uid)));
+        const matchingDesktop = desktopSessions.filter(s => uid != null && s?.userId != null && String(s.userId) === String(uid));
+        const session = newest([...userSessions, ...matchingDesktop]) || newest(desktopSessions.filter(s => s?.userId == null));
         if (!session) return;
 
         // Restore Volume
@@ -16913,7 +16852,7 @@
             currentTrackIndex = session.trackIndex;
           }
 
-          if (playerTitle) playerTitle.textContent = track.title || "SoundCloud Track";
+          renderPlayerTitle(track);
           if (playerArtist) playerArtist.textContent = track.artist || "SoundCloud Artist";
 
           const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20100%20100%27%3E%0A%20%20%3Cdefs%3E%0A%20%20%20%20%3ClinearGradient%20id%3D%27bg%27%20x1%3D%270%25%27%20y1%3D%270%25%27%20x2%3D%27100%25%27%20y2%3D%27100%25%27%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%23241e38%27/%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%230f0c1a%27/%3E%0A%20%20%20%20%3C/linearGradient%3E%0A%20%20%20%20%3ClinearGradient%20id%3D%27ac%27%20x1%3D%270%25%27%20y1%3D%270%25%27%20x2%3D%27100%25%27%20y2%3D%27100%25%27%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%23fb7185%27/%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%23c084fc%27/%3E%0A%20%20%20%20%3C/linearGradient%3E%0A%20%20%3C/defs%3E%0A%20%20%3Crect%20width%3D%27100%27%20height%3D%27100%27%20rx%3D%2718%27%20fill%3D%27url%28%23bg%29%27/%3E%0A%20%20%3Crect%20width%3D%2798%27%20height%3D%2798%27%20x%3D%271%27%20y%3D%271%27%20rx%3D%2717%27%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.1%29%27%20stroke-width%3D%271%27/%3E%0A%20%20%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2736%27%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.05%29%27%20stroke-width%3D%271.5%27/%3E%0A%20%20%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2726%27%20fill%3D%27none%27%20stroke%3D%27rgba%28255%2C255%2C255%2C0.05%29%27%20stroke-width%3D%271%27/%3E%0A%20%20%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2718%27%20fill%3D%27url%28%23ac%29%27%20opacity%3D%270.18%27/%3E%0A%20%20%3Cpath%20d%3D%27M44%2033v24a6%206%200%201%201-3-5.2V36.5l19-3.8v20.5a6%206%200%201%201-3-5.2V28.5z%27%20fill%3D%27url%28%23ac%29%27/%3E%0A%3C/svg%3E";
@@ -17124,7 +17063,7 @@
         }
 
         // Update UI instantly
-        if (playerTitle) playerTitle.textContent = track.title || "SoundCloud Track";
+        renderPlayerTitle(track);
         if (playerArtist) playerArtist.textContent = track.artist || "SoundCloud Artist";
         const fallbackSvg = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%20100%20100%27%3E%0A%20%20%3Crect%20width%3D%27100%27%20height%3D%27100%27%20rx%3D%2718%27%20fill%3D%27%23241e38%27/%3E%0A%3C/svg%3E";
         if (playerCover) {
@@ -18499,7 +18438,7 @@
 
 
 
-    setVolume(parseInt(volumeSlider.value) || 80);
+    setVolume(volumeSlider.valueAsNumber);
 
 
 
@@ -18571,63 +18510,6 @@
 
 
 
-    volumeIconBtn.addEventListener('click', () => {
-
-
-
-
-
-
-
-      if (parseInt(volumeSlider.value) > 0) {
-
-
-
-
-
-
-
-        setVolume(0);
-
-
-
-
-
-
-
-      } else {
-
-
-
-
-
-
-
-        setVolume(lastVolume || 80);
-
-
-
-
-
-
-
-      }
-
-
-
-
-
-
-
-      if (appConfig) api.saveConfig(appConfig).catch(console.warn);
-
-
-
-
-
-
-
-    });
 
 
 
@@ -18723,95 +18605,6 @@
 
 
 
-    const immVolBtn = document.getElementById('immersive-volume-btn');
-
-
-
-
-
-
-
-    if (immVolBtn) {
-
-
-
-
-
-
-
-      immVolBtn.addEventListener('click', () => {
-
-
-
-
-
-
-
-        const cur = volumeSlider ? parseInt(volumeSlider.value) : 80;
-
-
-
-
-
-
-
-        if (cur > 0) {
-
-
-
-
-
-
-
-          setVolume(0);
-
-
-
-
-
-
-
-        } else {
-
-
-
-
-
-
-
-          setVolume(lastVolume || 80);
-
-
-
-
-
-
-
-        }
-
-
-
-
-
-
-
-        if (appConfig) api.saveConfig(appConfig).catch(console.warn);
-
-
-
-
-
-
-
-      });
-
-
-
-
-
-
-
-    }
 
 
 
@@ -21589,7 +21382,6 @@
       const titleEl = document.getElementById('wave-card-title');
       const descEl = document.getElementById('wave-card-desc');
       const feedTitleEl = document.getElementById('wave-feed-title');
-      const refreshBtn = document.getElementById('wave-feed-refresh');
       const playSvg = document.getElementById('wave-play-svg');
       const pauseSvg = document.getElementById('wave-pause-svg');
 
@@ -21630,18 +21422,6 @@
       if (titleEl) titleEl.style.color = isLight ? '#0f172a' : '#ffffff';
       if (descEl) descEl.style.color = isLight ? '#475569' : 'rgba(212, 212, 216, 0.85)';
       if (feedTitleEl) feedTitleEl.style.color = isLight ? '#0f172a' : '#e4e4e7';
-      const shuffleWaveBtn = document.getElementById('wave-feed-shuffle');
-      if (shuffleWaveBtn) {
-        shuffleWaveBtn.style.color = isLight ? '#475569' : '#a1a1aa';
-        shuffleWaveBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
-        shuffleWaveBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
-      }
-      if (refreshBtn) {
-        refreshBtn.style.color = isLight ? '#475569' : '#a1a1aa';
-        refreshBtn.style.background = isLight ? '#f1f5f9' : 'rgba(255, 255, 255, 0.05)';
-        refreshBtn.style.borderColor = isLight ? '#e2e8f0' : 'rgba(255, 255, 255, 0.1)';
-      }
-
       // Update mood chips
       document.querySelectorAll('.wave-mood-chip').forEach(chip => {
         const isCurrentActive = chip.getAttribute('data-mood') === waveCurrentMood;
@@ -25478,7 +25258,6 @@
       const timeElapsedEl = document.getElementById('time-elapsed');
       const timeTotalEl = document.getElementById('time-total');
       const progressBarFillEl = document.getElementById('progress-bar-fill');
-      const playerTitleEl = document.getElementById('player-title');
       const playerArtistEl = document.getElementById('player-artist');
       const playerCoverEl = document.getElementById('player-cover');
 
@@ -25487,7 +25266,7 @@
       if (timeElapsedEl) timeElapsedEl.textContent = "0:00";
       if (timeTotalEl) timeTotalEl.textContent = "0:00";
       if (progressBarFillEl) progressBarFillEl.style.width = "0%";
-      if (playerTitleEl) playerTitleEl.textContent = "Трек не выбран";
+      renderPlayerTitle(null);
       if (playerArtistEl) playerArtistEl.textContent = "SoundCloud";
       if (playerCoverEl) playerCoverEl.src = "logo.png";
       playerSessionTrack = null;
@@ -25905,7 +25684,7 @@
 
 
 
-            if (activeTab === 'tab-library') syncQueueFromLikes();
+            if (!playerSessionTrack && document.getElementById('tab-library')?.classList.contains('active')) syncQueueFromLikes();
 
 
 
@@ -26452,7 +26231,7 @@
           const newFirstId = fresh.length > 0 ? (fresh[0].id || fresh[0].urn) : null;
 
           allTracks = mergePendingLikes(fresh);
-          if (activeTab === 'tab-library') syncQueueFromLikes();
+          if (!playerSessionTrack && document.getElementById('tab-library')?.classList.contains('active')) syncQueueFromLikes();
           saveLocalDatabase();
           renderLikedTable();
           applyUserProfile(currentUser, allTracks.length);
@@ -27050,7 +26829,7 @@
           renderHomeFeed(allTracks, res.mixed || lastMixedData || null);
           applyUserProfile(null, allTracks.length);
 
-          if (playerTitle) playerTitle.textContent = "Трек не выбран";
+          renderPlayerTitle(null);
           if (playerArtist) playerArtist.textContent = "SoundCloud";
           if (playerCover) playerCover.src = "logo.png";
 
@@ -32328,8 +32107,10 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-      if (typeof handleTrackPlaybackFailure === 'function' && currentQueue && currentTrackIndex >= 0 && currentTrackIndex < currentQueue.length) {
-        handleTrackPlaybackFailure(currentQueue[currentTrackIndex], 'audioEngineError');
+      if (err && currentQueue[currentTrackIndex]) {
+        isPlaying = false;
+        syncPlayPauseState(false);
+        notify('Не удалось воспроизвести трек');
       }
 
 
@@ -34881,7 +34662,7 @@ const micLyricsBtn = document.getElementById('mic-lyrics-btn');
 
 
 
-          api.invoke('clear_custom_wallpaper').catch(() => {});
+          api.invoke('clear_custom_wallpaper').catch(console.warn);
 
 
 

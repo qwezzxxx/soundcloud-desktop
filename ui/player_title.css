@@ -1,0 +1,39 @@
+.sc-track-action {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding-left: 6px;
+  z-index: 10;
+  padding-bottom: 4px;
+  visibility: hidden;
+}
+
+.sc-track-title:is(:hover, :focus-within) .sc-track-action {
+  visibility: visible;
+}
+
+#open-sc-permalink-btn[href] {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: inherit;
+  background: color-mix(in srgb, var(--sc-surface, var(--panel-bg)) 70%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 6px;
+  backdrop-filter: blur(var(--glass-blur, 12px));
+}
+
+#open-sc-permalink-btn:not([href]) { display: none; }
+#open-sc-permalink-btn svg { width: 11px; height: 11px; opacity: .75; }
+body.theme-custom .sc-track-action {
+  --sc-surface: var(--custom-surface);
+  color: var(--custom-ink);
+}
+#open-sc-permalink-btn:is(:hover, :focus-visible) {
+  border-color: color-mix(in srgb, currentColor 32%, transparent);
+}

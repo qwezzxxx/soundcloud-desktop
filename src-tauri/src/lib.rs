@@ -227,21 +227,10 @@ fn log_debug(msg: String) {
 
 #[tauri::command]
 async fn get_stream_url(track_id: Value, state: State<'_, AppState>) -> Result<String, String> {
-    use std::io::Write;
-    let p = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("debug_play.log"))).unwrap_or_else(|| std::path::PathBuf::from("debug_play.log"));
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
-        let _ = writeln!(f, "[Rust] get_stream_url called with track_id={:?}", track_id);
-    }
     let started = std::time::Instant::now();
     let res = state.sc.resolve_stream_url(track_id).await;
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
-        let _ = writeln!(
-            f,
-            "[Rust] get_stream_url resolved in {}ms: {:?}",
-            started.elapsed().as_millis(),
-            res
-        );
-    }
+    log_debug(format!("[Rust] get_stream_url {} in {}ms",
+        if res.is_ok() { "succeeded" } else { "failed" }, started.elapsed().as_millis()));
     res
 }
 
@@ -670,44 +659,38 @@ fn win_show(window: tauri::Window, startup_shown: State<'_, Arc<AtomicBool>>) ->
     window.set_focus().map_err(|e| e.to_string())
 }
 
+fn wallpaper_path() -> PathBuf {
+    std::env::current_exe()
+        .map(|exe| exe.with_file_name("custom_wallpaper.dat"))
+        .unwrap_or_else(|_| PathBuf::from("custom_wallpaper.dat"))
+}
+
 #[tauri::command]
 fn save_custom_wallpaper(data: String) -> Result<(), String> {
-    let mut path = PathBuf::from("custom_wallpaper.dat");
-    if let Ok(exe_dir) = std::env::current_exe() {
-        if let Some(parent) = exe_dir.parent() {
-            path = parent.join("custom_wallpaper.dat");
-        }
-    }
-    std::fs::write(&path, data).map_err(|e| e.to_string())
+    use std::io::Write;
+    let path = wallpaper_path();
+    let directory = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+    let mut staged = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
+    staged.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+    staged.as_file().sync_all().map_err(|e| e.to_string())?;
+    staged.persist(path).map_err(|e| e.error.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
 fn load_custom_wallpaper() -> Result<String, String> {
-    let mut path = PathBuf::from("custom_wallpaper.dat");
-    if let Ok(exe_dir) = std::env::current_exe() {
-        if let Some(parent) = exe_dir.parent() {
-            path = parent.join("custom_wallpaper.dat");
-        }
-    }
-    if path.exists() {
-        std::fs::read_to_string(&path).map_err(|e| e.to_string())
-    } else {
-        Ok(String::new())
+    match std::fs::read_to_string(wallpaper_path()) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        result => result.map_err(|e| e.to_string()),
     }
 }
 
 #[tauri::command]
 fn clear_custom_wallpaper() -> Result<(), String> {
-    let mut path = PathBuf::from("custom_wallpaper.dat");
-    if let Ok(exe_dir) = std::env::current_exe() {
-        if let Some(parent) = exe_dir.parent() {
-            path = parent.join("custom_wallpaper.dat");
-        }
+    match std::fs::remove_file(wallpaper_path()) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        result => result.map_err(|e| e.to_string()),
     }
-    if path.exists() {
-        let _ = std::fs::remove_file(&path);
-    }
-    Ok(())
 }
 
 fn resolve_config_path() -> PathBuf {
@@ -719,12 +702,8 @@ fn resolve_config_path() -> PathBuf {
                     drop(f);
                     return candidate;
                 }
-            } else {
-                let test_p = parent.join(".sc_write_test");
-                if let Ok(_) = std::fs::write(&test_p, "1") {
-                    let _ = std::fs::remove_file(&test_p);
-                    return candidate;
-                }
+            } else if tempfile::NamedTempFile::new_in(parent).is_ok() {
+                return candidate;
             }
         }
     }
